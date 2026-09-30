@@ -29,7 +29,10 @@ COPY lib ./lib
 COPY sample ./sample
 
 # apiloop 命令：docker compose exec apiloop apiloop user list
-RUN ln -s /app/bin/server /usr/local/bin/apiloop \
+# COPY 会原样保留宿主机上的文件权限。本地工作区里有的编辑工具会把文件存成 600，
+# 带进镜像后 node 用户读不了（EACCES），所以这里统一放开读权限，不依赖宿主机的状态
+RUN chmod -R a+rX /app/bin /app/lib /app/sample \
+    && ln -s /app/bin/server /usr/local/bin/apiloop \
     && mkdir -p /app/data /app/workspace \
     && chown -R node:node /app/data /app/workspace
 
