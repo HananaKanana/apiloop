@@ -759,7 +759,7 @@ onBeforeUnmount(function () {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
@@ -775,7 +775,7 @@ onBeforeUnmount(function () {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 0 8px 6px;
+  margin: 8px 16px 0;
   padding: 3px 10px;
   border-radius: 4px;
   font-size: 12px;
@@ -791,6 +791,11 @@ onBeforeUnmount(function () {
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
+/* 页签条左边留 16px。只推内容、不动 nav 本身，底下的分隔线才能整条贯通 */
+.panes :deep(.n-tabs-nav-scroll-content) {
+  padding-left: 16px;
+}
+
 /* Mock 页签内容多，给它整块高度，响应面板先收起来 */
 .panes.full {
   flex: 1;
@@ -798,7 +803,7 @@ onBeforeUnmount(function () {
 }
 
 .pane {
-  padding: 8px 2px;
+  padding: 12px 16px;
 }
 
 .pane.narrow {
@@ -842,7 +847,7 @@ onBeforeUnmount(function () {
 .response {
   flex: 1;
   min-height: 0;
-  padding: 8px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
 }

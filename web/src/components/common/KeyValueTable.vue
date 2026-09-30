@@ -83,7 +83,12 @@ function removeRow(index) {
 
     <div v-for="(row, index) in rows" :key="index" class="row">
       <div class="cell check">
+        <!--
+          末尾那行空行只是占位，不给复选框：勾着的空行看起来像一条已经启用的空参数。
+          往里填了内容它就变成真行（默认启用），复选框这时候才出现。
+        -->
         <n-checkbox
+          v-if="!row.__draft"
           :checked="row.enabled"
           :disabled="disabled"
           @update:checked="(v) => { updateRow(index, { enabled: v }); }"

@@ -543,7 +543,7 @@ function requestBodyText() {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 4px 2px;
+  padding: 4px 0;
 }
 
 .test-row,

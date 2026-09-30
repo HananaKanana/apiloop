@@ -206,7 +206,7 @@ onBeforeUnmount(function () {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
@@ -231,7 +231,7 @@ onBeforeUnmount(function () {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 12px 16px;
   max-width: 760px;
   width: 100%;
   box-sizing: border-box;
