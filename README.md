@@ -498,6 +498,23 @@ router.use('/hi', (req, res) => {
 | `POST /apis/:id/expectations/reorder` | 按 `{ ids: [...] }` 重排期望顺序 |
 | `GET /apis/:id` | 响应里带 `expectations`，按 `position` 排序 |
 
+### Mock 调用日志（契约第 11 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/mock-log?after=<seq>&limit=100` | 最近打到这个项目 mock 上的请求，按 `seq` 升序；`limit` 默认 100、最大 200。viewer |
+| `DELETE /projects/:pid/mock-log` | 清空该项目的日志（只清内存）。editor |
+
+联调时最常问的一句话是「我明明发了请求，怎么没反应」。日志回答的就是它：每条记下完整
+原始地址（含 `/mock/<slug>` 前缀与查询串）、查询参数、请求头、请求体预览、命中了哪个
+接口的哪条期望（`matched: null` 表示在 `/mock/<slug>` 下根本没有命中，这正是地址写错、
+slug 拼错时最需要看到的）、状态码与耗时。请求头里的 `Authorization`、`Cookie`、
+`Proxy-Authorization` 一律打码成 `***`，请求体与响应体各只留前 4KB。
+
+**日志只存在内存里**：每个项目保留最近 200 条，服务重启后清空；多个进程共用同一个库时，
+各自只记录打到自己端口上的请求。前端每 2 秒带 `after=上次返回的 lastSeq` 轮询一次，
+只拿新增的记录。
+
 ### 元信息与纯解析
 
 | 方法与路径 | 说明 |
@@ -547,7 +564,7 @@ lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只
 lib/command.js        start / open / web / init / user 命令实现
 lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
 lib/db/repos/         各表的增删改查
-lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / members / templatize
+lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / members / mock-log / templatize
 lib/api/guard.js      项目权限中间件：guard(level, locate)，判定逻辑在 lib/access.js
 lib/api/respond.js    接口的响应约定（ok / fail / wrap / notFound）
 lib/api/dto.js        repo 行 → 接口 DTO，以及入参清洗
@@ -563,6 +580,7 @@ lib/legacy-import.js  把目录里的旧配置导入成项目
 lib/legacy/           只读的 P0 格式库读取器
 lib/mock-engine.js    模板渲染与随机数据生成
 lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新，并做 mock 期望的匹配
+lib/mock-log.js       Mock 调用日志：按项目存的内存环形缓冲，每个项目 200 条
 lib/templatize.js     智能模板化：把真实响应换成「结构不变、值随机」的占位符模板（纯函数）
 lib/importers.js      cURL / OpenAPI(Swagger) 解析
 lib/executor.js       请求执行器：由服务端代发真实 HTTP 请求
