@@ -29,7 +29,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `GET /projects` | 项目列表；只返回自己参与的项目（admin 返回全部） |
 | `POST /projects` | 新建项目；任何登录用户都可以，创建者自动成为 owner |
 | `GET /projects/:pid` | 项目详情，`:pid` 可以是 id 或 slug |
-| `PUT /projects/:pid` | 改描述 / 变量 / 鉴权要 editor；改名字 / 标识要 owner。标识被占用会报错，不自动改名 |
+| `PUT /projects/:pid` | 改描述 / 变量 / 鉴权 / 脚本要 editor；改名字 / 标识要 owner。标识被占用会报错，不自动改名 |
 | `DELETE /projects/:pid` | 删除项目。owner；根项目与默认项目不能删 |
 | `GET /projects/:pid/members` | 成员列表。viewer |
 | `PUT /projects/:pid/members/:userId` | 加成员或改角色。owner；不是成员就加进来 |
@@ -41,12 +41,12 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | --- | --- |
 | `GET /projects/:pid/tree` | 整棵树，返回扁平的目录与接口列表，前端自己组装 |
 | `POST /projects/:pid/folders` | 新建目录，同一父目录下不允许重名 |
-| `PUT /folders/:id` | 改名字 / 描述 / 鉴权 / 变量 |
+| `PUT /folders/:id` | 改名字 / 描述 / 鉴权 / 变量 / 脚本 |
 | `DELETE /folders/:id?apis=move\|delete` | 删目录。`move`（默认）把内容移到父目录，`delete` 递归删 |
 | `POST /projects/:pid/move` | 移动目录或接口到指定位置，并重排 position；移进自己的子孙会被拒 |
 | `GET /apis/:id` | 接口详情（含请求定义、mock 配置、全部示例） |
 | `POST /projects/:pid/apis` | 新建接口 |
-| `PUT /apis/:id` | 更新接口；改 url 时 `mock.path` 的跟随规则、开启 mock 的前提见契约 |
+| `PUT /apis/:id` | 更新接口（含 `scripts`）；改 url 时 `mock.path` 的跟随规则、开启 mock 的前提见契约 |
 | `DELETE /apis/:id` | 删除接口 |
 | `POST /apis/:id/duplicate` | 复制接口（示例整份复制，名字加「 副本」） |
 | `POST /apis/:id/examples` | 新增示例；这是第一个示例时会自动成为 mock 用的那条 |
@@ -69,10 +69,10 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求 |
-| `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」 |
+| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行前置 / 测试脚本 |
+| `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」。测试脚本在 `end` 之前跑完，结果在 `end.result.scripts` 里 |
 | `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
-| `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果） |
+| `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果）。查看者不是发起人时，`result.scripts` 的 `console` 为空、变量 `set` 的值为 `***` |
 | `DELETE /projects/:pid/history` | 清空该项目的历史 |
 | `POST /projects/:pid/files` | 上传文件（`application/octet-stream` + `X-Filename`），返回服务端绝对路径 |
 
@@ -96,6 +96,40 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 > 权限与 Postman 的 collection 导入一致：`new` 谁都能用（导完是 owner），`into` 要 editor，
 > 且「项目不存在」与「不是成员」返回**同一个 400**。**凭据默认不保留**，规则见
 > [README 的 HAR 导入一节](../README.md#har-导入)。
+
+## 脚本（契约第 16 节）
+
+接口、目录、项目三层各可以挂前置脚本（`prerequest`）与测试脚本（`test`）：
+
+```js
+scripts = [{ listen: 'prerequest' | 'test', exec: '脚本源码' }]
+```
+
+- `Project`、`Folder`、`Api` 的 DTO 都带 `scripts`；`PUT /projects/:pid`、`PUT /folders/:id`、
+  `PUT /apis/:id` 都接受它。
+- 写入时校验：`listen` 只能是 `prerequest` 或 `test`，每段 `exec` 最长 **64KB**，不合法返回 400。
+- `/send` 与 `/send/stream` 的 `options.scripts` 默认为 `true`，传 `false` 时这次发送
+  **一段脚本都不执行**。执行顺序是「项目 → 目录（从外到内）→ 接口」，
+  接口那一层取自请求体里的 `request.scripts`（没保存的修改也生效）。
+
+执行结果挂在 `ExecResult` 上，**没有任何脚本时是 `null`**：
+
+```js
+scripts = {
+  tests: [{ name, passed, error? }],
+  console: [{ level, text, source }],            // source 形如 '项目' / '目录「人员信息」' / '接口'
+  errors: [{ phase: 'prerequest'|'test', source, message }],
+  warnings: [string],
+  variables: {
+    environment: { set: {}, unset: [] },
+    project: { set: {}, unset: [] },
+    persisted: boolean                           // 是否真的写进了库（viewer 不写）
+  }
+}
+```
+
+> 沙箱限制、支持的 `pm.*` API、变量写回规则见 [README 的「脚本」一节](../README.md#脚本)。
+> 前置脚本出错时请求不发送，`result.error.code` 是 `SCRIPT`。
 
 ## 流式发送与 WebSocket（契约第 14、15 节）
 

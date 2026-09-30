@@ -142,9 +142,9 @@ curl -i 'http://localhost:8080/api/users?id=404'
 导入前会先预览：文件夹数、接口数、示例数、未支持的鉴权类型和脚本数量，确认后才写库。
 同名项目会问你是新建还是合并。整个导入在一个事务里，中途失败整体回滚。
 
-**不执行 Postman 的前置脚本和测试脚本。** 导入时原样保存并提示「N 个脚本未执行」——
-在沙箱里安全地跑别人写的 `pm.*` 脚本代价很大（Node 自带的 `vm` 不能当安全边界），
-目前不做。
+**前置脚本和测试脚本会执行**，跑在 QuickJS 的 wasm 沙箱里（见「[脚本](#脚本)」）——
+沙箱里没有 `require` / `process` / `fetch`，也不能碰文件系统，单段脚本 1 秒 CPU、32MB 内存。
+导入时原样保存，并在预览里提示带进来了多少个脚本。
 
 ## HAR 导入
 
@@ -298,6 +298,88 @@ Cookie、代理、打码的行为和原来的 `/send` 完全一样 —— 两条
 - **WebSocket 不记录历史，也不进目录树**：它是一个临时调试用的标签页，不是接口。
 - **流式发送取消时，已经收到的响应体不会写进历史**：历史里有一条 `ABORTED` 记录，但
   `result.response` 是空的。响应体是在响应收完的时候才组装起来的，中途取消就没有这一段。
+
+## 脚本
+
+接口、目录、项目三层都可以挂**前置脚本**（`prerequest`）和**测试脚本**（`test`），
+用 Postman 那套 `pm.*` 写法。发送请求时按 **项目 → 目录（从外到内）→ 接口** 的顺序执行。
+
+```
+前置脚本  →  替换变量  →  发送  →  测试脚本  →  写回变量  →  写历史
+```
+
+- 接口那一层的脚本取自**请求体里带的 `request.scripts`**，所以编辑器里没保存的改动也会生效；
+- **前置脚本出错，请求就不发送了**，错误码是 `SCRIPT`；测试脚本出错只记下这个错误，
+  已经跑过的测试结果照样保留；
+- 界面上「设置」页签里的**「执行脚本」关掉之后，这次发送一段脚本都不执行**（`options.scripts: false`）。
+
+### 环境
+
+脚本跑在 **QuickJS（wasm）** 沙箱里，每个 context 之间互不影响：
+
+| 限制 | 值 |
+| --- | --- |
+| 单段脚本的 CPU 时间 | 1 秒（**等 `pm.sendRequest` 的时间不算在内**，否则前面一次慢请求会把后面的脚本误判成超时） |
+| 一次发送里所有脚本的挂钟时间 | 30 秒 |
+| 每个 context 的内存 | 32MB |
+| `pm.sendRequest` 的次数 | 一次发送最多 10 次，第 11 次直接以 `err` 回调 |
+
+沙箱里**没有 `require`、`process`、`fetch`，也不能读文件**；`setTimeout`、`URL` 这些浏览器
+才有的全局同样没有（`pm` 自己实现了需要的部分）。死循环会被按时打断，内存炸弹会被拦下，
+不会拖垮服务、也不会让这次发送卡住。
+
+### 支持的 API
+
+- **变量**：`pm.variables`（本次请求的临时变量，不保存）、`pm.environment`、
+  `pm.collectionVariables`、`pm.globals`；每个都有 `get / set / unset / has / toObject`，
+  只有 `pm.variables` 有 `clear`。
+- **`pm.request`**：`method`、`url`（`toString()` / `getHost()` / `getPath()` / `query.*`，也可整体赋值）、
+  `headers`（`get / has / add / upsert / remove / toObject`）、`body.mode` 与 `body.raw`。
+- **`pm.response`**（只在测试脚本里有）：`code`、`status`、`responseTime`、`size()`、`text()`、`json()`、
+  `headers.get / has / toObject`，以及 `to.have.status(n)`、`to.have.header(name)`、`to.be.ok`。
+- **测试**：`pm.test(name, fn)`，以及 `pm.expect(value)` 的一个 chai 子集
+  （`equal` / `eql` / `include` / `a` / `property` / `lengthOf` / `above` / `below` / `least` /
+  `most` / `match` / `oneOf` / `ok` / `true` / `false` / `null` / `undefined` / `exist` / `empty`，
+  加上 `not` 与 `deep`，还有 `to be been is that which and has have with at of same` 这些连接词）。
+- **`pm.sendRequest(req, callback)`**：`req` 可以是地址字符串，也可以是
+  `{ url, method, header, body }`；回调签名是 `callback(err, res)`。它**走服务端代发**，
+  代理设置和 Cookie jar 与这次请求相同，超时 10 秒，**不记入历史**。
+  脚本以同步写法调用它，宿主会挂起沙箱等结果。
+- **老写法**：`tests["名称"] = 布尔值`、`responseBody`、`responseCode.code`、`responseHeaders`、
+  `responseTime`，以及 `postman.setEnvironmentVariable` / `getEnvironmentVariable` /
+  `clearEnvironmentVariable` / `setGlobalVariable` / `getGlobalVariable` / `clearGlobalVariable`。
+- `console.log / info / warn / error` 都会记下来（最多 200 条，每条最长 2KB），在响应面板的
+  「控制台」页签里看。
+- **没列出来的 API 一律不支持**：调用时会抛「apiloop 暂不支持 xxx」，不会静默失效。
+  `postman.setNextRequest` 只给一条警告，不做跳转。
+
+### 变量写回
+
+| 用什么写 | 写到哪 |
+| --- | --- |
+| `pm.variables.set` | 只在本次请求内有效，**不保存** |
+| `pm.environment.set` | 当前选中的环境 |
+| `pm.collectionVariables.set`、`pm.globals.set` | 项目变量 |
+
+- **没选中环境时**，`pm.environment.set` 只在本次请求内有效，并给一条警告。
+- **只有 editor 及以上角色才会保存。** viewer 执行同样的脚本，修改只在本请求内有效，
+  并提示「只读角色：脚本对变量的修改没有保存」。
+- 保存时**只动脚本涉及到的那些 key**：其他变量的描述、启用状态、顺序都保持原样，
+  新增的追加到末尾、默认启用。所有写回在一个事务里完成，**请求失败或被取消也照样写回**
+  —— 前置脚本已经执行过了。
+
+### 结果与打码
+
+发送结果里的 `scripts` 有 `tests`（每条的名称、通过与否、失败原因）、`console`、`errors`、
+`warnings`、以及 `variables`（哪一级动了哪些 key，`persisted` 表示是否真的存进了库）。
+**没有任何脚本时它是 `null`**（这时也完全不加载 wasm）。
+
+历史对项目里所有成员可见，而脚本最常干的就是"把 token 打印出来"和"把 token 写进变量"，
+所以**别人查看你的历史时**：`scripts.console` 是空的，`variables` 里 `set` 的值是 `***`
+（key 保留，方便看出脚本动过哪些变量）。
+
+> **测试脚本在取消时不执行。** 取消的那次请求仍然会写历史（`ABORTED`），
+> 但前置脚本对变量的修改照样写回。
 
 ## Mock 数据模板
 
