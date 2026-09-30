@@ -32,6 +32,12 @@ export const useTreeStore = defineStore('tree', function () {
     return map;
   });
 
+  const folderById = computed(function () {
+    const map = new Map();
+    folders.value.forEach(function (folder) { map.set(folder.id, folder); });
+    return map;
+  });
+
   function apply(data) {
     folders.value = data.folders || [];
     apis.value = data.apis || [];
@@ -66,6 +72,16 @@ export const useTreeStore = defineStore('tree', function () {
 
   async function renameFolder(id, name) {
     const data = await treeApi.updateFolder(id, { name: name });
+    await refresh();
+    return data.folder;
+  }
+
+  /**
+   * 保存目录设置（名称 / 描述 / 鉴权 / 变量）。契约第 3 节 `PUT /folders/:id` 是部分更新，
+   * 所以调用方只传改动过的字段也可以。
+   */
+  async function saveFolder(id, patch) {
+    const data = await treeApi.updateFolder(id, patch);
     await refresh();
     return data.folder;
   }
@@ -108,6 +124,7 @@ export const useTreeStore = defineStore('tree', function () {
     apis: apis,
     nodes: nodes,
     apiById: apiById,
+    folderById: folderById,
     loading: loading,
     projectId: projectId,
     selectedFolderId: selectedFolderId,
@@ -116,6 +133,7 @@ export const useTreeStore = defineStore('tree', function () {
     refresh: refresh,
     createFolder: createFolder,
     renameFolder: renameFolder,
+    saveFolder: saveFolder,
     removeFolder: removeFolder,
     move: move,
     duplicateApi: duplicateApi,

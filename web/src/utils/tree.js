@@ -90,6 +90,28 @@ export function collectFolderKeys(nodes) {
 }
 
 /**
+ * 从一个目录往上走，返回 `[自己, 父目录, 祖父目录, ...]` —— **从内到外**。
+ *
+ * 鉴权继承（契约第 5 节第 2 步）和变量替换都要这个链，别在调用处各写一遍。
+ * 传 `folderId = null` 得到空数组，正好对应「接口没放在任何目录里」。
+ */
+export function folderChain(folders, folderId) {
+  const byId = new Map();
+  (folders || []).forEach(function (folder) { byId.set(folder.id, folder); });
+
+  const chain = [];
+  let id = folderId || null;
+  // 兜底：数据万一成环（正常情况服务端会拦），也不能把界面转死
+  while (id && chain.length < 64) {
+    const folder = byId.get(id);
+    if (!folder) break;
+    chain.push(folder);
+    id = folder.parentId || null;
+  }
+  return chain;
+}
+
+/**
  * 按关键词过滤（匹配接口名、url 或目录名）。
  * 命中的节点连同它的所有祖先目录一起保留，其余剪掉。
  */

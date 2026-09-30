@@ -6,6 +6,7 @@ import * as historyApi from '@/api/history';
 import { createSseParser } from '@/utils/sse';
 import { byteLength } from '@/utils/bytes';
 import { useWsStore } from '@/stores/ws';
+import { useTreeStore } from '@/stores/tree';
 
 let draftSeq = 0;
 let wsSeq = 0;
@@ -61,6 +62,19 @@ export function emptyLive() {
  */
 export function emptyWsSpec() {
   return { url: '', params: { headers: [], query: [] }, auth: null };
+}
+
+/**
+ * 目录设置标签页里可编辑的那部分（契约第 3 节 `PUT /folders/:id`）。
+ * 放进 `spec` 是为了直接复用标签页那套「和快照比出 dirty」的机制。
+ */
+export function folderSpecFrom(folder) {
+  return {
+    name: folder.name || '',
+    description: folder.description || '',
+    auth: folder.auth ? JSON.parse(JSON.stringify(folder.auth)) : { type: 'inherit' },
+    variables: JSON.parse(JSON.stringify(folder.variables || []))
+  };
 }
 
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
@@ -203,6 +217,45 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
+   * 打开目录设置。key 里带目录 id，所以**同一个目录只会有一个标签页**。
+   * 可编辑的内容放在 `spec` 上，这样「和快照比出 dirty」那套机制可以直接复用。
+   */
+  function openFolder(folderId) {
+    const key = 'folder:' + folderId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const folder = useTreeStore().folderById.get(folderId);
+    if (!folder) return null;
+
+    const spec = folderSpecFrom(folder);
+    const tab = Object.assign({
+      key: key,
+      kind: 'folder',
+      apiId: null,
+      folderId: folderId,
+      title: folder.name || '目录设置',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
    * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
    * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
    */
@@ -293,6 +346,15 @@ export const useTabsStore = defineStore('tabs', function () {
     removed.forEach(function (tab) { close(tab.key); });
   }
 
+  /** 目录被删掉之后同理，把它的设置标签页收掉 */
+  function syncWithFolders(folderIds) {
+    const known = new Set(folderIds);
+    const removed = tabs.value.filter(function (tab) {
+      return tab.kind === 'folder' && !known.has(tab.folderId);
+    });
+    removed.forEach(function (tab) { close(tab.key); });
+  }
+
   function markSaved(tab, api) {
     const spec = specFromApi(api);
     tab.api = api;
@@ -305,6 +367,15 @@ export const useTabsStore = defineStore('tabs', function () {
     tab.savedSnapshot = snapshot(spec);
     tab.dirty = false;
     activeKey.value = tab.key;
+  }
+
+  /** 目录设置保存成功后：用服务端返回的 folder 重算快照，dirty 自然就消了 */
+  function markFolderSaved(tab, folder) {
+    const spec = folderSpecFrom(folder);
+    tab.title = folder.name || '目录设置';
+    tab.spec = spec;
+    tab.savedSnapshot = snapshot(spec);
+    tab.dirty = false;
   }
 
   function touchActive() {
@@ -429,12 +500,15 @@ export const useTabsStore = defineStore('tabs', function () {
     openApi: openApi,
     openDraft: openDraft,
     openWs: openWs,
+    openFolder: openFolder,
     openHistory: openHistory,
     activate: activate,
     close: close,
     closeAll: closeAll,
     syncWithApis: syncWithApis,
+    syncWithFolders: syncWithFolders,
     markSaved: markSaved,
+    markFolderSaved: markFolderSaved,
     touch: touch,
     touchActive: touchActive,
     sendRequest: sendRequest,

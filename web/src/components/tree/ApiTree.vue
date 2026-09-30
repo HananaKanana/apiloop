@@ -7,7 +7,7 @@ import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree'
 import { usePrompt } from '@/utils/prompt';
 import TreeContextMenu from './TreeContextMenu.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder']);
 
 const projects = useProjectStore();
 const tree = useTreeStore();
@@ -113,30 +113,40 @@ function onSelectedChange(keys) {
 }
 
 function openMenu(event, node) {
-  // viewer 的右键菜单里没有任何能点的项（新建 / 重命名 / 删除 / 复制都要写权限），
-  // 索性不弹出来 —— 弹一个全是灰项的菜单比不弹更让人困惑
-  if (!projects.canEdit) return;
+  // viewer 没有任何写权限，但「目录设置」是能看的（打开后只读），所以目录上只给它这一项。
+  // 接口节点上没有任何 viewer 能用的项，那就不弹 —— 弹一个全是灰项的菜单比不弹更让人困惑
+  if (!projects.canEdit && node.kind !== 'folder') return;
 
   menu.value = {
     show: true,
     x: event.clientX,
     y: event.clientY,
     node: node,
-    options: node.kind === 'folder'
-      ? [
-          { label: '新建子目录', key: 'new-folder' },
-          { label: '新建接口', key: 'new-api' },
-          { type: 'divider', key: 'd1' },
-          { label: '重命名', key: 'rename' },
-          { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
-        ]
-      : [
-          { label: '复制', key: 'duplicate' },
-          { label: '重命名', key: 'rename' },
-          { type: 'divider', key: 'd2' },
-          { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
-        ]
+    options: node.kind === 'folder' ? folderMenuOptions() : apiMenuOptions()
   };
+}
+
+function folderMenuOptions() {
+  if (!projects.canEdit) return [{ label: '目录设置', key: 'folder-settings' }];
+
+  return [
+    { label: '目录设置', key: 'folder-settings' },
+    { type: 'divider', key: 'd0' },
+    { label: '新建子目录', key: 'new-folder' },
+    { label: '新建接口', key: 'new-api' },
+    { type: 'divider', key: 'd1' },
+    { label: '重命名', key: 'rename' },
+    { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
+  ];
+}
+
+function apiMenuOptions() {
+  return [
+    { label: '复制', key: 'duplicate' },
+    { label: '重命名', key: 'rename' },
+    { type: 'divider', key: 'd2' },
+    { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
+  ];
 }
 
 async function onMenuSelect(key) {
@@ -145,6 +155,7 @@ async function onMenuSelect(key) {
   if (!node) return;
 
   try {
+    if (key === 'folder-settings') return emit('open-folder', node.id);
     if (key === 'new-folder') return await createFolder(node.id);
     if (key === 'new-api') return emit('new-api', node.id);
     if (key === 'rename') return await rename(node);
@@ -377,6 +388,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         <n-tree
           v-if="displayTree.length"
           block-line
+          expand-on-click
           :data="displayTree"
           :expanded-keys="expandedKeys"
           :selected-keys="selectedKeys"
