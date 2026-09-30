@@ -45,9 +45,12 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 
 `mock web` 之后访问 `http://localhost:<端口>/__mock`。
 
+![管理台](docs/screenshot-console.jpg)
+
 | 能力 | 说明 |
 | --- | --- |
 | 接口增删改查 | 左侧按分组列出接口，可搜索、可一键停用、可复制、可删除 |
+| 分组管理 | 新建分组、重命名（该分组下接口一起改名）、删除分组（可选「接口移到未分组」或「连接口一起删除」）、拖动排序 |
 | 入参表单 | Query / Body 字段表格：字段名、类型、必填、说明、示例值；`{{@xx}}` 路径参数自动识别 |
 | 出参配置 | 响应类型（JSON / 纯文本 / HTML）、状态码、CORS 开关、响应延时、自定义响应头 |
 | JSON 编辑器 | 语法高亮、实时校验（带行号）、格式化 / 压缩、Tab 缩进、滚动同步 |
@@ -59,6 +62,10 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 | 即时生效 | 保存后服务端热更新路由，无需重启；外部直接编辑 `routes.json` 也会自动生效 |
 | 导入导出 | 一键导出 `routes.json` |
 
+删除分组时会让用户明确选择接口去向，避免误删：
+
+![删除分组](docs/screenshot-group-delete.jpg)
+
 界面完全离线可用：零构建、无 CDN、无外部字体和图标。
 
 ## routes.json
@@ -68,6 +75,7 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 ```json
 {
   "version": 1,
+  "groups": ["用户", "订单"],
   "routes": [
     {
       "id": "r_lx3k2a",
@@ -104,6 +112,8 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 | `responseType` | `json` / `text` / `html` |
 | `response` | 响应体模板，支持下面的占位符语法，**每个请求都会重新渲染** |
 | `query` / `body` | 只是入参描述，用于文档和自测面板预填，不做强制校验 |
+
+顶层的 `groups` 是分组列表，决定侧边栏里分组的名字和顺序。它可以是空的，也可以包含还没有接口的分组；接口上的 `group` 只要写了新名字，会自动登记进来。老文件里没有 `groups` 字段也能正常用——分组会从接口的 `group` 里推导出来。
 
 `routes.json` 也可以直接写成顶层数组。
 
@@ -233,6 +243,11 @@ router.use('/hi', (req, res) => {
 | `PUT /__mock/api/routes/:id` | 更新 |
 | `DELETE /__mock/api/routes/:id` | 删除 |
 | `POST /__mock/api/routes/:id/duplicate` | 复制 |
+| `GET /__mock/api/groups` | 分组列表（含每个分组的接口数） |
+| `POST /__mock/api/groups` | 新建分组，body `{ name }` |
+| `PUT /__mock/api/groups/:name` | 重命名分组，body `{ name }`，该分组下接口一起改名 |
+| `DELETE /__mock/api/groups/:name` | 删除分组；默认把接口移到未分组，加 `?routes=delete` 则连接口一起删 |
+| `POST /__mock/api/groups/reorder` | 调整分组顺序，body `{ names: [...] }`，只传部分分组也可以 |
 | `POST /__mock/api/preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
 | `POST /__mock/api/import/curl` | 解析 cURL |
 | `POST /__mock/api/import/openapi` | 解析 OpenAPI / Swagger |
@@ -247,7 +262,7 @@ router.use('/hi', (req, res) => {
 npm test
 ```
 
-66 个用例，覆盖模板引擎与 JSON 容错、cURL / OpenAPI 导入、配置存储与热更新、管理台 API、以及 CLI 端到端（`init` / `web` / `start` / 端口占用 / 帮助信息）。
+74 个用例，覆盖模板引擎与 JSON 容错、cURL / OpenAPI 导入、配置存储与热更新、分组管理、管理台 API、以及 CLI 端到端（`init` / `web` / `start` / 端口占用 / 帮助信息）。
 
 ## 目录结构
 
