@@ -31,6 +31,7 @@ import WsScenarioDialog from './WsScenarioDialog.vue';
 import { buildWsScenario } from '@/utils/wsScenario';
 import { resolveScope } from '@/utils/variables';
 import { HEADER_NAMES } from '@/utils/suggestions';
+import { usePaneTabsTheme } from '@/utils/paneTabs';
 
 /**
  * WebSocket 标签页（契约第 15、17 节）。两种形态共用这一个组件：
@@ -51,6 +52,7 @@ const ws = useWsStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
 const message = useMessage();
+const paneTabsTheme = usePaneTabsTheme();
 
 const activePane = ref('headers');
 const sending = ref(false);
@@ -496,7 +498,13 @@ watch(
     </n-alert>
 
     <div class="panes" :class="{ full: activePane === 'mock' }">
-      <n-tabs v-model:value="activePane" type="line" size="small" animated>
+      <n-tabs
+        v-model:value="activePane"
+        type="line"
+        size="small"
+        animated
+        :theme-overrides="paneTabsTheme"
+      >
         <n-tab-pane name="headers" tab="Headers">
           <div class="pane">
             <key-value-table

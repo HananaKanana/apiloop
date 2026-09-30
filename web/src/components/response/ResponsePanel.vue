@@ -15,10 +15,13 @@ import HeadersTable from './HeadersTable.vue';
 import SseEventsTable from './SseEventsTable.vue';
 import TimingsBar from './TimingsBar.vue';
 import { formatBytes } from '@/utils/bytes';
+import { usePaneTabsTheme } from '@/utils/paneTabs';
 
 /**
  * 响应面板。数据全部来自标签页上最近一次发送的结果。
  */
+const paneTabsTheme = usePaneTabsTheme();
+
 const props = defineProps({
   tab: { type: Object, required: true },
   savingExample: { type: Boolean, default: false },
@@ -305,7 +308,13 @@ function requestBodyText() {
 
 
         <div class="tabs">
-          <n-tabs v-model:value="activeTab" type="line" size="small" animated>
+          <n-tabs
+            v-model:value="activeTab"
+            type="line"
+            size="small"
+            animated
+            :theme-overrides="paneTabsTheme"
+          >
             <n-tab-pane name="body" tab="Body" :disabled="!response">
               <body-viewer v-if="response" :response="response" />
             </n-tab-pane>
