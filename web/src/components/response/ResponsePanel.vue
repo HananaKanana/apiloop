@@ -41,6 +41,7 @@ const ERROR_TEXT = {
   INVALID_HEADER: '请求头不合法。',
   FILE: '读取本地文件失败。',
   PROXY: '代理不可用：连不上代理，或者 CONNECT 隧道被拒绝了。检查系统设置里的代理地址，或者关掉这次请求的「使用系统代理」。',
+  SCRIPT: '前置脚本出错，请求没有发送。改完脚本再发，或者在「设置」页签里关掉这次请求的「执行脚本」。',
   OTHER: '请求失败。'
 };
 
@@ -127,6 +128,47 @@ const errorText = computed(function () {
   const base = ERROR_TEXT[error.value.code] || ERROR_TEXT.OTHER;
   return base + '（' + error.value.code + '：' + error.value.message + '）';
 });
+
+/* ---------------- 脚本结果（契约第 16 节） ---------------- */
+
+/** 一段脚本都没执行时服务端给 null */
+const scripts = computed(function () {
+  return (result.value && result.value.scripts) || null;
+});
+
+const scriptTests = computed(function () {
+  return (scripts.value && scripts.value.tests) || [];
+});
+
+const scriptConsole = computed(function () {
+  return (scripts.value && scripts.value.console) || [];
+});
+
+const scriptErrors = computed(function () {
+  return (scripts.value && scripts.value.errors) || [];
+});
+
+const scriptWarnings = computed(function () {
+  return (scripts.value && scripts.value.warnings) || [];
+});
+
+const testCount = computed(function () {
+  const list = scriptTests.value;
+  return {
+    total: list.length,
+    passed: list.filter(function (item) { return item.passed; }).length
+  };
+});
+
+/** 页签标题的颜色：全通过是绿的，有失败是红的 */
+const testTabClass = computed(function () {
+  if (!testCount.value.total) return '';
+  return testCount.value.passed === testCount.value.total ? 'tests-pass' : 'tests-fail';
+});
+
+function scriptErrorTitle(item) {
+  return item.phase === 'prerequest' ? '前置脚本出错' : '测试脚本出错';
+}
 
 /** 只有文本响应能存成示例；二进制存下来没意义 */
 const canSaveExample = computed(function () {
@@ -226,6 +268,21 @@ function requestBodyText() {
           {{ tab.sendError }}
         </n-alert>
 
+        <!-- 脚本出错：来源和原因都要写出来，不然用户不知道该去改哪一段 -->
+        <n-alert
+          v-for="(item, index) in scriptErrors"
+          :key="'script-error-' + index"
+          type="error"
+          :show-icon="false"
+          class="notice"
+        >
+          {{ scriptErrorTitle(item) }}（{{ item.source }}）：{{ item.message }}
+        </n-alert>
+
+        <n-alert v-if="scriptWarnings.length" type="warning" :show-icon="false" class="notice">
+          <div v-for="(text, index) in scriptWarnings" :key="index">{{ text }}</div>
+        </n-alert>
+
         <n-alert v-if="tab.cancelled && !tab.sending" type="info" :show-icon="false" class="notice">
           这次请求已经取消。服务端会照常记一条历史（状态是「已取消」），里面是断开前收到的部分。
         </n-alert>
@@ -257,6 +314,37 @@ function requestBodyText() {
             <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
             <n-tab-pane v-if="tab.sseEvents" name="events" tab="事件">
               <sse-events-table :events="tab.sseEvents" :dropped="tab.sseDropped || 0" />
+            </n-tab-pane>
+
+            <!-- 有测试才有「测试结果」，有输出才有「控制台」—— 空页签是噪音 -->
+            <n-tab-pane v-if="scriptTests.length" name="tests">
+              <template #tab>
+                <span :class="testTabClass">测试结果 {{ testCount.passed }}/{{ testCount.total }}</span>
+              </template>
+              <div class="script-list">
+                <div v-for="(item, index) in scriptTests" :key="index" class="test-row">
+                  <span class="mark" :class="{ fail: !item.passed }">
+                    {{ item.passed ? '通过' : '失败' }}
+                  </span>
+                  <span class="test-name">{{ item.name }}</span>
+                  <span v-if="!item.passed && item.error" class="test-error">{{ item.error }}</span>
+                </div>
+              </div>
+            </n-tab-pane>
+
+            <n-tab-pane v-if="scriptConsole.length" name="console" tab="控制台">
+              <div class="script-list">
+                <div
+                  v-for="(line, index) in scriptConsole"
+                  :key="index"
+                  class="console-row"
+                  :class="'level-' + line.level"
+                >
+                  <span class="console-source">{{ line.source }}</span>
+                  <span class="console-level">{{ line.level }}</span>
+                  <span class="console-text">{{ line.text }}</span>
+                </div>
+              </div>
             </n-tab-pane>
 
             <n-tab-pane name="headers" tab="Headers" :disabled="!displayHeaders">
@@ -442,5 +530,84 @@ function requestBodyText() {
   white-space: pre-wrap;
   word-break: break-all;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 页签标题上的通过数：全通过才绿，有失败就红 */
+.tests-pass {
+  color: #18a058;
+}
+
+.tests-fail {
+  color: #d03050;
+}
+
+.script-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px;
+}
+
+.test-row,
+.console-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 通过是常态，保持中性；只有失败才上色 */
+.mark {
+  flex: none;
+  width: 32px;
+  opacity: 0.65;
+}
+
+.mark.fail {
+  color: #d03050;
+  opacity: 1;
+}
+
+.test-name {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.test-error {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.console-source {
+  flex: none;
+  width: 96px;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-level {
+  flex: none;
+  width: 44px;
+  opacity: 0.6;
+}
+
+.console-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.console-row.level-warn .console-text {
+  color: #f0a020;
+}
+
+.console-row.level-error .console-text {
+  color: #d03050;
 }
 </style>

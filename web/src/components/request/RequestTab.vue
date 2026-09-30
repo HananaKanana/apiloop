@@ -25,7 +25,7 @@ import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
 import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
-import ScriptsView from './ScriptsView.vue';
+import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
@@ -227,6 +227,9 @@ function changedFields(api, current) {
   if (JSON.stringify(current.params) !== JSON.stringify(saved.params)) patch.params = current.params;
   if (JSON.stringify(current.body) !== JSON.stringify(saved.body)) patch.body = current.body;
   if (JSON.stringify(current.auth) !== JSON.stringify(saved.auth)) patch.auth = current.auth;
+  if (JSON.stringify(current.scripts || []) !== JSON.stringify(saved.scripts || [])) {
+    patch.scripts = current.scripts || [];
+  }
 
   return patch;
 }
@@ -490,11 +493,11 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="scripts" tab="Scripts">
-          <div class="pane">
-            <scripts-view :scripts="(tab.api && tab.api.scripts) || []" />
-          </div>
-        </n-tab-pane>
+          <n-tab-pane name="scripts" tab="Scripts">
+            <div class="pane">
+              <script-editor v-model="spec.scripts" :disabled="!projects.canEdit" />
+            </div>
+          </n-tab-pane>
 
         <n-tab-pane name="settings" tab="设置">
           <div class="pane narrow">
@@ -525,6 +528,21 @@ onBeforeUnmount(function () {
                 <span class="option-desc">
                   按系统设置里的代理配置决定是否走代理（连不上的域名由「不走代理的地址列表」排除）。
                   关掉就是这次直连。
+                </span>
+              </div>
+            </div>
+
+            <div class="option-row">
+              <n-switch
+                size="small"
+                :value="requestOptions.scripts"
+                @update:value="(v) => setOption('scripts', v)"
+              />
+              <div class="option-text">
+                <span class="option-title">执行脚本</span>
+                <span class="option-desc">
+                  这次请求执行项目和目录上的脚本，以及接口自己的前置脚本和测试脚本。
+                  关掉就一段都不执行，适合脚本写坏了一时改不回来的情况。
                 </span>
               </div>
             </div>

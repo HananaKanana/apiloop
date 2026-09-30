@@ -6,7 +6,7 @@ import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import VarTable from '@/components/common/VarTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
-import ScriptsView from '@/components/request/ScriptsView.vue';
+import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import { folderChain } from '@/utils/tree';
 import { inheritHint } from '@/utils/auth';
 
@@ -38,13 +38,9 @@ const canEdit = computed(function () {
   return projects.canEdit;
 });
 
-/** 服务端那一份（只读展示脚本、算路径用），和正在编辑的 spec 分开 */
+/** 服务端那一份（算路径用），和正在编辑的 spec 分开 */
 const folder = computed(function () {
   return tree.folderById.get(props.tab.folderId) || null;
-});
-
-const scripts = computed(function () {
-  return (folder.value && folder.value.scripts) || [];
 });
 
 /** 「位置：A / B」——只显示上级，自己那一级已经在标题上了 */
@@ -92,7 +88,8 @@ async function save() {
       name: String(spec.value.name).trim(),
       description: spec.value.description,
       auth: spec.value.auth,
-      variables: spec.value.variables
+      variables: spec.value.variables,
+      scripts: spec.value.scripts
     });
     tabs.markFolderSaved(props.tab, saved);
     message.success('已保存');
@@ -184,8 +181,12 @@ onBeforeUnmount(function () {
           <auth-editor v-model="spec.auth" :disabled="!canEdit" :inherit-hint="authHint" />
         </n-card>
 
-        <n-card v-if="scripts.length" :bordered="false" size="small" title="脚本" class="card">
-          <scripts-view :scripts="scripts" />
+        <n-card :bordered="false" size="small" title="脚本" class="card">
+          <p class="tip">
+            这个目录下的接口发送时，会先按「项目 → 目录（从外到内）→ 接口」执行前置脚本，
+            响应回来后再按同样的顺序执行测试脚本。
+          </p>
+          <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="180px" />
         </n-card>
       </template>
     </div>

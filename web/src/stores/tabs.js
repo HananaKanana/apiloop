@@ -7,6 +7,8 @@ import { createSseParser } from '@/utils/sse';
 import { byteLength } from '@/utils/bytes';
 import { useWsStore } from '@/stores/ws';
 import { useTreeStore } from '@/stores/tree';
+import { useEnvStore } from '@/stores/env';
+import { useProjectStore } from '@/stores/project';
 
 let draftSeq = 0;
 let wsSeq = 0;
@@ -24,17 +26,20 @@ export function emptySpec() {
     url: '',
     params: { path: [], query: [], headers: [] },
     body: { mode: 'none' },
-    auth: null
+    auth: null,
+    // 脚本挂在 spec 上（契约第 16 节：接口的脚本取自 request.scripts），
+    // 这样没保存的脚本改动也会参与这次发送
+    scripts: []
   };
 }
 
 /**
- * `/send` 的 options（契约第 12 节）。两个开关默认都开：
- * 自动管理 Cookie、按系统设置走代理。它们是**这次请求**的选择，
+ * `/send` 的 options（契约第 12、16 节）。三个开关默认都开：
+ * 自动管理 Cookie、按系统设置走代理、执行脚本。它们是**这次请求**的选择，
  * 属于标签页自己的界面状态，不落库、也不进 spec。
  */
 export function emptyOptions() {
-  return { cookies: true, proxy: true };
+  return { cookies: true, proxy: true, scripts: true };
 }
 
 /**
@@ -73,7 +78,8 @@ export function folderSpecFrom(folder) {
     name: folder.name || '',
     description: folder.description || '',
     auth: folder.auth ? JSON.parse(JSON.stringify(folder.auth)) : { type: 'inherit' },
-    variables: JSON.parse(JSON.stringify(folder.variables || []))
+    variables: JSON.parse(JSON.stringify(folder.variables || [])),
+    scripts: JSON.parse(JSON.stringify(folder.scripts || []))
   };
 }
 
@@ -88,7 +94,8 @@ export function specFromApi(api) {
       headers: (api.params && api.params.headers) || []
     },
     body: api.body || { mode: 'none' },
-    auth: api.auth === undefined ? null : api.auth
+    auth: api.auth === undefined ? null : api.auth,
+    scripts: JSON.parse(JSON.stringify(api.scripts || []))
   };
 }
 
@@ -272,6 +279,8 @@ export const useTabsStore = defineStore('tabs', function () {
     const spec = Object.assign({}, record.request || emptySpec());
     const environmentId = spec.environmentId || '';
     delete spec.environmentId;
+    // 早期写进历史的 spec 里没有 scripts（P8 才加），补一个空的，别让编辑器拿到 undefined
+    if (!Array.isArray(spec.scripts)) spec.scripts = [];
 
     const result = record.result || null;
     const truncated = Boolean(
@@ -391,6 +400,21 @@ export const useTabsStore = defineStore('tabs', function () {
     return found;
   }
 
+  /**
+   * 脚本写回过变量（契约第 16 节的 `scripts.variables.persisted`）时，
+   * 把当前环境和项目的变量重新拉一遍 —— 「缺少变量」的提示和环境管理弹窗里
+   * 显示的值都得是最新的。拉失败不影响这次发送的结果，所以只吞掉。
+   */
+  function refreshVariablesIfPersisted(result) {
+    const scripts = result && result.scripts;
+    if (!scripts || !scripts.variables || !scripts.variables.persisted) return;
+
+    const envs = useEnvStore();
+    const projects = useProjectStore();
+    if (envs.projectId) envs.load(envs.projectId).catch(function () {});
+    projects.refresh().catch(function () {});
+  }
+
   function pushSseEvent(tab, item) {
     const list = tab.sseEvents || (tab.sseEvents = []);
     list.push({
@@ -460,6 +484,7 @@ export const useTabsStore = defineStore('tabs', function () {
         tab.result = event.result || null;
         tab.historyId = event.historyId || null;
         tab.missingVariables = (event.result && event.result.missingVariables) || [];
+        refreshVariablesIfPersisted(event.result);
       }
     }
 
