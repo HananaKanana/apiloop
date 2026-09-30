@@ -1,7 +1,7 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
 import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
-import { Dots, FileImport, Filter, Plus } from '@vicons/tabler';
+import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
@@ -36,10 +36,6 @@ const newOptions = [
   { label: 'WebSocket', key: 'ws' }
 ];
 
-const moreOptions = computed(function () {
-  return [{ label: anyExpanded.value ? '全部收起' : '全部展开', key: 'toggle' }];
-});
-
 function onNewSelect(key) {
   if (key === 'api') {
     emit('new-api', null);
@@ -53,10 +49,6 @@ function onNewSelect(key) {
     // 建在当前选中的目录下（和导入的落点规则一致）
     createFolder(tree.selectedFolderId || null);
   }
-}
-
-function onMoreSelect(key) {
-  if (key === 'toggle') toggleExpandAll();
 }
 
 const searchText = ref('');
@@ -447,13 +439,17 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         </template>
       </n-button>
 
-      <n-dropdown trigger="click" :options="moreOptions" @select="onMoreSelect">
-        <n-button size="small" quaternary title="更多">
-          <template #icon>
-            <n-icon :component="Dots" />
-          </template>
-        </n-button>
-      </n-dropdown>
+      <!-- 全部收起 / 全部展开：直接一个按钮，不再藏进「…」菜单（那里本来也只有这一项） -->
+      <n-button
+        size="small"
+        quaternary
+        :title="anyExpanded ? '全部收起' : '全部展开'"
+        @click="toggleExpandAll"
+      >
+        <template #icon>
+          <n-icon :component="anyExpanded ? Fold : FoldDown" />
+        </template>
+      </n-button>
     </div>
 
     <div class="group-title">目录</div>
