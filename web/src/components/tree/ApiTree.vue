@@ -314,6 +314,20 @@ function expandAll() {
   expandedKeys.value = collectFolderKeys(tree.nodes);
 }
 
+function collapseAll() {
+  expandedKeys.value = [];
+}
+
+/** 工具栏那一个按钮：有任何目录展开着就是「收起」，全收着才是「展开」 */
+const anyExpanded = computed(function () {
+  return expandedKeys.value.length > 0;
+});
+
+function toggleExpandAll() {
+  if (anyExpanded.value) collapseAll();
+  else expandAll();
+}
+
 function selectApi(apiId) {
   selectedKeys.value = ['a:' + apiId];
 }
@@ -330,7 +344,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         clearable
         placeholder="搜索名称或 url"
       />
-      <n-button size="small" quaternary title="全部展开" @click="expandAll">展开</n-button>
+      <n-button
+        size="small"
+        quaternary
+        :title="anyExpanded ? '全部收起' : '全部展开'"
+        @click="toggleExpandAll"
+      >
+        {{ anyExpanded ? '收起' : '展开' }}
+      </n-button>
       <n-button
         v-if="projects.canEdit"
         size="small"
