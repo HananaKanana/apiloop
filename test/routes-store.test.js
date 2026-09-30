@@ -24,7 +24,7 @@ test('normalizeRoute 补默认值', function () {
 test('normalizeRoute 拒绝非法输入', function () {
     assert.throws(function () { storeModule.normalizeRoute({ path: '/a', method: 'FETCH' }); }, /不支持的请求方法/);
     assert.throws(function () { storeModule.normalizeRoute({ path: '   ' }); }, /路径不能为空/);
-    assert.throws(function () { storeModule.normalizeRoute({ path: '/__mock/api/routes' }); }, /管理台占用的前缀/);
+    assert.throws(function () { storeModule.normalizeRoute({ path: '/__admin/api/routes' }); }, /管理台占用的前缀/);
 });
 
 test('normalizeRoute 约束数值范围', function () {

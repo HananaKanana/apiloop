@@ -25,7 +25,8 @@ test.before(async function () {
 
     var admin = adminModule.createAdmin({ store: store, version: 'test' });
     app.use(admin.apiPath, admin.api);
-    app.use(admin.mountPath, admin.static);
+    app.use(admin.rootStatic);
+    app.get('/', function (req, res) { res.redirect(302, admin.defaultPage); });
     app.use(runtimeModule.createRuntime(store).middleware);
 
     var server = app.listen(0);
@@ -37,7 +38,7 @@ test.before(async function () {
         dir: dir,
         base: 'http://127.0.0.1:' + server.address().port,
         api: function (method, url, body) {
-            return fetch(ctx.base + '/__mock/api' + url, {
+            return fetch(ctx.base + '/__admin/api' + url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: body === undefined ? undefined : JSON.stringify(body)
@@ -59,12 +60,32 @@ test.after(function () {
     if (ctx.server) ctx.server.close();
 });
 
-test('管理台页面可访问', async function () {
+test('老地址 /__mock 不再挂管理台页面', async function () {
     var res = await fetch(ctx.base + '/__mock/');
-    assert.strictEqual(res.status, 200);
-    var html = await res.text();
-    assert.ok(html.indexOf('server-mock 管理台') > -1);
-    assert.ok(html.indexOf('/__mock') > -1 || html.indexOf('app.js') > -1);
+    assert.strictEqual(res.status, 404, '老地址应该已经下线');
+});
+
+test('默认入口是 /index.html，根路径 302 过去', async function () {
+    var page = await fetch(ctx.base + '/index.html');
+    assert.strictEqual(page.status, 200);
+    assert.ok((await page.text()).indexOf('server-mock 管理台') > -1);
+
+    // 页面用的是相对路径，所以根路径下 app.js / style.css 也必须能取到
+    for (var asset of ['/app.js', '/style.css']) {
+        var res = await fetch(ctx.base + asset);
+        assert.strictEqual(res.status, 200, asset + ' 应该能访问');
+    }
+
+    var root = await fetch(ctx.base + '/', { redirect: 'manual' });
+    assert.strictEqual(root.status, 302);
+    assert.strictEqual(root.headers.get('location'), adminModule.DEFAULT_PAGE);
+});
+
+test('默认页面优先于使用者自己的 index.html', async function () {
+    // 根目录挂的 static 一旦有 index 选项就会把 / 变成 200 目录首页，跳转失效。
+    // 这里直接断言 / 不会返回 HTML，确保 index:false 没被人改掉。
+    var root = await fetch(ctx.base + '/', { redirect: 'manual' });
+    assert.notStrictEqual(root.status, 200, '/ 不应该直接返回页面，而要跳转');
 });
 
 test('meta 返回占位符 / 字段类型 / 模板', async function () {
@@ -283,7 +304,7 @@ test('删除接口后返回 404', async function () {
 });
 
 test('校验失败返回 400 且带可读错误', async function () {
-    var reserved = await ctx.api('POST', '/routes', { route: { path: '/__mock/hack' } });
+    var reserved = await ctx.api('POST', '/routes', { route: { path: '/__admin/hack' } });
     assert.strictEqual(reserved.status, 400);
     assert.ok(reserved.body.error.indexOf('管理台') > -1);
 
