@@ -56,4 +56,4 @@
   - `POST /projects/:pid/apis` 用 `mock.path = '/__admin/x'` 时的返回结果；
   - `npm pack --dry-run` 的文件数。
 
-  **量 `npm pack` 之前先 `git stash -u`，或者确认 session2 的 HAR 文件已经提交**，否则工作区里未跟踪的文件会被算进去（这个坑是你自己发现的）。
+  **量 `npm pack` 时绝对不要执行 `git stash`**：工作区是共用的，stash 会把 session2 正在写的 HAR 文件一起收走。做法是先把 HEAD 导出成一份干净副本，在副本里量：`git archive HEAD | tar -x -C <临时目录>`，然后进入这个目录执行 `npm pack --dry-run`。否则工作区里未跟踪的文件会被算进去（这个坑是你自己发现的）。
