@@ -18,7 +18,7 @@ mock init      # 生成示例 router.js / index.html / routes.json
 mock web       # 启动服务并打开管理台
 ```
 
-打开 <http://localhost:8080/__mock> 就能在页面上增删改接口，保存后立即生效，不用重启。
+打开 <http://localhost:8080/index.html> 就能在页面上增删改接口，保存后立即生效，不用重启。直接访问 <http://localhost:8080> 会自动跳到这个页面。
 
 也可以完全不用管理台，直接跑 `mock start`，它会读取同一份 `routes.json`。
 
@@ -26,7 +26,7 @@ mock web       # 启动服务并打开管理台
 
 | 命令 | 作用 |
 | --- | --- |
-| `mock web` | 启动服务 + `/__mock` 可视化管理台 |
+| `mock web` | 启动服务 + 可视化管理台（默认入口 `/index.html`） |
 | `mock start` | 只启动服务（也会加载 `routes.json`） |
 | `mock open` | 启动服务并自动打开目录里的 html |
 | `mock init` | 生成示例文件：`router.js`、`index.html`、`routes.json` |
@@ -43,7 +43,9 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 
 ## 可视化管理台
 
-`mock web` 之后访问 `http://localhost:<端口>/__mock`。
+`mock web` 之后访问 `http://localhost:<端口>/index.html`。只输入 `http://localhost:<端口>` 会自动 302 到这个页面。
+
+> 注意：`web` 模式下根路径的 `index.html`、`app.js`、`style.css` 归管理台使用，项目里同名的文件会被遮住。`start` 模式不挂管理台，不受影响。
 
 ![管理台](docs/screenshot-console.jpg)
 
@@ -105,7 +107,7 @@ mock web --config mock/routes.json  # 接口配置文件，默认当前目录的
 | 字段 | 说明 |
 | --- | --- |
 | `method` | `GET` `POST` `PUT` `DELETE` `PATCH` `HEAD` `OPTIONS` `ALL` |
-| `path` | Express 风格，支持 `:id` 路径参数；不能以 `/__mock` 开头（管理台占用） |
+| `path` | Express 风格，支持 `:id` 路径参数；不能以 `/__admin` 开头（管理台占用） |
 | `status` | 100~599 |
 | `delay` | 响应延时，毫秒 |
 | `cors` | 打开后自动补 `Access-Control-Allow-*`，并处理 `OPTIONS` 预检 |
@@ -237,22 +239,22 @@ router.use('/hi', (req, res) => {
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `GET /__mock/api/meta` | 占位符、字段类型、响应模板、方法列表、配置路径 |
-| `GET /__mock/api/routes` | 全部接口配置 |
-| `POST /__mock/api/routes` | 新建 |
-| `PUT /__mock/api/routes/:id` | 更新 |
-| `DELETE /__mock/api/routes/:id` | 删除 |
-| `POST /__mock/api/routes/:id/duplicate` | 复制 |
-| `GET /__mock/api/groups` | 分组列表（含每个分组的接口数） |
-| `POST /__mock/api/groups` | 新建分组，body `{ name }` |
-| `PUT /__mock/api/groups/:name` | 重命名分组，body `{ name }`，该分组下接口一起改名 |
-| `DELETE /__mock/api/groups/:name` | 删除分组；默认把接口移到未分组，加 `?routes=delete` 则连接口一起删 |
-| `POST /__mock/api/groups/reorder` | 调整分组顺序，body `{ names: [...] }`，只传部分分组也可以 |
-| `POST /__mock/api/preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
-| `POST /__mock/api/import/curl` | 解析 cURL |
-| `POST /__mock/api/import/openapi` | 解析 OpenAPI / Swagger |
-| `POST /__mock/api/import/routes` | 批量落库 |
-| `GET /__mock/api/export` | 导出 routes.json |
+| `GET /__admin/api/meta` | 占位符、字段类型、响应模板、方法列表、配置路径 |
+| `GET /__admin/api/routes` | 全部接口配置 |
+| `POST /__admin/api/routes` | 新建 |
+| `PUT /__admin/api/routes/:id` | 更新 |
+| `DELETE /__admin/api/routes/:id` | 删除 |
+| `POST /__admin/api/routes/:id/duplicate` | 复制 |
+| `GET /__admin/api/groups` | 分组列表（含每个分组的接口数） |
+| `POST /__admin/api/groups` | 新建分组，body `{ name }` |
+| `PUT /__admin/api/groups/:name` | 重命名分组，body `{ name }`，该分组下接口一起改名 |
+| `DELETE /__admin/api/groups/:name` | 删除分组；默认把接口移到未分组，加 `?routes=delete` 则连接口一起删 |
+| `POST /__admin/api/groups/reorder` | 调整分组顺序，body `{ names: [...] }`，只传部分分组也可以 |
+| `POST /__admin/api/preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
+| `POST /__admin/api/import/curl` | 解析 cURL |
+| `POST /__admin/api/import/openapi` | 解析 OpenAPI / Swagger |
+| `POST /__admin/api/import/routes` | 批量落库 |
+| `GET /__admin/api/export` | 导出 routes.json |
 
 统一返回 `{ ok: true, ... }` 或 `{ ok: false, error: "..." }`。
 

@@ -35,7 +35,7 @@ async function waitForServer(base, timeoutMs) {
     var deadline = Date.now() + (timeoutMs || 10000);
     while (Date.now() < deadline) {
         try {
-            var res = await fetch(base + '/__mock/api/meta');
+            var res = await fetch(base + '/__admin/api/meta');
             if (res.ok) return await res.json();
         } catch (err) {
             // 还没起来，继续等
@@ -61,7 +61,7 @@ test('web --help 列出 --config 示例', function () {
     var result = runCli(['web', '--help']);
     assert.strictEqual(result.status, 0);
     assert.ok(result.stdout.indexOf('--config') > -1);
-    assert.ok(result.stdout.indexOf('/__mock') > -1);
+    assert.ok(result.stdout.indexOf('/index.html') > -1, '帮助里应给出默认入口');
 });
 
 test('非法命令以 1 退出并打印帮助', function () {
@@ -112,10 +112,18 @@ test('web：启动管理台，API 与 mock 路由都可用', async function () {
         assert.strictEqual(meta.ok, true);
         assert.ok(meta.placeholders.length > 0);
 
-        // 管理台页面
-        var page = await fetch(base + '/__mock/');
-        assert.strictEqual(page.status, 200);
-        assert.ok((await page.text()).indexOf('server-mock 管理台') > -1);
+        // 老地址 /__mock 已经下线
+        var legacy = await fetch(base + '/__mock/');
+        assert.strictEqual(legacy.status, 404, '老地址应该不再挂管理台');
+
+        // 默认入口是 /index.html，访问根路径自动跳过去
+        var defaultPage = await fetch(base + '/index.html');
+        assert.strictEqual(defaultPage.status, 200);
+        assert.ok((await defaultPage.text()).indexOf('server-mock 管理台') > -1);
+
+        var root = await fetch(base, { redirect: 'manual' });
+        assert.strictEqual(root.status, 302);
+        assert.strictEqual(root.headers.get('location'), '/index.html');
 
         // routes.json 里的示例接口
         var users = await fetch(base + '/api/users?page=2');
@@ -125,7 +133,7 @@ test('web：启动管理台，API 与 mock 路由都可用', async function () {
         assert.strictEqual(body.data.page, '2', 'query 回显应生效');
 
         // 分组接口可用，且示例分组里正好是那 3 个接口
-        var groups = await (await fetch(base + '/__mock/api/groups')).json();
+        var groups = await (await fetch(base + '/__admin/api/groups')).json();
         var sample = groups.groups.filter(function (g) { return g.name === '用户'; })[0];
         assert.ok(sample, '应能读到 init 生成的示例分组');
         assert.strictEqual(sample.count, 3);
@@ -135,7 +143,7 @@ test('web：启动管理台，API 与 mock 路由都可用', async function () {
         assert.strictEqual((await detail.json()).data.id, '99');
 
         // 新建接口立即生效
-        var created = await fetch(base + '/__mock/api/routes', {
+        var created = await fetch(base + '/__admin/api/routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ route: { method: 'GET', path: '/api/added', response: '{"added":true}' } })
@@ -186,7 +194,7 @@ test('start：也会加载 routes.json（不需要 web 也能用配置好的接�
         assert.strictEqual(body.source, 'routes.json');
 
         // start 模式不挂管理台
-        var admin = await fetch(base + '/__mock/api/meta');
+        var admin = await fetch(base + '/__admin/api/meta');
         assert.strictEqual(admin.status, 404);
     } finally {
         child.kill('SIGTERM');

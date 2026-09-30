@@ -14,7 +14,7 @@ var VALID_COMMANDS = ['start', 'init', 'open', 'web'];
 var COMMANDS = {
     open: 'Start a web server and open html file in your browser, if any',
     start: 'Start a web server',
-    web: 'Start a web server with the visual mock console at /__mock',
+    web: 'Start a web server with the visual mock console at /index.html',
     init: 'Create the sample file router.js'
 };
 
