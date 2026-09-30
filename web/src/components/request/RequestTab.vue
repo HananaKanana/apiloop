@@ -3,8 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   NButton,
   NCheckbox,
+  NDropdown,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NModal,
   NSelect,
@@ -14,6 +16,7 @@ import {
   NTabs,
   useMessage
 } from 'naive-ui';
+import { ChevronDown, DeviceFloppy } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useTabsStore, specFromApi, emptyOptions } from '@/stores/tabs';
@@ -318,6 +321,77 @@ async function confirmSaveDraft() {
   }
 }
 
+/* ---------------- 面包屑与「另存为」 ---------------- */
+
+/** 项目 › 目录… › 接口名。临时标签页还没名字，最后一级就是「新建请求」 */
+const crumbs = computed(function () {
+  const list = [];
+  if (projects.current) list.push(projects.current.name);
+  folderChain(tree.folders, props.tab.folderId).forEach(function (folder) {
+    list.push(folder.name);
+  });
+  list.push(props.tab.title || '新建请求');
+  return list;
+});
+
+const saveMenu = [{ label: '另存为…', key: 'save-as' }];
+
+function onSaveMenu(key) {
+  if (key === 'save-as') saveAs();
+}
+
+/**
+ * 另存为：不管当前这个标签页绑没绑接口，都开那个「名称 + 目录」的弹窗，
+ * 确认之后走 createApi 建一个新的。绑了接口的会把标题带上「副本」做默认名。
+ */
+function saveAs() {
+  if (!projects.currentId) {
+    message.warning('还没有选中项目');
+    return;
+  }
+
+  const fallback = props.tab.apiId ? props.tab.title + ' 副本' : (props.tab.spec.url || '新建接口');
+  saveForm.value = {
+    name: fallback,
+    folderId: props.tab.folderId || null
+  };
+  showSaveDialog.value = true;
+}
+
+/* ---------------- 页签上的计数 ---------------- */
+
+/** 已启用、而且填了内容的行才算一条 */
+function enabledCount(rows) {
+  return (rows || []).filter(function (row) {
+    return row && row.enabled !== false && (row.key || row.value);
+  }).length;
+}
+
+/** 鉴权页签后面跟的那个词，和 AuthEditor 里的类型下拉一致 */
+const AUTH_LABELS = {
+  inherit: '继承',
+  none: '无',
+  bearer: 'Bearer',
+  basic: 'Basic',
+  apikey: 'API Key'
+};
+
+const paneStatus = computed(function () {
+  const spec = props.tab.spec;
+  const params = spec.params || {};
+  const auth = spec.auth || {};
+
+  return {
+    params: enabledCount(params.path) + enabledCount(params.query),
+    headers: enabledCount(params.headers),
+    hasBody: Boolean(spec.body && spec.body.mode && spec.body.mode !== 'none'),
+    hasScripts: (spec.scripts || []).some(function (item) {
+      return item && String(item.exec || '').trim();
+    }),
+    auth: AUTH_LABELS[String(auth.type || 'inherit')] || '继承'
+  };
+});
+
 /* ---------------- 保存为示例 ---------------- */
 
 function guessResponseType(headers) {
@@ -537,6 +611,38 @@ onBeforeUnmount(function () {
 
 <template>
   <div class="request-tab">
+    <!-- 面包屑：项目 › 目录… › 接口名，右边是保存 -->
+    <div class="crumb-bar">
+      <div class="crumbs">
+        <template v-for="(part, index) in crumbs" :key="index">
+          <span v-if="index" class="sep">›</span>
+          <span class="crumb" :class="{ last: index === crumbs.length - 1 }">{{ part }}</span>
+        </template>
+      </div>
+
+      <n-space v-if="projects.canEdit" align="center" :size="4">
+        <n-button
+          size="small"
+          :disabled="Boolean(tab.apiId) && !tab.dirty"
+          :loading="saving"
+          @click="save"
+        >
+          <template #icon>
+            <n-icon :component="DeviceFloppy" />
+          </template>
+          保存
+        </n-button>
+
+        <n-dropdown trigger="click" :options="saveMenu" @select="onSaveMenu">
+          <n-button size="small" quaternary title="更多保存方式">
+            <template #icon>
+              <n-icon :component="ChevronDown" />
+            </template>
+          </n-button>
+        </n-dropdown>
+      </n-space>
+    </div>
+
     <div class="head">
       <url-bar
         :method="spec.method"
@@ -548,14 +654,6 @@ onBeforeUnmount(function () {
         @send="onSend"
         @cancel="onCancel"
       />
-
-      <n-space align="center" :size="6">
-        <!-- Cookie 是「每个用户 × 每个项目」自己的数据，viewer 也能管，不跟只读角色一起收 -->
-        <n-button size="small" quaternary @click="showCookies = true">Cookie</n-button>
-        <n-button v-if="projects.canEdit" size="small" :loading="saving" @click="save">
-          {{ tab.apiId ? '保存' : '另存为' }}
-        </n-button>
-      </n-space>
     </div>
 
     <!-- 未定义的变量：发送前就提示，别等请求发出去才发现 -->
@@ -568,7 +666,17 @@ onBeforeUnmount(function () {
 
     <div class="panes" :class="{ full: activePane === 'mock' }">
       <n-tabs v-model:value="activePane" type="line" size="small" animated>
-        <n-tab-pane name="params" tab="Params">
+        <!-- 最右边：Cookie 管理（原来在地址栏那一行） -->
+        <template #suffix>
+          <n-button size="tiny" quaternary @click="showCookies = true">Cookies</n-button>
+        </template>
+
+        <n-tab-pane name="params">
+          <template #tab>
+            <span class="pane-tab">
+              Params<span v-if="paneStatus.params" class="count">{{ paneStatus.params }}</span>
+            </span>
+          </template>
           <div class="pane">
             <p class="label">查询参数</p>
             <key-value-table
@@ -588,7 +696,12 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="headers" tab="Headers">
+        <n-tab-pane name="headers">
+          <template #tab>
+            <span class="pane-tab">
+              Headers<span v-if="paneStatus.headers" class="count">{{ paneStatus.headers }}</span>
+            </span>
+          </template>
           <div class="pane">
             <key-value-table
               v-model="spec.params.headers"
@@ -599,13 +712,23 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="body" tab="Body">
+        <n-tab-pane name="body">
+          <template #tab>
+            <span class="pane-tab">
+              Body<span v-if="paneStatus.hasBody" class="pane-dot" />
+            </span>
+          </template>
           <div class="pane">
             <body-editor :spec="spec" :project-id="projects.currentId" :scope="scope" />
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="auth" tab="Auth">
+        <n-tab-pane name="auth">
+          <template #tab>
+            <span class="pane-tab">
+              Auth<span class="count">{{ paneStatus.auth }}</span>
+            </span>
+          </template>
           <div class="pane narrow">
             <auth-editor
               :model-value="spec.auth"
@@ -616,7 +739,12 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="scripts" tab="Scripts">
+        <n-tab-pane name="scripts">
+          <template #tab>
+            <span class="pane-tab">
+              Scripts<span v-if="paneStatus.hasScripts" class="pane-dot" />
+            </span>
+          </template>
           <div class="pane">
             <script-editor v-model="spec.scripts" :disabled="!projects.canEdit" />
           </div>
@@ -763,6 +891,45 @@ onBeforeUnmount(function () {
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
+/* 面包屑那一行：左边是路径，右边是保存 */
+.crumb-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px 0;
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.crumb {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.55;
+}
+
+/* 最后一级是当前接口，颜色正常、加粗一点 */
+.crumb.last {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.sep {
+  flex: none;
+  opacity: 0.35;
+}
+
 .head > :first-child {
   flex: 1;
   min-width: 0;
@@ -794,6 +961,42 @@ onBeforeUnmount(function () {
 /* 页签条左边留 16px。只推内容、不动 nav 本身，底下的分隔线才能整条贯通 */
 .panes :deep(.n-tabs-nav-scroll-content) {
   padding-left: 16px;
+}
+
+/*
+ * 选中的页签用浅灰底胶囊，不用下划线（和 Postman 一致）：
+ * 把 line 类型那条指示条藏掉，改用背景色。
+ */
+.panes :deep(.n-tabs-tab) {
+  padding: 0 10px;
+  border-radius: 5px;
+}
+
+.panes :deep(.n-tabs-tab.n-tabs-tab--active) {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.panes :deep(.n-tabs-bar) {
+  display: none;
+}
+
+/* 页签名字后面跟的计数 / 圆点 */
+.pane-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pane-tab .count {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.pane-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #0cbb52;
 }
 
 /* Mock 页签内容多，给它整块高度，响应面板先收起来 */

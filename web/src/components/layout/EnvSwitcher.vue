@@ -1,6 +1,7 @@
 <script setup>
 import { computed, watch } from 'vue';
-import { NButton, NDropdown } from 'naive-ui';
+import { NIcon, NDropdown } from 'naive-ui';
+import { ChevronDown } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useUiStore } from '@/stores/ui';
@@ -50,10 +51,38 @@ function onSelect(key) {
 
 <template>
   <n-dropdown :options="options" trigger="click" @select="onSelect">
-    <n-button size="small" quaternary>
-      {{ envs.selected ? envs.selected.name : '无环境' }}
-    </n-button>
+    <button class="switcher">
+      <span class="name">{{ envs.selected ? envs.selected.name : '无环境' }}</span>
+      <n-icon size="14" :component="ChevronDown" />
+    </button>
   </n-dropdown>
 
   <env-manager-modal v-model:show="showManager" />
 </template>
+
+<style scoped>
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.switcher:hover {
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.switcher .name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

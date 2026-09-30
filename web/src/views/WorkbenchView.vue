@@ -2,10 +2,11 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
-import { LayoutSidebarLeftCollapse, LayoutSidebarLeftExpand } from '@vicons/tabler';
+import { Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
+import EnvQuickView from '@/components/env/EnvQuickView.vue';
 import QuickOpen from '@/components/layout/QuickOpen.vue';
 import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
@@ -191,23 +192,23 @@ onBeforeUnmount(function () {
       <template #project>
         <project-switcher @change="onProjectChange" />
       </template>
-      <template #env>
-        <env-switcher />
-      </template>
     </top-bar>
 
     <div class="body">
-      <aside v-show="!collapsed" class="left" :style="{ width: leftWidth + 'px' }">
+      <!--
+        侧栏收起时不是整块消失，而是缩成 40px 的图标栏（SideBar 自己管），
+        所以这里只改宽度，不用 v-show —— 否则目录树会被卸载重建。
+      -->
+      <aside class="left" :style="{ width: collapsed ? '40px' : leftWidth + 'px' }">
         <side-bar
+          :collapsed="collapsed"
+          @toggle="toggleSidebar"
           @open="onOpenApi"
           @new-api="onNewApi"
           @new-ws="onNewWs"
           @open-folder="onOpenFolder"
           @import="ui.openImport()"
         />
-        <button class="collapse" title="收起侧栏（⌘\）" @click="toggleSidebar">
-          <n-icon size="16" :component="LayoutSidebarLeftCollapse" />
-        </button>
       </aside>
 
       <div
@@ -218,26 +219,37 @@ onBeforeUnmount(function () {
       />
 
       <main class="right">
-        <!-- 侧栏收起来之后，得留一个能再打开的入口 -->
-        <button v-if="collapsed" class="expand" title="展开侧栏（⌘\）" @click="toggleSidebar">
-          <n-icon size="16" :component="LayoutSidebarLeftExpand" />
-        </button>
-        <div v-if="tabs.tabs.length" class="tab-bar">
-          <div
-            v-for="tab in tabs.tabs"
-            :key="tab.key"
-            class="tab-item"
-            :class="{ active: tab.key === tabs.activeKey }"
-            @click="tabs.activate(tab.key)"
-          >
-            <span
-              v-if="tabMethod(tab)"
-              class="tab-method"
-              :style="{ color: methodColor(tabMethod(tab)) }"
-            >{{ tabMethod(tab) }}</span>
-            <span v-if="tab.dirty" class="dot" title="有没保存的修改" />
-            <span class="tab-title">{{ tab.title }}</span>
-            <span class="tab-close" title="关闭" @click.stop="closeTab(tab)">×</span>
+        <!--
+          标签行始终显示：右边的环境切换器（和它拉环境列表的 watcher）要一直挂着，
+          没有标签页时也不能卸载 —— 否则新建请求时环境变量就没了。
+        -->
+        <div class="tab-bar">
+          <div class="tab-list">
+            <div
+              v-for="tab in tabs.tabs"
+              :key="tab.key"
+              class="tab-item"
+              :class="{ active: tab.key === tabs.activeKey }"
+              @click="tabs.activate(tab.key)"
+            >
+              <span
+                v-if="tabMethod(tab)"
+                class="tab-method"
+                :style="{ color: methodColor(tabMethod(tab)) }"
+              >{{ tabMethod(tab) }}</span>
+              <span v-if="tab.dirty" class="dot" title="有没保存的修改" />
+              <span class="tab-title">{{ tab.title }}</span>
+              <span class="tab-close" title="关闭" @click.stop="closeTab(tab)">×</span>
+            </div>
+
+            <button class="tab-add" title="新建请求" @click="tabs.openDraft(null)">
+              <n-icon size="15" :component="Plus" />
+            </button>
+          </div>
+
+          <div class="tab-tail">
+            <env-quick-view />
+            <env-switcher />
           </div>
         </div>
 
@@ -293,46 +305,6 @@ onBeforeUnmount(function () {
   border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
-/* 侧栏最底下的折叠按钮 */
-.collapse,
-.expand {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: inherit;
-  opacity: 0.55;
-  cursor: pointer;
-  padding: 0;
-}
-
-.collapse {
-  height: 28px;
-  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
-}
-
-.collapse:hover,
-.expand:hover {
-  opacity: 1;
-}
-
-/* 侧栏收起来时浮在内容区左上角的小按钮 */
-.expand {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 5;
-  width: 26px;
-  height: 26px;
-  border-radius: 5px;
-}
-
-.expand:hover {
-  background: rgba(128, 128, 128, 0.14);
-}
-
 .splitter {
   flex: none;
   width: 5px;
@@ -355,18 +327,26 @@ onBeforeUnmount(function () {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* 侧栏收起来时，展开按钮要浮在左上角 */
-  position: relative;
 }
 
 .tab-bar {
   flex: none;
   display: flex;
-  align-items: stretch;
-  gap: 1px;
-  overflow-x: auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px 3px 6px;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
   background: rgba(128, 128, 128, 0.06);
+}
+
+/* 标签列表占满剩下的宽度，标签多了就横向滚 */
+.tab-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
 }
 
 .tab-item {
@@ -374,12 +354,12 @@ onBeforeUnmount(function () {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
-  height: 32px;
+  padding: 0 8px 0 10px;
+  height: 26px;
   max-width: 220px;
+  border-radius: 5px;
   font-size: 12px;
   cursor: pointer;
-  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
   white-space: nowrap;
 }
 
@@ -387,9 +367,39 @@ onBeforeUnmount(function () {
   background: rgba(128, 128, 128, 0.12);
 }
 
+/* 选中的标签页：浅灰底胶囊，不用下划线 */
 .tab-item.active {
-  background: var(--n-color, #fff);
-  box-shadow: inset 0 -2px 0 var(--apiloop-primary);
+  background: rgba(128, 128, 128, 0.2);
+}
+
+/* 标签行最后面的「＋」：新建一个空白请求 */
+.tab-add {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.tab-add:hover {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+/* 最右边：环境快速查看 + 环境切换 */
+.tab-tail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .tab-title {

@@ -50,25 +50,31 @@ function renderMethodOption(option) {
 
 <template>
   <div class="url-bar">
-    <n-select
-      class="method"
-      size="small"
-      tag
-      filterable
-      :options="methodOptions"
-      :render-label="renderMethodOption"
-      :value="String(method || 'GET').toUpperCase()"
-      @update:value="(v) => emit('update:method', String(v).toUpperCase())"
-    />
+    <!-- 方法下拉和地址合成一个带边框的整体：下拉自己不要边框，中间一条竖线分开 -->
+    <div class="url-box">
+      <n-select
+        class="method"
+        size="small"
+        tag
+        filterable
+        :options="methodOptions"
+        :render-label="renderMethodOption"
+        :value="String(method || 'GET').toUpperCase()"
+        @update:value="(v) => emit('update:method', String(v).toUpperCase())"
+      />
 
-    <var-input
-      class="url"
-      :model-value="url"
-      :scope="scope"
-      placeholder="https://example.com/api/users/:id，支持 {{变量}}"
-      @update:model-value="(v) => emit('update:url', v)"
-      @enter="emit('send')"
-    />
+      <span class="divider" />
+
+      <var-input
+        class="url"
+        borderless
+        :model-value="url"
+        :scope="scope"
+        placeholder="https://example.com/api/users/:id，支持 {{变量}}"
+        @update:model-value="(v) => emit('update:url', v)"
+        @enter="emit('send')"
+      />
+    </div>
 
     <n-button
       v-if="sending"
@@ -80,7 +86,16 @@ function renderMethodOption(option) {
     >
       取消
     </n-button>
-    <n-button v-else class="send" size="small" type="primary" @click="emit('send')">
+    <!-- Postman 的 Send 一直是蓝色，和主色无关，用户看惯了 -->
+    <n-button
+      v-else
+      class="send"
+      size="small"
+      color="#097bed"
+      text-color="#fff"
+      :bordered="false"
+      @click="emit('send')"
+    >
       发送
     </n-button>
   </div>
@@ -93,9 +108,46 @@ function renderMethodOption(option) {
   gap: 8px;
 }
 
+.url-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-right: 8px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.4));
+  border-radius: 5px;
+  transition: border-color 0.3s;
+}
+
+.url-box:focus-within {
+  border-color: var(--apiloop-primary);
+}
+
+/* 方法下拉去掉自己的边框和底色，融进外面那个框 */
+.url-box :deep(.n-base-selection) {
+  --n-border: none;
+  --n-border-hover: none;
+  --n-border-focus: none;
+  --n-border-active: none;
+  --n-box-shadow-focus: none;
+  --n-box-shadow-hover: none;
+  --n-color: transparent;
+  --n-color-active: transparent;
+  background-color: transparent;
+}
+
 .method {
   flex: none;
-  width: 110px;
+  width: 100px;
+}
+
+.divider {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin-right: 8px;
+  background: var(--n-border-color, rgba(128, 128, 128, 0.4));
 }
 
 .url {
@@ -106,6 +158,7 @@ function renderMethodOption(option) {
 .send {
   flex: none;
   width: 72px;
+  height: 32px;
 }
 
 .method-text {
