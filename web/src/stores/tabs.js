@@ -20,6 +20,15 @@ export function emptySpec() {
   };
 }
 
+/**
+ * `/send` 的 options（契约第 12 节）。两个开关默认都开：
+ * 自动管理 Cookie、按系统设置走代理。它们是**这次请求**的选择，
+ * 属于标签页自己的界面状态，不落库、也不进 spec。
+ */
+export function emptyOptions() {
+  return { cookies: true, proxy: true };
+}
+
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
 export function specFromApi(api) {
   return {
@@ -84,6 +93,7 @@ export const useTabsStore = defineStore('tabs', function () {
       title: data.api.name || '未命名接口',
       spec: spec,
       savedSnapshot: snapshot(spec),
+      options: emptyOptions(),
       api: data.api,
       dirty: false,
       result: null,
@@ -109,6 +119,7 @@ export const useTabsStore = defineStore('tabs', function () {
       title: '新建请求',
       spec: emptySpec(),
       savedSnapshot: null,
+      options: emptyOptions(),
       api: null,
       dirty: false,
       result: null,
@@ -159,6 +170,7 @@ export const useTabsStore = defineStore('tabs', function () {
       title: spec.url || '历史记录',
       spec: spec,
       savedSnapshot: null,
+      options: emptyOptions(),
       api: null,
       dirty: false,
       result: result,
@@ -235,7 +247,8 @@ export const useTabsStore = defineStore('tabs', function () {
         {
           request: clone(tab.spec),
           apiId: tab.apiId || undefined,
-          environmentId: environmentId || undefined
+          environmentId: environmentId || undefined,
+          options: clone(tab.options || emptyOptions())
         },
         tab.controller.signal
       );

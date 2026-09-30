@@ -38,6 +38,7 @@ const ERROR_TEXT = {
   INVALID_URL: 'URL 不合法。',
   INVALID_HEADER: '请求头不合法。',
   FILE: '读取本地文件失败。',
+  PROXY: '代理不可用：连不上代理，或者 CONNECT 隧道被拒绝了。检查系统设置里的代理地址，或者关掉这次请求的「使用系统代理」。',
   OTHER: '请求失败。'
 };
 
@@ -61,6 +62,11 @@ const request = computed(function () {
 
 const redirects = computed(function () {
   return (result.value && result.value.redirects) || [];
+});
+
+/** 这次请求实际用的代理（地址里的密码服务端已经打码）；直连时为 null */
+const proxy = computed(function () {
+  return (result.value && result.value.proxy) || null;
 });
 
 function formatSize(bytes) {
@@ -118,6 +124,10 @@ function requestBodyText() {
             </n-tag>
             <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
             <span class="metric">大小 {{ formatSize(response.size) }}</span>
+
+            <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
+              经由代理 {{ proxy.url }}
+            </n-tag>
 
             <n-popover v-if="redirects.length" trigger="click" placement="bottom-start">
               <template #trigger>
@@ -266,6 +276,14 @@ function requestBodyText() {
 
 .clickable {
   cursor: pointer;
+}
+
+/* 代理地址可能很长，别把状态条撑开 */
+.proxy-tag {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .redirect-list {

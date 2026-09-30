@@ -31,6 +31,7 @@ const options = computed(function () {
   ];
   if (session.isAdmin) {
     items.push({ label: '用户管理', key: 'users' });
+    items.push({ label: '系统设置', key: 'settings' });
   }
   items.push({ type: 'divider', key: 'd1' });
   items.push({ label: '退出登录', key: 'logout' });
@@ -67,6 +68,7 @@ async function submitPassword() {
 async function onSelect(key) {
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
+  if (key === 'settings') return router.push('/settings');
   if (key === 'about') return emit('about');
   if (key === 'logout') {
     await session.logout();
