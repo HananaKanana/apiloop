@@ -2,3 +2,9 @@
 node_modules
 .router.js
 server-mock-*.tgz
+
+# 接口数据库是运行时生成的，不入库
+routes.db
+routes.db-journal
+routes.db-wal
+routes.db-shm

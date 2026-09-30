@@ -4,10 +4,11 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 var storeModule = require('../lib/routes-store');
+var db = require('../lib/db');
 
 function tempStore() {
     var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-store-'));
-    return { store: storeModule.createStore({ file: path.join(dir, 'routes.json') }), dir: dir };
+    return { store: storeModule.createStore({ file: path.join(dir, 'routes.db') }), dir: dir };
 }
 
 test('normalizeRoute 补默认值', function () {
@@ -71,18 +72,18 @@ test('CRUD：新建 / 查询 / 更新 / 复制 / 删除', function () {
     assert.strictEqual(store.duplicate('not-exist'), null);
 });
 
-test('落盘：文件格式、原子替换、可被重新读取', function () {
+test('落盘：写进数据库并可被重新读取', function () {
     var ctx = tempStore();
     var store = ctx.store;
-    store.create({ path: '/api/a' });
+    store.create({ path: '/api/a', group: 'G' });
     store.create({ path: '/api/b' });
 
-    var text = fs.readFileSync(store.filePath, 'utf-8');
-    var doc = JSON.parse(text);
-    assert.strictEqual(doc.version, 1);
-    assert.strictEqual(doc.routes.length, 2);
-    assert.ok(text.endsWith('\n'), '文件应以换行结尾');
-    assert.strictEqual(fs.existsSync(store.filePath + '.tmp'), false, '临时文件应已被 rename');
+    // 配置现在落在 SQLite 库里，直接查表核对内容与顺序
+    var handle = db.openDatabase(store.filePath);
+    var doc = db.readAll(handle);
+    db.close(handle);
+    assert.deepStrictEqual(doc.routes.map(function (r) { return r.path; }), ['/api/a', '/api/b']);
+    assert.deepStrictEqual(doc.groups, ['G'], '分组也要落库');
 
     var reloaded = storeModule.createStore({ file: store.filePath });
     assert.strictEqual(reloaded.load().length, 2);
@@ -104,50 +105,68 @@ test('change 事件在增删改后触发', function () {
     assert.strictEqual(store.getRoutes().length, 2);
 });
 
-test('load 对空文件与缺失文件都返回空列表', function () {
+test('load 对缺失的库和空库都返回空列表', function () {
     var ctx = tempStore();
-    assert.deepStrictEqual(ctx.store.load(), []);
-
-    fs.writeFileSync(ctx.store.filePath, '   \n');
-    assert.deepStrictEqual(ctx.store.load(), []);
+    assert.deepStrictEqual(ctx.store.load(), [], '库文件还不存在时应为空');
+    assert.deepStrictEqual(ctx.store.load(), [], '库已建好但还是空的时候仍应为空');
+    assert.deepStrictEqual(ctx.store.getGroups(), []);
 });
 
-test('load 对坏 JSON 抛出可读错误', function () {
+test('库文件不是 SQLite 时给出可读错误', function () {
     var ctx = tempStore();
-    fs.writeFileSync(ctx.store.filePath, '{ this is not json');
-    assert.throws(function () { ctx.store.load(); }, /不是合法的 JSON/);
+    // 模拟 --config 指到一个旧的 JSON 配置文件上
+    fs.writeFileSync(ctx.store.filePath, '{ this is not a database');
+    assert.throws(function () { ctx.store.load(); }, /不是 SQLite 数据库/);
 });
 
-test('load 支持直接是数组的写法', function () {
+test('旧 routes.json 坏掉时只记警告，不影响启动', function () {
     var ctx = tempStore();
-    fs.writeFileSync(ctx.store.filePath, JSON.stringify([{ path: '/api/a' }]));
-    assert.strictEqual(ctx.store.load().length, 1);
+    fs.writeFileSync(path.join(ctx.dir, 'routes.json'), '{ 这不是合法 JSON');
+    assert.deepStrictEqual(ctx.store.load(), [], '坏 JSON 不该让服务起不来');
+    assert.strictEqual(ctx.store.getRoutes().length, 0);
+    assert.strictEqual(ctx.store.getMigrationWarnings().length, 1);
+    assert.ok(/不是合法 JSON/.test(ctx.store.getMigrationWarnings()[0]));
 });
 
-test('文件监听：外部修改后触发 change 并重新加载', async function () {
+test('旧 routes.json 支持直接是数组的极简写法', function () {
+    var ctx = tempStore();
+    fs.writeFileSync(path.join(ctx.dir, 'routes.json'), JSON.stringify([{ path: '/api/a' }]));
+    ctx.store.load();
+    assert.strictEqual(ctx.store.getRoutes().length, 1);
+    assert.strictEqual(ctx.store.getRoutes()[0].path, '/api/a');
+    assert.strictEqual(ctx.store.getMigratedFrom(), path.join(ctx.dir, 'routes.json'));
+});
+
+test('文件监听：外部改库后触发 change 并重新加载', async function () {
     var ctx = tempStore();
     var store = ctx.store;
     store.load();
+    store.create({ path: '/api/self' });
     store.startWatching();
     try {
         var events = 0;
         store.on('change', function () { events++; });
 
-        // fs.watch 从调用到真正生效有一小段时间，立刻写文件会漏掉事件（测试竞态）
+        // fs.watch 从调用到真正生效有一小段时间，立刻写会漏掉事件（测试竞态）
         await new Promise(function (resolve) { setTimeout(resolve, 200); });
-        fs.writeFileSync(store.filePath, JSON.stringify({ version: 1, routes: [{ id: 'x', path: '/api/from-disk' }] }));
+
+        // 模拟「外部拿 sqlite3 命令行改了数据」：另开一条连接直接写库
+        var handle = db.openDatabase(store.filePath);
+        var doc = db.readAll(handle);
+        doc.routes.push(storeModule.normalizeRoute({ path: '/api/from-db' }, { keepId: true }));
+        db.writeAll(handle, doc);
+        db.close(handle);
 
         var deadline = Date.now() + 5000;
         function reloaded() {
-            var list = store.getRoutes();
-            return list.length === 1 && list[0].path === '/api/from-disk';
+            return store.getRoutes().some(function (r) { return r.path === '/api/from-db'; });
         }
         while (Date.now() < deadline && !reloaded()) {
             await new Promise(function (resolve) { setTimeout(resolve, 50); });
         }
 
-        assert.ok(reloaded(), '外部写入后应重新加载，当前: ' + JSON.stringify(store.getRoutes()));
-        assert.ok(events > 0, '外部修改应触发 change 事件');
+        assert.ok(reloaded(), '外部改库后应重新加载，当前: ' + JSON.stringify(store.getRoutes()));
+        assert.ok(events > 0, '外部改动应触发 change 事件');
     } finally {
         store.stopWatching();
     }
@@ -266,22 +285,26 @@ test('分组排序：完整重排 / 部分重排 / 非法名字', function () {
     assert.throws(function () { store.reorderGroups(['不存在']); }, /分组不存在/);
     assert.throws(function () { store.reorderGroups('A'); }, /必须是数组/);
 
-    // 顺序要落盘
-    var doc = JSON.parse(fs.readFileSync(store.filePath, 'utf-8'));
-    assert.deepStrictEqual(doc.groups, ['A', 'C', 'B']);
+    // 顺序要落盘：重开一次读回来
+    var reopened = storeModule.createStore({ file: store.filePath });
+    reopened.load();
+    assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['A', 'C', 'B']);
 });
 
-test('分组会写进 routes.json，老文件没有 groups 也能用', function () {
+test('分组会落进数据库，旧配置没有 groups 也能推导出来', function () {
     var ctx = tempStore();
     var store = ctx.store;
     store.load();
     store.addGroup('空分组也应保存');
-    var doc = JSON.parse(fs.readFileSync(store.filePath, 'utf-8'));
-    assert.deepStrictEqual(doc.groups, ['空分组也应保存']);
 
-    // 老格式：只有 routes，没有 groups
+    var reopened = storeModule.createStore({ file: store.filePath });
+    reopened.load();
+    assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['空分组也应保存']);
+    assert.strictEqual(reopened.getGroups()[0].count, 0, '空分组的接口数是 0');
+
+    // 旧格式：只有 routes，没有 groups —— 分组从接口的 group 推导
     var legacy = tempStore();
-    fs.writeFileSync(legacy.store.filePath, JSON.stringify({
+    fs.writeFileSync(path.join(legacy.dir, 'routes.json'), JSON.stringify({
         version: 1,
         routes: [{ id: 'r1', path: '/api/a', group: '老分组' }, { id: 'r2', path: '/api/b', group: '老分组' }]
     }));
@@ -290,7 +313,7 @@ test('分组会写进 routes.json，老文件没有 groups 也能用', function 
 
     // 只有路由数组的极简格式
     var bare = tempStore();
-    fs.writeFileSync(bare.store.filePath, JSON.stringify([{ path: '/api/a', group: 'x' }]));
+    fs.writeFileSync(path.join(bare.dir, 'routes.json'), JSON.stringify([{ path: '/api/a', group: 'x' }]));
     bare.store.load();
     assert.deepStrictEqual(bare.store.getGroups(), [{ name: 'x', count: 1 }]);
 });
