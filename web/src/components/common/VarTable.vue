@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { NCheckbox, NIcon, NInput, NTooltip } from 'naive-ui';
 import { Trash } from '@vicons/tabler';
+import { BARE_INPUT_THEME } from '@/utils/bareInput';
 
 /**
  * 变量表格：key、value、启用、secret。
@@ -76,7 +77,9 @@ function removeRow(index) {
 
     <div v-for="(row, index) in rows" :key="index" class="row" :class="{ off: row.enabled === false }">
       <div class="cell check">
+        <!-- 末尾的空行只是占位，不给复选框（和 KeyValueTable 一致） -->
         <n-checkbox
+          v-if="!row.__draft"
           :checked="row.enabled"
           :disabled="disabled"
           @update:checked="(v) => { updateRow(index, { enabled: v }); }"
@@ -88,6 +91,7 @@ function removeRow(index) {
           size="small"
           :value="row.key"
           :disabled="disabled"
+          :theme-overrides="BARE_INPUT_THEME"
           placeholder="变量名"
           @update:value="(v) => { updateRow(index, { key: v }); }"
         />
@@ -100,6 +104,7 @@ function removeRow(index) {
           :type="row.secret ? 'password' : 'text'"
           :show-password-on="row.secret ? 'click' : undefined"
           :disabled="disabled"
+          :theme-overrides="BARE_INPUT_THEME"
           placeholder="值"
           @update:value="(v) => { updateRow(index, { value: v }); }"
         />
@@ -109,6 +114,7 @@ function removeRow(index) {
         <n-tooltip trigger="hover">
           <template #trigger>
             <n-checkbox
+              v-if="!row.__draft"
               :checked="row.secret"
               :disabled="disabled"
               @update:checked="(v) => { updateRow(index, { secret: v }); }"
@@ -199,20 +205,6 @@ function removeRow(index) {
 .row.off .cell.key,
 .row.off .cell.value {
   opacity: 0.5;
-}
-
-/* 格子里的输入框去掉边框、底色和内外边距 */
-.cell :deep(.n-input) {
-  --n-border: none;
-  --n-border-hover: none;
-  --n-border-focus: none;
-  --n-box-shadow-focus: none;
-  --n-color: transparent;
-  --n-color-hover: transparent;
-  --n-color-focus: transparent;
-  --n-padding-left: 0;
-  --n-padding-right: 0;
-  --n-padding-vertical: 0;
 }
 
 .delete-button {
