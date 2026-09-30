@@ -5,6 +5,7 @@ import { ref } from 'vue';
 export const useUiStore = defineStore('ui', function () {
   const envManagerVisible = ref(false);
   const historyVisible = ref(false);
+  const importVisible = ref(false);
 
   function openEnvManager() {
     envManagerVisible.value = true;
@@ -14,10 +15,16 @@ export const useUiStore = defineStore('ui', function () {
     historyVisible.value = true;
   }
 
+  function openImport() {
+    importVisible.value = true;
+  }
+
   return {
     envManagerVisible: envManagerVisible,
     historyVisible: historyVisible,
+    importVisible: importVisible,
     openEnvManager: openEnvManager,
-    openHistory: openHistory
+    openHistory: openHistory,
+    openImport: openImport
   };
 });

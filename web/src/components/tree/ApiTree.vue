@@ -103,7 +103,13 @@ function onSelectedChange(keys) {
   if (!key) return;
 
   const node = findNode(tree.nodes, key);
-  if (node && node.kind === 'api') emit('open', node.api);
+  if (node && node.kind === 'api') {
+    tree.setSelectedFolder(node.parentId);
+    emit('open', node.api);
+    return;
+  }
+  // 选中目录时记下来，导入 cURL / OpenAPI 会落到这个目录
+  tree.setSelectedFolder(node ? node.id : null);
 }
 
 function openMenu(event, node) {
