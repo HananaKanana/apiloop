@@ -88,6 +88,23 @@ const results = computed(function () {
     .slice(0, MAX_ROWS);
 });
 
+/**
+ * 把文字按关键字切成几段，命中的那段标出来高亮（只标第一处连续命中，不区分大小写）。
+ * 子序列命中（比如 uif 命中 userInfo）就不标了 —— 零零散散的高亮反而难看。
+ */
+function segments(text, query) {
+  const source = String(text || '');
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) return [{ text: source, hit: false }];
+  const at = source.toLowerCase().indexOf(needle);
+  if (at === -1) return [{ text: source, hit: false }];
+  return [
+    { text: source.slice(0, at), hit: false },
+    { text: source.slice(at, at + needle.length), hit: true },
+    { text: source.slice(at + needle.length), hit: false }
+  ].filter(function (part) { return part.text; });
+}
+
 function move(step) {
   const total = results.value.length;
   if (!total) return;
@@ -178,8 +195,26 @@ watch(results, function () {
           @click="open(item)"
         >
           <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
-          <span class="name">{{ item.name }}</span>
-          <span class="path">{{ item.path }}</span>
+          <!-- 两行：上面是名字和所在目录，下面是地址 —— 只看名字分不清是不是要找的那个 -->
+          <div class="main">
+            <div class="line">
+              <span class="name">
+                <span
+                  v-for="(part, i) in segments(item.name, keyword)"
+                  :key="i"
+                  :class="{ hit: part.hit }"
+                >{{ part.text }}</span>
+              </span>
+              <span v-if="item.path" class="path">{{ item.path }}</span>
+            </div>
+            <div class="url">
+              <span
+                v-for="(part, i) in segments(item.url || '(没有地址)', keyword)"
+                :key="i"
+                :class="{ hit: part.hit }"
+              >{{ part.text }}</span>
+            </div>
+          </div>
         </div>
 
         <div v-if="!results.length" class="empty">没有匹配的接口</div>
@@ -212,7 +247,7 @@ watch(results, function () {
 
 .item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 6px 12px;
   cursor: pointer;
@@ -226,6 +261,7 @@ watch(results, function () {
 .method {
   flex: none;
   width: 44px;
+  line-height: 19px;
   text-align: right;
   font-size: 10px;
   font-weight: 700;
@@ -233,9 +269,20 @@ watch(results, function () {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .name {
   flex: none;
-  max-width: 260px;
+  max-width: 70%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -248,7 +295,25 @@ watch(results, function () {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  opacity: 0.55;
+  opacity: 0.5;
+  text-align: right;
+}
+
+.url {
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  /* 用灰色而不是 opacity：父元素半透明的话，里面高亮的那段也跟着变淡 */
+  color: #8a8f98;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 搜索命中的那一段：主色加粗 */
+.hit {
+  color: var(--apiloop-primary);
+  font-weight: 600;
 }
 
 .empty {
