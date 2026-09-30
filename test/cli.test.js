@@ -170,7 +170,7 @@ test('web：登录后管理台 API 与 mock 路由都可用', async function () 
 
         var page = await fetch(base + '/index.html');
         assert.strictEqual(page.status, 200);
-        assert.ok((await page.text()).indexOf('app.js') > -1);
+        assert.ok((await page.text()).indexOf('管理台') > -1, 'index.html 应该是新版管理台页面');
 
         // 老地址 /__mock 已经下线
         assert.strictEqual((await fetch(base + '/__mock/')).status, 404, '老地址应该不再挂管理台');
