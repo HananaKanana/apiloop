@@ -7,7 +7,7 @@ import { useProjectStore } from '@/stores/project';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 
 /**
- * 侧栏「环境」页（Task 7）。每个环境一行：点它在右边的环境编辑区里打开；
+ * 侧栏「环境」页（Task 7）。每个环境一行：单击在右边的环境编辑区里打开，双击设为当前环境；
  * 当前正在用的那个前面打勾；鼠标悬停时右边出现「…」菜单。
  */
 const envs = useEnvStore();
@@ -43,6 +43,13 @@ const canEdit = computed(function () {
 
 function openEnv(env) {
   envs.edit(env.id);
+}
+
+/** 双击：设为当前环境（单击只是在右边打开编辑） */
+function useEnv(env) {
+  if (env.id === envs.selectedId) return;
+  envs.select(env.id);
+  message.success('已切换到「' + env.name + '」');
 }
 
 async function createEnv() {
@@ -127,6 +134,7 @@ async function onMenuSelect(env, key) {
         class="item"
         :class="{ active: envs.editing && env.id === envs.editing.id }"
         @click="openEnv(env)"
+        @dblclick="useEnv(env)"
         @contextmenu.prevent="openContextMenu($event, env)"
       >
         <!-- 当前正在用的那个打勾，其余留空（不给常态留占位） -->
