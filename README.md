@@ -382,6 +382,50 @@ curl -i 'http://localhost:8080/api/users?id=404'
 # X-Apiloop-Mock: expectation:id%20%E6%98%AF%20404
 ```
 
+## Cookie 与代理
+
+调试「先登录、再调业务接口」这类接口时，不用再手动从浏览器里复制 cookie。
+
+**Cookie 是自动的**：发请求前从库里取出匹配的 cookie 放进请求头，响应里的 `Set-Cookie`
+再写回库 —— 每一跳都这么做，所以「登录接口 302 跳转到首页」这种链路，跳过去的那一跳
+就已经带上新 cookie 了。请求头里手写了 `Cookie` 时以手写的为准（整个请求都不再自动补），
+但响应里的 `Set-Cookie` 照样写回库。不想要这一套时，在 `/send` 里传 `options.cookies: false`。
+
+* **作用范围：每个用户在每个项目里各有一份，互相看不见。** cookie 往往就是登录凭证，
+  同一个项目的两个成员登录的是不同账号，共用一份等于把两个人的登录态搅在一起。
+* 匹配按 RFC 6265：`Domain` 和请求主机对得上、`Path` 是请求路径的前缀、`Secure` 的只能走
+  https、过期的不再发送（并会从库里删掉，`Max-Age=0` 就是立即删除）。
+  没写 `Domain` 的是 host-only，只发给完全相同的主机名。
+* 带 `Secure` 属性的 cookie 不会通过 http 发出去，界面上也只显示打码后的值。
+
+**历史记录里的打码**（历史是项目里所有成员都能看的，所以写进去之前先处理，
+**返回给发送者本人的结果保持原样**）：
+
+| 位置 | 处理 |
+| --- | --- |
+| 请求头 `Cookie` / `Authorization` / `Proxy-Authorization` | 值换成 `***` |
+| 响应头 `Set-Cookie` | 保留 cookie 名和各项属性，只把值换成 `***`，例如 `sid=***; Path=/; HttpOnly` |
+
+**代理**支持 http 代理：目标是 http 时直接转发，目标是 https 时用 `CONNECT` 建隧道
+（隧道里目标服务器的证书仍然按「是否校验证书」处理，隧道只解决怎么连过去）。
+代理设置在「设置」里改，`GET /settings/proxy` 登录即可读、`PUT /settings/proxy` 只有
+管理员能改。地址里的密码在任何输出里都是 `***`，提交时也填 `***` 表示「密码不变」。
+
+* 默认值从环境变量 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 读（大小写两种写法都认），
+  只要读到任何一个就视为启用。**读到的默认值不会写进库** —— 否则以后改环境变量就不生效了。
+* 地址只支持 `http://` 形式；`socks://`、`https://` 在保存时就返回 400。
+* `noProxy` 用逗号分隔，每项可以是精确主机名、`.` 开头的后缀、`host:port`，或者 `*`（全部直连）。
+  目标主机命中 noProxy 就直连，重定向之后换了主机也会重新判断。
+* `/send` 里传 `options.proxy: false` 可以让这一次请求直连。
+* 连不上代理、或者 `CONNECT` 返回的不是 2xx，错误码都是 `PROXY`（不会让请求「失败得很含糊」）。
+
+### 已知限制
+
+**不内置公共后缀列表**。`Domain` 那条规则只要求「至少含一个点」，所以 `Domain=co.uk`
+这样的写法仍然会被放行 —— 而我们没有任何办法在本地判断 `co.uk` 是公共后缀。真要严格，
+得带上几百 KB 的公共后缀表并持续更新，代价比收益大。自己控制的域名常规用不会有影响，
+**不要把别人的响应直接当成可信数据导入**。
+
 ## 兼容手写 router.js
 
 老的用法完全保留：当前目录存在 `router.js` 时照旧加载（`router` 就是 Express app）。
@@ -498,6 +542,25 @@ router.use('/hi', (req, res) => {
 | `POST /apis/:id/expectations/reorder` | 按 `{ ids: [...] }` 重排期望顺序 |
 | `GET /apis/:id` | 响应里带 `expectations`，按 `position` 排序 |
 
+### Cookie（契约第 12 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/cookies` | 列出**自己**在这个项目里的 cookie；已过期的不返回（并顺手从库里删掉） |
+| `POST /projects/:pid/cookies` | 手动新增或更新一条；按 `domain + path + name` 定位。`domain` 以 `.` 开头是域 cookie，否则 host-only |
+| `DELETE /cookies/:id` | 删一条自己的。不是自己的、与不存在，都是同一个 404「Cookie不存在」 |
+| `DELETE /projects/:pid/cookies?domain=` | 清空自己在这个项目下的 cookie；带 `domain` 时只清这个域名的 |
+
+> 每个用户在每个项目里各有一份，接口里没有任何一处能看到别人的。规则见
+> [Cookie 与代理](#cookie-与代理)。
+
+### 系统设置（契约第 12 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /settings/proxy` | 读取代理设置。登录即可，地址里的密码显示为 `***` |
+| `PUT /settings/proxy` | 修改代理设置。**仅管理员**；密码提交 `***` 表示不变 |
+
 ### Mock 调用日志（契约第 11 节）
 
 | 方法与路径 | 说明 |
@@ -564,11 +627,13 @@ lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只
 lib/command.js        start / open / web / init / user 命令实现
 lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
 lib/db/repos/         各表的增删改查
-lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / members / mock-log / templatize
+lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / members / mock-log / cookies / settings / templatize
 lib/api/guard.js      项目权限中间件：guard(level, locate)，判定逻辑在 lib/access.js
 lib/api/respond.js    接口的响应约定（ok / fail / wrap / notFound）
 lib/api/dto.js        repo 行 → 接口 DTO，以及入参清洗
 lib/access.js         项目权限判定：角色是什么、资源属于哪个项目
+lib/cookies.js        Cookie 的解析、匹配与内存 jar（纯函数，now 由调用方传）
+lib/proxy-settings.js 代理设置：存 meta 表，没有设置时从环境变量现算
 lib/tree.js           目录树业务逻辑：移动、删除目录、复制接口、树的读取与写入
 lib/routes-store.js   单个项目的门面（对外 API 与老版本一致，供旧版管理台使用）
 lib/project-stores.js 每个项目只建一个 store 实例，缓存复用
