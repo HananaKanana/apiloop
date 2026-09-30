@@ -131,6 +131,16 @@ function onTemplatizeConfirm(payload) {
   message.info('已替换内容，确认后点「保存」');
 }
 
+/**
+ * 给外面判断「现在切走会不会丢东西」用。
+ * 目前只有智能模板化会留下未保存状态 —— 普通改动 600ms 后自己就存了。
+ */
+function isDirty() {
+  return dirty.value;
+}
+
+defineExpose({ isDirty: isDirty });
+
 const templateOptions = computed(function () {
   return (props.templates || []).map(function (item, index) {
     return { label: item.name, value: index };

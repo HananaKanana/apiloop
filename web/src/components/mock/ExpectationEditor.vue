@@ -35,7 +35,6 @@ function clone(value) {
 function reset(source) {
   draft.value = {
     name: source.name || '',
-    enabled: source.enabled !== false,
     exampleId: source.exampleId || '',
     conditions: clone(source.conditions || []).map(function (item) {
       return {
@@ -61,11 +60,17 @@ const exampleOptions = computed(function () {
   });
 });
 
+/**
+ * 草稿与已保存内容的差异。
+ *
+ * **刻意不含 `enabled`**：编辑器界面上没有启用开关，启用状态只由左侧列表那个开关负责。
+ * 把它放进草稿的话，用户在列表里拨完开关、再回来改一个条件点保存，
+ * 就会把这个字段一起写回去，把开关悄悄拨回原样。
+ */
 const dirty = computed(function () {
   if (!draft.value || !props.expectation) return false;
   const saved = {
     name: props.expectation.name || '',
-    enabled: props.expectation.enabled !== false,
     exampleId: props.expectation.exampleId || '',
     conditions: clone(props.expectation.conditions || []).map(function (item) {
       return {
@@ -93,9 +98,10 @@ async function save() {
   saving.value = true;
   errorText.value = '';
   try {
+    // 不提交 enabled：PUT 是部分更新，不传它服务端就不会动 ——
+    // 这个字段归左侧列表的开关管，见 dirty 上面的说明
     const data = await expectationsApi.updateExpectation(props.expectation.id, {
       name: draft.value.name,
-      enabled: draft.value.enabled,
       exampleId: draft.value.exampleId,
       conditions: draft.value.conditions
     });

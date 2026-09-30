@@ -23,6 +23,10 @@ import { useUiStore } from '@/stores/ui';
  *   2. 关闭面板、组件卸载、切换项目、`document.hidden` 时都要停；
  *   3. 切换项目和清空日志之后 lastSeq 归零，否则会漏掉或错位；
  *   4. 任何时刻只有一个定时器 —— 所以 start 之前一定先 stop。
+ *
+ * 另外还要防住**请求交叠**（定时器只有一个，不代表请求只有一个）：用 `inFlight`
+ * 保证同一时刻只有一次拉取，用 `generation` 把「切项目 / 清空」之前发出的那批结果
+ * 整批作废。少了这两样，慢网络下会出现重复的行，清空之后旧记录还会自己回来。
  */
 const POLL_MS = 2000;
 const MAX_ROWS = 500;
@@ -41,6 +45,13 @@ const loaded = ref(false);
 const expandedSeq = ref(null);
 
 let timer = null;
+/** 已经有拉取在途时不再发第二个 —— 否则两批结果会拼出重复的行 */
+let inFlight = false;
+/**
+ * 第几代数据。`reset()`（切项目 / 清空）时加一，在途请求返回时值变了就整批丢弃。
+ * 只靠 pid 比较挡不住「同一个项目里前后两轮请求交叠」，也挡不住清空之后旧结果复活。
+ */
+let generation = 0;
 
 const visible = computed({
   get: function () { return ui.mockLogVisible; },
@@ -73,12 +84,17 @@ function startPolling() {
 async function tick() {
   const pid = projects.currentId;
   if (!pid || paused.value || document.hidden) return;
+  // 上一轮还没回来就跳过这一轮：宁可少拉一次，也不要两批结果叠在一起
+  if (inFlight) return;
+
+  const mine = generation;
+  inFlight = true;
 
   try {
     const data = await mockLogApi.listMockLog(pid, { after: lastSeq.value, limit: 100 });
 
-    // 拉的过程中可能已经切了项目，这一批就丢掉
-    if (pid !== projects.currentId) return;
+    // 拉的过程中切了项目、或者点了清空 —— 这一批已经不属于当前这一代，整批丢掉
+    if (mine !== generation || pid !== projects.currentId) return;
 
     const list = data.items || [];
     if (list.length) {
@@ -88,12 +104,15 @@ async function tick() {
   } catch (err) {
     // 轮询失败不打断用户：不弹提示，下一个周期自己会重试
   } finally {
-    loaded.value = true;
+    inFlight = false;
+    // 被丢弃的那一批不算「加载完成」，否则空状态会在新数据回来之前闪一下
+    if (mine === generation) loaded.value = true;
   }
 }
 
-/** 换项目 / 清空之后都要从头拉，lastSeq 必须归零 */
+/** 换项目 / 清空之后都要从头拉，lastSeq 必须归零，在途的结果也要作废 */
 function reset() {
+  generation += 1;
   items.value = [];
   lastSeq.value = 0;
   expandedSeq.value = null;

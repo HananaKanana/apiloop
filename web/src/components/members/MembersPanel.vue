@@ -120,6 +120,10 @@ async function changeRole(member, role) {
     const data = await membersApi.setMemberRole(props.pid, member.userId, role);
     members.value = data.members || [];
     message.success('已修改角色');
+
+    // 改的是自己的话，myRole 已经变了 —— 重新拉一遍项目列表，
+    // 否则界面上的 owner 控件要等刷新页面才消失
+    if (member.userId === myUserId.value) await projects.refresh();
   } catch (err) {
     // 把自己降级成最后一个 owner 这种情况，原因由服务端说清楚
     message.error(err.message);
