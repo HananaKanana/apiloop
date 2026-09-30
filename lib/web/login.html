@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+  <form id="loginForm" class="login-card">
+    <h1 class="login-title">登录管理台</h1>
+
+    <label class="login-field">
+      <span>用户名</span>
+      <input id="username" class="input" type="text" name="username" autocomplete="username" autofocus>
+    </label>
+
+    <label class="login-field">
+      <span>密码</span>
+      <input id="password" class="input" type="password" name="password" autocomplete="current-password">
+    </label>
+
+    <div id="loginError" class="alert alert-error" hidden></div>
+
+    <button id="loginSubmit" class="btn btn-primary btn-block" type="submit">登录</button>
+  </form>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var LOGIN_API = '/__admin/api/auth/login';
+
+    /**
+     * 登录后跳哪 —— 只接受站内路径。
+     * 必须以单个 / 开头（`//evil.com` 是协议相对 URL，会被当成外站），否则一律回首页。
+     */
+    function safeNext() {
+      var raw = '';
+      try {
+        raw = new URLSearchParams(location.search).get('next') || '';
+      } catch (err) {
+        raw = '';
+      }
+      if (raw.charAt(0) !== '/' || raw.charAt(1) === '/') return '/index.html';
+      return raw;
+    }
+
+    var form = document.getElementById('loginForm');
+    var errorBox = document.getElementById('loginError');
+    var submit = document.getElementById('loginSubmit');
+    var usernameInput = document.getElementById('username');
+    var passwordInput = document.getElementById('password');
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      errorBox.hidden = true;
+      submit.disabled = true;
+
+      fetch(LOGIN_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: usernameInput.value,
+          password: passwordInput.value
+        })
+      }).then(function (res) {
+        return res.text().then(function (text) {
+          var data = null;
+          try { data = JSON.parse(text); } catch (err) { data = null; }
+
+          if (!res.ok || !data || data.ok === false) {
+            throw new Error((data && data.error) || ('登录失败（HTTP ' + res.status + '）'));
+          }
+          location.href = safeNext();
+        });
+      }).catch(function (err) {
+        errorBox.textContent = err && err.message ? err.message : '登录失败';
+        errorBox.hidden = false;
+        submit.disabled = false;
+        passwordInput.focus();
+        passwordInput.select();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -938,3 +938,52 @@ textarea.input { resize: vertical; }
   .sidebar { flex-basis: 240px; width: 240px; }
   .config-path { max-width: 160px; }
 }
+
+/* ==========================================================================
+ * 登录页（login.html）：只用到下面这几个类，其余复用管理台的样式
+ * ========================================================================== */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg, #f5f6f8);
+}
+
+.login-card {
+  width: 320px;
+  padding: 28px 24px;
+  border-radius: 10px;
+  background: var(--panel, #fff);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
+}
+
+.login-title {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.login-field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.login-field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-dim, #666);
+}
+
+.login-field .input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.login-card .alert {
+  margin-bottom: 12px;
+}
