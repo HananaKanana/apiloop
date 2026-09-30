@@ -17,6 +17,7 @@ import {
 import { useProjectStore } from '@/stores/project';
 import VarTable from '@/components/common/VarTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
+import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MembersPanel from '@/components/members/MembersPanel.vue';
 
 /**
@@ -43,7 +44,8 @@ const form = ref({
   slug: '',
   description: '',
   variables: [],
-  auth: { type: 'inherit' }
+  auth: { type: 'inherit' },
+  scripts: []
 });
 
 const projectId = ref('');
@@ -62,7 +64,8 @@ function fillFrom(project) {
     slug: project.slug || '',
     description: project.description || '',
     variables: JSON.parse(JSON.stringify(project.variables || [])),
-    auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' }
+    auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' },
+    scripts: JSON.parse(JSON.stringify(project.scripts || []))
   };
 }
 
@@ -97,7 +100,8 @@ async function save() {
     const patch = {
       description: form.value.description,
       variables: form.value.variables,
-      auth: form.value.auth
+      auth: form.value.auth,
+      scripts: form.value.scripts
     };
     if (isOwner.value) {
       patch.name = form.value.name.trim();
@@ -216,6 +220,14 @@ watch(function () { return route.params.pid; }, load);
               接口自己的鉴权留空或选了「继承父级」时，就沿用到这里。
             </p>
             <auth-editor v-model="form.auth" :disabled="!canEdit" />
+          </n-card>
+
+          <n-card :bordered="false" size="small" title="项目脚本" class="card">
+            <p class="tip">
+              这个项目里所有接口发送时都会执行：前置脚本在请求发出之前，测试脚本在响应回来之后。
+              顺序是「项目 → 目录（从外到内）→ 接口」。
+            </p>
+            <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />
           </n-card>
         </n-tab-pane>
 

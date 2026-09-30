@@ -12,7 +12,7 @@ web/
   src/
     api/            fetch 封装与按契约分组的接口调用
     stores/         Pinia：session、project、env、tree、tabs、ws、ui
-    components/     layout / tree / request / response / mock / history / importExport / ws / folder / common
+    components/     layout / tree / request / response / mock / scripts / history / importExport / ws / folder / common
     views/          LoginView、WorkbenchView、UsersView、ProjectSettingsView
     utils/          树组装、下载、提示弹窗、SSE 解析、鉴权继承
 ```
