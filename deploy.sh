@@ -52,7 +52,14 @@ case "$CMD" in
     done
     # 先建好数据目录：不存在时 Docker 会以 root 身份创建，容器里的 node 用户（uid 1000）就写不进去了
     mkdir -p data
+    # 重新构建后，旧镜像会失去 apiloop:latest 标签，变成 <none>，每部署一次就多一个。
+    # 先记下旧镜像的 ID，新容器起来后把它删掉；只删这一个，不碰别的项目的镜像
+    OLD_IMAGE="$(docker image inspect -f '{{.Id}}' apiloop:latest 2>/dev/null || true)"
     compose up -d --build
+    NEW_IMAGE="$(docker image inspect -f '{{.Id}}' apiloop:latest 2>/dev/null || true)"
+    if [ -n "$OLD_IMAGE" ] && [ "$OLD_IMAGE" != "$NEW_IMAGE" ]; then
+      docker image rm "$OLD_IMAGE" >/dev/null 2>&1 || true
+    fi
     PORT_SHOWN="${PORT:-$(grep -s '^PORT=' .env | cut -d= -f2)}"
     echo "服务已启动：http://localhost:${PORT_SHOWN:-8080}"
     echo "首次启动时 admin 的随机密码在日志里：./deploy.sh logs | grep 初始密码（在 .env 设了 ADMIN_PASSWORD 则用它）"
