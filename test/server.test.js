@@ -11,6 +11,8 @@ var storeModule = require('../lib/routes-store');
 var dbModule = require('../lib/db');
 var projectsRepo = require('../lib/db/repos/projects');
 var apisRepo = require('../lib/db/repos/apis');
+var usersRepo = require('../lib/db/repos/users');
+var auth = require('../lib/auth');
 var foldersRepo = require('../lib/db/repos/folders');
 var examplesRepo = require('../lib/db/repos/examples');
 var runtimeModule = require('../lib/mock-runtime');
@@ -30,7 +32,15 @@ test.before(async function () {
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({ extended: true }));
 
-    var admin = adminModule.createAdmin({ store: store, version: 'test' });
+    // 管理台接口现在要登录，先建一个管理员
+    usersRepo.create(handle, {
+        username: 'tester',
+        password_hash: auth.hashPassword('test-pass'),
+        display_name: '测试员',
+        role: 'admin'
+    });
+
+    var admin = adminModule.createAdmin({ handle: handle, store: store, version: 'test' });
     app.use(admin.apiPath, admin.api);
     app.use(admin.rootStatic);
     app.get('/', function (req, res) { res.redirect(302, admin.defaultPage); });
@@ -39,16 +49,27 @@ test.before(async function () {
     var server = app.listen(0);
     await once(server, 'listening');
 
+    var base = 'http://127.0.0.1:' + server.address().port;
+
+    // 登录一次拿到 cookie，后面所有管理台请求都带上
+    var loginResponse = await fetch(base + '/__admin/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'tester', password: 'test-pass' })
+    });
+    var cookie = String(loginResponse.headers.get('set-cookie') || '').split(';')[0];
+
     ctx = {
         store: store,
         handle: handle,
         server: server,
         dir: dir,
-        base: 'http://127.0.0.1:' + server.address().port,
+        base: base,
+        cookie: cookie,
         api: function (method, url, body) {
             return fetch(ctx.base + '/__admin/api' + url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Cookie': ctx.cookie },
                 body: body === undefined ? undefined : JSON.stringify(body)
             }).then(function (res) {
                 return res.json().then(function (json) { return { status: res.status, body: json }; });
