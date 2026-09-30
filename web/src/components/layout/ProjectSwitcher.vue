@@ -35,9 +35,23 @@ const form = ref({ name: '', slug: '', description: '' });
  * 普通选项上的 `render` 会被忽略，再加上没有 `label`，下拉里就只剩一排空白。
  */
 function renderLabel(option) {
-  return h('div', { class: 'proj-option' }, [
-    h('span', { class: 'name' }, option.name),
-    option.slug ? h('span', { class: 'slug' }, option.slug) : null,
+  /*
+   * 样式必须写成内联：下拉菜单被 teleport 到 body 下渲染，不在本组件的 DOM 里，
+   * 组件的 scoped 样式（包括 :deep）够不着它。之前写在组件样式里，结果名字和标识
+   * 挤成一串，「qb」显示成「qbqb」。
+   *
+   * 标识显示成它的 mock 前缀（/mock/qb），一眼能看出是什么，不会像名字重复了一遍；
+   * 根项目挂在根路径，只显示「根」标签。
+   */
+  const hint = option.slug && !option.isRoot ? '/mock/' + option.slug : '';
+
+  return h('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
+    h('span', null, option.name),
+    hint
+      ? h('span', {
+        style: 'font-size: 12px; opacity: 0.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;'
+      }, hint)
+      : null,
     option.isRoot
       ? h(NTag, { size: 'tiny', bordered: false, type: 'info' }, { default: () => '根' })
       : null
@@ -167,16 +181,3 @@ function onSelect(key) {
   </n-modal>
 </template>
 
-<style scoped>
-:deep(.proj-option) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-:deep(.proj-option .slug) {
-  font-size: 12px;
-  opacity: 0.5;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-</style>
