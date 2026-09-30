@@ -156,14 +156,22 @@ function renderSuffix(info) {
 function nodeProps(info) {
   return {
     /**
-     * 点目录：展开 / 收起（n-tree 的 expand-on-click）之外，再把目录设置页打开 —— 和 Postman 一样。
-     * 只点左边那个小箭头时只展开收起，不开页。放在 onClick 而不是 selected 变化里：
-     * 目录已经选中时再点，selected 不会变，但页可能已经被关掉了，要能重新打开。
+     * 点接口：打开它的标签页。点目录：展开 / 收起（n-tree 的 expand-on-click）之外，
+     * 再把目录设置页打开 —— 和 Postman 一样；只点左边那个小箭头时只展开收起，不开页。
+     *
+     * **必须放在 onClick，不能靠 selected 变化**：节点已经选中时再点，selected 不会变
+     * （cancelable 是 false），可那个标签页可能已经被关掉了 —— 之前就是这样，
+     * 打开一个接口、关掉标签页，再点它就打不开了（用户 2026-09-30 报的 bug）。
      */
     onClick: function (event) {
-      if (info.option.kind !== 'folder') return;
+      const node = info.option;
+      if (node.kind === 'api') {
+        if (node.api) emit('open', node.api);
+        return;
+      }
+      if (node.kind !== 'folder') return;
       if (event.target && event.target.closest && event.target.closest('.n-tree-node-switcher')) return;
-      emit('open-folder', info.option.id);
+      emit('open-folder', node.id);
     },
     onContextmenu: function (event) {
       event.preventDefault();
@@ -181,9 +189,9 @@ function onSelectedChange(keys) {
   if (!key) return;
 
   const node = findNode(tree.nodes, key);
+  // 打开标签页在 nodeProps 的 onClick 里做，这里只记选中位置
   if (node && node.kind === 'api') {
     tree.setSelectedFolder(node.parentId);
-    emit('open', node.api);
     return;
   }
   // 选中目录时记下来，导入 cURL / OpenAPI 会落到这个目录
