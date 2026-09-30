@@ -635,7 +635,7 @@ watch(
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 12px 16px;
   gap: 8px;
 }
 
@@ -669,6 +669,11 @@ watch(
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
+/* 页签条左边留 16px，和请求区一致 */
+.panes :deep(.n-tabs-nav-scroll-content) {
+  padding-left: 16px;
+}
+
 /* Mock 页签内容多，给它整块高度，日志和输入区先收起来 */
 .panes.full {
   flex: 1;
@@ -676,7 +681,7 @@ watch(
 }
 
 .pane {
-  padding: 8px 2px;
+  padding: 12px 16px;
 }
 
 .pane.narrow {

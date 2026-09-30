@@ -197,7 +197,9 @@ async function onFilePicked(event) {
 
           <div v-for="(row, index) in formRows()" :key="index" class="row">
             <div class="cell check">
+              <!-- 末尾的空行只是占位，不给复选框（勾着的空行像一条已启用的空参数） -->
               <n-checkbox
+                v-if="!row.__draft"
                 :checked="row.enabled !== false"
                 @update:checked="(v) => updateFormRow(index, { enabled: v })"
               />
