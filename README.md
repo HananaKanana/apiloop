@@ -141,7 +141,7 @@ apiloop web --config routes.json        # 首次启动时要导入的旧配置�
 | `users` / `sessions` | 用户与登录态 |
 | `projects` / `project_members` | 项目与成员 |
 | `legacy_imports` | 记下哪些旧配置文件已经导入过，避免重复导入 |
-| `mock_expectations` | 已建表，留给后续版本 |
+| `mock_expectations` | mock 期望：按请求条件决定这个接口返回哪一份示例 |
 
 `position` 只在同级内比较：同一个父目录下，先按 `position` 列子目录，
 再按 `position` 列接口。
@@ -264,6 +264,86 @@ sqlite3 ~/.apiloop/data.db 'select position, method, mock_path from apis order b
 
 实际返回 `{ "age": 42, "vip": true }`（数字和布尔，而不是字符串）。写在文字中间则保持字符串，例如 `"msg": "你好 {{@cname}}"`。
 
+## 智能模板化
+
+录制或保存下来的真实响应是「死数据」：每次请求返回的都一样。**一键模板化**把它变成
+「每次请求都随机、但结构和类型不变」的 mock 模板。
+
+判断顺序是三步：**先看 key 保护名单，再看 key 名，最后看值的形态**。
+保护名单上的 key（`code`、`msg`、`status`、`page`、`pageSize`、`total`，以及所有以
+`is` / `has` 开头的）和所有布尔值、`null` **一个都不换** —— 带业务含义的值随机化之后，
+联调的前端就没法用了。
+
+下面这份响应里，`code`、`msg`、`success`、`page`、`pageSize`、`status` 都会原样保留：
+
+```json
+{ "code": 0, "msg": "ok", "success": true, "data": { "status": "PAID", "page": 1, "pageSize": 20 } }
+```
+
+而一份录下来的用户列表：
+
+```json
+{"code":0,"data":{"list":[{"id":1,"name":"张三","phone":"13800138000","avatar":"https://x/a.png","createdAt":"2026-01-01 10:00:00"}]}}
+```
+
+模板化之后是这样（元素全是对象的数组只模板化第一个元素，外面包一层 `{{@repeat(n)}}`）：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "list": [
+{{@repeat(3)}}      {
+        "id": "{{@id}}",
+        "name": "{{@cname}}",
+        "phone": "{{@phone}}",
+        "avatar": "{{@image(200x200)}}",
+        "createdAt": "{{@datetime}}"
+      }
+{{/repeat}}    ]
+  }
+}
+```
+
+* key 名不区分大小写、忽略 `_` 和 `-`，所以 `created_at`、`createdAt`、`CreatedAt` 是同一个 key。
+* `id` / `price` / `timestamp` 这类数值占位符渲染出来仍是数字，不会变成字符串。
+* 换完之后会**自己渲染一次并解析一遍**；解析不过就原样返回，并在 `skipped` 里说明原因。
+* 已经写过 `{{@...}}` 的值不会再动它，所以重复模板化不会越换越歪。
+* 接口是纯计算、**不写库**：`POST /templatize`，body `{ body: string }`，
+  返回 `{ body, replacements, skipped }`，`replacements` 列出每一处替换（`path` 形如 `data.list[0].phone`），
+  前端拿它展示给用户确认。
+
+## Mock 期望
+
+同一个接口，按请求条件返回不同的示例。比如「`?id=404` 就返回 404 那份示例」
+「带 `X-Role: admin` 就返回管理员数据」。这是「调通即 mock」的另一半：
+示例是数据，期望是「什么时候用哪份数据」。
+
+```json
+{
+  "name": "id 是 404",
+  "exampleId": "e_xxx",
+  "conditions": [{ "in": "query", "key": "id", "op": "eq", "value": "404" }]
+}
+```
+
+* 一条期望里的多个条件是「且」的关系；多条期望按 `position` 依次检查，**第一条命中的生效**；
+  一条都没命中，就用接口上默认示例（`mock.exampleId`）那份。
+* `in`：`query` / `header` / `body` / `path`。
+* `op`：`eq` / `ne` / `contains` / `regex` / `exists` / `notExists` / `gt` / `lt`。
+* `header` 的 key 不区分大小写（`X-Role` 和 `x-role` 一样）。
+* `body` 支持 `user.age` 这种嵌套取值，而且**只在请求体是 JSON 对象时才判断**：
+  表单、纯文本、没有请求体一律不命中（`exists` / `notExists` 也一样）。
+* `gt` / `lt` 按数字比较，任意一边不是数字就不命中。
+* 期望指向的示例被删除时，这条期望会跟着消失。
+* mock 响应多一个响应头 `X-Apiloop-Mock`，一眼看出命中的是哪一条：
+  命中期望时是 `expectation:<期望名>`（名字经过 URL 编码），没命中是 `default`。
+
+```bash
+curl -i 'http://localhost:8080/api/users?id=404'
+# X-Apiloop-Mock: expectation:id%20%E6%98%AF%20404
+```
+
 ## 兼容手写 router.js
 
 老的用法完全保留：当前目录存在 `router.js` 时照旧加载（`router` 就是 Express app）。
@@ -365,6 +445,17 @@ router.use('/hi', (req, res) => {
 | `GET /projects/:pid/export/postman` | 导出成 Postman Collection |
 | `GET /environments/:id/export/postman` | 导出成 Postman Environment |
 
+### Mock 期望与智能模板化（契约第 8、9 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /templatize` | 把 JSON 文本模板化（纯计算，不写库），返回 `{ body, replacements, skipped }` |
+| `POST /apis/:id/expectations` | 新增期望；`exampleId` 必须是这个接口自己的示例 |
+| `PUT /expectations/:id` | 改名字 / 启用状态 / 条件 / 所指示例 |
+| `DELETE /expectations/:id` | 删除期望，返回更新后的接口 |
+| `POST /apis/:id/expectations/reorder` | 按 `{ ids: [...] }` 重排期望顺序 |
+| `GET /apis/:id` | 响应里带 `expectations`，按 `position` 排序 |
+
 ### 元信息与纯解析
 
 | 方法与路径 | 说明 |
@@ -414,7 +505,7 @@ lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只
 lib/command.js        start / open / web / init / user 命令实现
 lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
 lib/db/repos/         各表的增删改查
-lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman
+lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / templatize
 lib/api/respond.js    接口的响应约定（ok / fail / wrap / notFound）
 lib/api/dto.js        repo 行 → 接口 DTO，以及入参清洗
 lib/tree.js           目录树业务逻辑：移动、删除目录、复制接口、树的读取与写入
@@ -427,7 +518,8 @@ lib/admin.js          管理台后端：挂载 v2 接口、旧版接口与静态
 lib/legacy-import.js  把目录里的旧配置导入成项目
 lib/legacy/           只读的 P0 格式库读取器
 lib/mock-engine.js    模板渲染与随机数据生成
-lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新
+lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新，并做 mock 期望的匹配
+lib/templatize.js     智能模板化：把真实响应换成「结构不变、值随机」的占位符模板（纯函数）
 lib/importers.js      cURL / OpenAPI(Swagger) 解析
 lib/executor.js       请求执行器：由服务端代发真实 HTTP 请求
 lib/postman.js        Postman 集合 / 环境的解析与生成
