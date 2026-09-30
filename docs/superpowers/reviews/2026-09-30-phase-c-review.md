@@ -57,3 +57,15 @@
   - `npm pack --dry-run` 的文件数。
 
   **量 `npm pack` 时绝对不要执行 `git stash`**：工作区是共用的，stash 会把 session2 正在写的 HAR 文件一起收走。做法是先把 HEAD 导出成一份干净副本，在副本里量：`git archive HEAD | tar -x -C <临时目录>`，然后进入这个目录执行 `npm pack --dry-run`。否则工作区里未跟踪的文件会被算进去（这个坑是你自己发现的）。
+
+---
+
+# C-4 复审（470b84a）：通过
+
+- 保留前缀的规则统一放在 `validateRoutePath` 里，所以新建、更新、导入三条写入路径都会拦截；`/__administrator` 和 `/api/__admin` 这类路径照常放行，判断准确。
+- 新增 `files: docs/api.md`，npm 包的文件数从 63 变为 64，是在干净副本上统计的。
+- 删除了 `rootProject()`；`--tpl` 的帮助文字三处都改成了 jade。
+- CHANGELOG 里 2.0.0 才新增的功能的修复项，已经并进对应的功能条目，这个处理方式好。
+- 小瑕疵（不强制）：Express 的路由默认不区分大小写，所以 `/__ADMIN/x` 这样的 mock 路径也会被管理台接走，而 `reservedPrefixOf` 是区分大小写比较的。建议比较前先转成小写。
+
+**C 阶段验收完成。**
