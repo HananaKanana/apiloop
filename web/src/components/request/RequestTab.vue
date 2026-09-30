@@ -135,8 +135,26 @@ function readSplitHeight() {
 }
 
 const rootRef = ref(null);
+const panesRef = ref(null);
 const panesHeight = ref(readSplitHeight());
 const draggingSplit = ref(false);
+
+/**
+ * 请求区最高能到多少：从**请求区的顶边**量到整个标签页的底边，再给响应区留出最小高度。
+ *
+ * 不能拿 `rootRef.clientHeight` 直接算 —— 请求区上面还有面包屑、地址栏，
+ * 有时还有那条未定义变量的提示，加起来 100px 左右；不减掉的话，
+ * 一拖动分隔线就跳到鼠标下方 100px 的地方，响应区还会被挤到只剩几十像素。
+ *
+ * @returns {number|null} 量不出来（或者容器太矮）时返回 null，调用方直接不动
+ */
+function maxPanesHeight() {
+  if (!rootRef.value || !panesRef.value) return null;
+  const bottom = rootRef.value.getBoundingClientRect().bottom;
+  const top = panesRef.value.getBoundingClientRect().top;
+  const max = bottom - top - MIN_RESPONSE - 8;
+  return max < MIN_PANES ? null : max;
+}
 
 function startSplitDrag() {
   draggingSplit.value = true;
@@ -145,10 +163,11 @@ function startSplitDrag() {
 }
 
 function onSplitMove(event) {
-  if (!draggingSplit.value || !rootRef.value) return;
-  const box = rootRef.value.getBoundingClientRect();
-  const max = rootRef.value.clientHeight - MIN_RESPONSE - 8;
-  panesHeight.value = Math.max(MIN_PANES, Math.min(event.clientY - box.top, max));
+  if (!draggingSplit.value || !panesRef.value) return;
+  const max = maxPanesHeight();
+  if (max === null) return;
+  const top = panesRef.value.getBoundingClientRect().top;
+  panesHeight.value = Math.max(MIN_PANES, Math.min(event.clientY - top, max));
 }
 
 /**
@@ -157,9 +176,8 @@ function onSplitMove(event) {
  * 这里只改当前值、不写回 localStorage —— 窗口再变大时还能回到原来那个高度。
  */
 function clampPanesHeight() {
-  if (!rootRef.value) return;
-  const max = rootRef.value.clientHeight - MIN_RESPONSE - 8;
-  if (max < MIN_PANES) return;
+  const max = maxPanesHeight();
+  if (max === null) return;
   panesHeight.value = Math.max(MIN_PANES, Math.min(panesHeight.value, max));
 }
 
@@ -749,6 +767,7 @@ onBeforeUnmount(function () {
     </div>
 
     <div
+      ref="panesRef"
       class="panes"
       :class="{ full: activePane === 'mock' }"
       :style="activePane === 'mock' ? null : { height: panesHeight + 'px' }"
