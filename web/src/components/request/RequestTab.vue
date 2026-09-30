@@ -36,6 +36,7 @@ import { inheritHint } from '@/utils/auth';
 import { clampReplayDelay } from '@/utils/replay';
 import { resolveScope, missingVariables } from '@/utils/variables';
 import { HEADER_NAMES } from '@/utils/suggestions';
+import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
 
 /**
@@ -54,6 +55,7 @@ const envs = useEnvStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
+const paneTabsTheme = usePaneTabsTheme();
 const message = useMessage();
 
 const activePane = ref('params');
@@ -675,7 +677,13 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="panes" :class="{ full: activePane === 'mock' }">
-      <n-tabs v-model:value="activePane" type="line" size="small" animated>
+      <n-tabs
+        v-model:value="activePane"
+        type="line"
+        size="small"
+        animated
+        :theme-overrides="paneTabsTheme"
+      >
         <!-- 最右边：Cookie 管理（原来在地址栏那一行） -->
         <template #suffix>
           <n-button size="tiny" quaternary @click="showCookies = true">Cookies</n-button>
@@ -978,23 +986,6 @@ onBeforeUnmount(function () {
 /* 页签条左边留 16px。只推内容、不动 nav 本身，底下的分隔线才能整条贯通 */
 .panes :deep(.n-tabs-nav-scroll-content) {
   padding-left: 16px;
-}
-
-/*
- * 选中的页签用浅灰底胶囊，不用下划线（和 Postman 一致）：
- * 把 line 类型那条指示条藏掉，改用背景色。
- */
-.panes :deep(.n-tabs-tab) {
-  padding: 0 10px;
-  border-radius: 5px;
-}
-
-.panes :deep(.n-tabs-tab.n-tabs-tab--active) {
-  background: rgba(128, 128, 128, 0.18);
-}
-
-.panes :deep(.n-tabs-bar) {
-  display: none;
 }
 
 /* 页签名字后面跟的计数 / 圆点 */
