@@ -7,9 +7,11 @@ import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import ApiTree from '@/components/tree/ApiTree.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
+import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
+import { useUiStore } from '@/stores/ui';
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 640;
@@ -19,6 +21,7 @@ const router = useRouter();
 const projects = useProjectStore();
 const tree = useTreeStore();
 const tabs = useTabsStore();
+const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -140,6 +143,7 @@ onBeforeUnmount(function () {
         <env-switcher />
       </template>
       <template #actions>
+        <n-button quaternary size="small" @click="ui.openHistory()">历史</n-button>
         <n-button quaternary size="small" @click="collapsed = !collapsed">
           {{ collapsed ? '显示目录' : '隐藏目录' }}
         </n-button>
@@ -181,6 +185,8 @@ onBeforeUnmount(function () {
         </div>
       </main>
     </div>
+
+    <history-panel />
   </div>
 </template>
 

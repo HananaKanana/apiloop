@@ -169,6 +169,10 @@ function requestBodyText() {
           {{ tab.sendError }}
         </n-alert>
 
+        <n-alert v-if="tab.historyTruncated" type="info" :show-icon="false" class="notice">
+          这条历史里的响应体超过了 256 KB，落库时做了截断，下面是截断后的内容。
+        </n-alert>
+
         <n-alert
           v-if="tab.missingVariables && tab.missingVariables.length"
           type="warning"

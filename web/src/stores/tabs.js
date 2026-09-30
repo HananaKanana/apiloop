@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as apisApi from '@/api/apis';
 import * as sendApi from '@/api/send';
+import * as historyApi from '@/api/history';
 
 let draftSeq = 0;
 
@@ -126,6 +127,54 @@ export const useTabsStore = defineStore('tabs', function () {
     activeKey.value = key;
   }
 
+  /**
+   * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
+   * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
+   */
+  async function openHistory(historyId) {
+    const key = 'history:' + historyId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const data = await historyApi.getHistory(historyId);
+    const record = data.entry || {};
+    const spec = Object.assign({}, record.request || emptySpec());
+    const environmentId = spec.environmentId || '';
+    delete spec.environmentId;
+
+    const result = record.result || null;
+    const truncated = Boolean(
+      (result && result.historyTruncated) ||
+        (result && result.response && result.response.historyTruncated)
+    );
+
+    const tab = {
+      key: key,
+      kind: 'history',
+      apiId: record.apiId || null,
+      folderId: null,
+      title: spec.url || '历史记录',
+      spec: spec,
+      savedSnapshot: null,
+      api: null,
+      dirty: false,
+      result: result,
+      historyTruncated: truncated,
+      environmentId: environmentId,
+      sendError: '',
+      missingVariables: (result && result.missingVariables) || [],
+      sending: false,
+      controller: null
+    };
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
   function close(key) {
     const index = tabs.value.findIndex(function (tab) { return tab.key === key; });
     if (index === -1) return;
@@ -213,6 +262,7 @@ export const useTabsStore = defineStore('tabs', function () {
     hasDirty: hasDirty,
     openApi: openApi,
     openDraft: openDraft,
+    openHistory: openHistory,
     activate: activate,
     close: close,
     closeAll: closeAll,
