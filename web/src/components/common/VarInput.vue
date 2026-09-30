@@ -33,6 +33,16 @@ const props = defineProps({
   scope: { type: Map, default: null },
   /** 不要自己的边框（地址栏把它和方法的框合成一个整体时用） */
   borderless: { type: Boolean, default: false },
+  /**
+   * 表格格子里的样式：边框、底色、内边距全去掉，直接坐在格子上。
+   * 聚焦时的底色由格子的 `:focus-within` 负责，所以这里也不再画聚焦边框。
+   */
+  bare: { type: Boolean, default: false },
+  /**
+   * 普通单词的补全（请求头名字、Content-Type 的值这类），和 `{{变量}}` 的补全是两套：
+   * 这个不看 `{{`，输入任意前缀就提示。
+   */
+  suggest: { type: Array, default: null },
   /** 补全列表里值预览最多显示多少个字符 */
   previewLimit: { type: Number, default: 30 }
 });
@@ -57,7 +67,13 @@ const hasToken = computed(function () {
   return String(props.modelValue || '').indexOf('{{') !== -1;
 });
 
+/** 有单词补全候选（请求头名字那种）时必须上编辑器，不然补全根本出不来 */
+const hasSuggest = computed(function () {
+  return Array.isArray(props.suggest) && props.suggest.length > 0;
+});
+
 const useEditor = computed(function () {
+  if (hasSuggest.value) return true;
   return hasScope.value && (editing.value || hasToken.value);
 });
 
@@ -160,6 +176,38 @@ function completionSource(context) {
     options: matched,
     filter: false,
     validFor: /^[^{}]*$/
+  };
+}
+
+/**
+ * 普通单词的补全（`suggest` 传进来的那批）。和变量补全是两套，互不干扰：
+ * 这个只要输入了词就提示，不看 `{{`。
+ */
+function suggestSource(context) {
+  const list = props.suggest || [];
+  if (!list.length) return null;
+
+  const word = context.matchBefore(/[\w-]*/);
+  if (!word) return null;
+  // 光标没动、也不是手动触发的，就别弹（免得一点进格子就冒出来）
+  if (word.from === word.to && !context.explicit) return null;
+
+  const typed = word.text.toLowerCase();
+  const matched = list.filter(function (item) {
+    return item.label.toLowerCase().indexOf(typed) !== -1;
+  });
+
+  matched.sort(function (a, b) {
+    const prefixA = a.label.toLowerCase().indexOf(typed) === 0 ? 0 : 1;
+    const prefixB = b.label.toLowerCase().indexOf(typed) === 0 ? 0 : 1;
+    return prefixA - prefixB;
+  });
+
+  return {
+    from: word.from,
+    options: matched,
+    filter: false,
+    validFor: /^[\w-]*$/
   };
 }
 
@@ -309,11 +357,11 @@ function createView() {
         EditorState.readOnly.of(props.readonly),
         EditorView.editable.of(!props.readonly),
         autocompletion({
-          override: [completionSource],
+          override: [completionSource, suggestSource],
           activateOnTyping: true,
           closeOnBlur: true,
           icons: false,
-          // 自己过滤，见 completionSource
+          // 自己过滤，见上面两个 source
           defaultKeymap: true
         }),
         variableTooltip,
@@ -413,17 +461,18 @@ defineExpose({ focus: focus });
     v-if="useEditor"
     ref="host"
     class="var-input"
-    :class="{ focused: focused, readonly: readonly, borderless: borderless }"
+    :class="{ focused: focused, readonly: readonly, borderless: borderless, bare: bare }"
   />
 
   <!-- 没给作用域、或者这一格还用不着编辑器：普通输入框 -->
   <n-input
     v-else
+    :class="{ 'bare-input': bare }"
     size="small"
     :value="modelValue"
     :placeholder="placeholder"
     :readonly="readonly"
-    :bordered="!borderless"
+    :bordered="!borderless && !bare"
     @focus="onPlainFocus"
     @update:value="(v) => emit('update:modelValue', v)"
     @keyup.enter="emit('enter')"
@@ -459,6 +508,32 @@ defineExpose({ focus: focus });
   border: none;
   padding: 0;
   min-height: 26px;
+}
+
+/* 表格格子：边框、底色、内边距全不要，直接坐在格子上 */
+.var-input.bare {
+  border: none;
+  padding: 0;
+  min-height: 28px;
+  background-color: transparent;
+}
+
+.var-input.bare.focused {
+  border-color: transparent;
+}
+
+/* 普通输入框那一路的 bare：把 naive-ui 自己的边框和内外边距都清掉 */
+.bare-input {
+  --n-border: none;
+  --n-border-hover: none;
+  --n-border-focus: none;
+  --n-box-shadow-focus: none;
+  --n-color: transparent;
+  --n-color-hover: transparent;
+  --n-color-focus: transparent;
+  --n-padding-left: 0;
+  --n-padding-right: 0;
+  --n-padding-vertical: 0;
 }
 
 .var-input :deep(.cm-editor) {

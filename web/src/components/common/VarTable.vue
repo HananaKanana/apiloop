@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
-import { NButton, NCheckbox, NInput, NTooltip } from 'naive-ui';
+import { NCheckbox, NIcon, NInput, NTooltip } from 'naive-ui';
+import { Trash } from '@vicons/tabler';
 
 /**
  * 变量表格：key、value、启用、secret。
@@ -73,7 +74,7 @@ function removeRow(index) {
       <div class="cell action" />
     </div>
 
-    <div v-for="(row, index) in rows" :key="index" class="row">
+    <div v-for="(row, index) in rows" :key="index" class="row" :class="{ off: row.enabled === false }">
       <div class="cell check">
         <n-checkbox
           :checked="row.enabled"
@@ -118,32 +119,34 @@ function removeRow(index) {
       </div>
 
       <div class="cell action">
-        <n-button
+        <button
           v-if="!disabled && (row.key || row.value)"
-          size="tiny"
-          quaternary
-          type="error"
+          class="delete-button"
+          title="删除这一行"
           @click="removeRow(index)"
         >
-          删除
-        </n-button>
+          <n-icon size="15" :component="Trash" />
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/*
+ * 和 KeyValueTable 同一套网格样式：整张表 1px 外框 + 行列细线，
+ * 格子里的输入框没有边框和底色。列宽写在一个变量里，改列只改一处。
+ */
 .var-table {
+  --var-cols: 32px minmax(0, 32%) minmax(0, 1fr) 48px 40px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
+  display: grid;
+  grid-template-columns: var(--var-cols);
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
@@ -151,36 +154,89 @@ function removeRow(index) {
   border-bottom: none;
 }
 
+.row:hover {
+  background: rgba(128, 128, 128, 0.06);
+}
+
 .row.head {
+  background: rgba(128, 128, 128, 0.08);
   font-size: 12px;
-  opacity: 0.65;
-  padding: 5px 6px;
 }
 
 .cell {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 8px;
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.cell:last-child {
+  border-right: none;
+}
+
+.row.head .cell {
+  opacity: 0.6;
+}
+
+.cell:focus-within {
+  background: rgba(255, 108, 55, 0.08);
+}
+
+.row.head .cell:focus-within {
+  background: transparent;
 }
 
 .cell.check,
-.cell.secret {
-  flex: none;
-  width: 26px;
-  display: flex;
-  justify-content: center;
-}
-
+.cell.secret,
 .cell.action {
-  flex: none;
-  width: 52px;
+  justify-content: center;
+  padding: 0;
+}
+
+/* 停用的行：文字半透明（勾选框保持清楚） */
+.row.off .cell.key,
+.row.off .cell.value {
+  opacity: 0.5;
+}
+
+/* 格子里的输入框去掉边框、底色和内外边距 */
+.cell :deep(.n-input) {
+  --n-border: none;
+  --n-border-hover: none;
+  --n-border-focus: none;
+  --n-box-shadow-focus: none;
+  --n-color: transparent;
+  --n-color-hover: transparent;
+  --n-color-focus: transparent;
+  --n-padding-left: 0;
+  --n-padding-right: 0;
+  --n-padding-vertical: 0;
+}
+
+.delete-button {
+  width: 26px;
+  height: 26px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
 }
 
-.cell.key {
-  flex: 0 0 34%;
+.row:hover .delete-button {
+  opacity: 0.6;
 }
 
-.cell.value {
-  flex: 1;
+.delete-button:hover {
+  background: rgba(235, 32, 19, 0.12);
+  color: #eb2013;
+  opacity: 1;
 }
 </style>

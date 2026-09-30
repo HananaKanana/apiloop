@@ -408,7 +408,7 @@ async function submitAdd() {
 
 .table {
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   font-size: 12px;
 }
@@ -435,7 +435,14 @@ async function submitAdd() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: 0 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* 和请求区的键值表格同一套：列之间也有细线 */
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.cell:last-child {
+  border-right: none;
 }
 
 .cell.name {
