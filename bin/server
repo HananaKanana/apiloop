@@ -9,6 +9,10 @@ var chalk = require('chalk');
 var yargs = require('yargs/yargs');
 var hideBin = require('yargs/helpers').hideBin;
 
+// 产品名与版本从 app-info / package.json 取，不在这里硬编码
+var appInfo = require('../lib/app-info');
+var pkg = require('../package.json');
+
 var VALID_COMMANDS = ['start', 'init', 'open', 'web', 'user'];
 
 var COMMANDS = {
@@ -95,7 +99,8 @@ function showRootHelp(name) {
     });
 
     parser
-        .epilogue('For more use, enter ' + chalk.green(name + ' <command> --help') +
+        .epilogue(chalk.bold(appInfo.APP_NAME) + ' v' + pkg.version + ' — ' + pkg.description +
+            '\n\nFor more use, enter ' + chalk.green(name + ' <command> --help') +
             '\nFor example: ' + chalk.green(name + ' start --help'))
         .showHelp();
 }

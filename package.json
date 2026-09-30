@@ -1,7 +1,7 @@
 {
-  "name": "server-mock",
+  "name": "apiloop",
   "version": "1.2.0",
-  "description": "an simple web server",
+  "description": "本地接口调试 + mock 工具",
   "main": "lib/command.js",
   "engines": {
     "node": ">=22.13.0"
@@ -14,9 +14,8 @@
     "README.md"
   ],
   "bin": {
-    "mock": "./bin/server",
-    "server-mock": "./bin/server",
-    "server": "./bin/server"
+    "apiloop": "./bin/server",
+    "mock": "./bin/server"
   },
   "scripts": {
     "test": "node --test --test-timeout=30000 test/*.test.js"
