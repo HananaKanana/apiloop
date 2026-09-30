@@ -4,6 +4,7 @@ import { NButton, NDropdown, NEmpty, NIcon, useDialog, useMessage } from 'naive-
 import { Check, Dots, Plus } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
+import ContextMenu from '@/components/common/ContextMenu.vue';
 
 /**
  * 侧栏「环境」页（Task 7）。每个环境一行：点它在右边的环境编辑区里打开；
@@ -16,6 +17,21 @@ const dialog = useDialog();
 
 /** 哪一行的「…」菜单开着 */
 const openMenuId = ref('');
+
+/** 右键菜单：和「…」同一份选项 */
+const ctx = ref({ show: false, x: 0, y: 0, env: null });
+
+function openContextMenu(event, env) {
+  // 没有能用的项（viewer 右键当前环境）就不弹，弹一个空菜单更让人困惑
+  if (!menuOptions(env).length) return;
+  ctx.value = { show: true, x: event.clientX, y: event.clientY, env: env };
+}
+
+function onContextSelect(key) {
+  const env = ctx.value.env;
+  ctx.value.show = false;
+  if (env) onMenuSelect(env, key);
+}
 
 const list = computed(function () {
   return envs.environments || [];
@@ -111,6 +127,7 @@ async function onMenuSelect(env, key) {
         class="item"
         :class="{ active: envs.editing && env.id === envs.editing.id }"
         @click="openEnv(env)"
+        @contextmenu.prevent="openContextMenu($event, env)"
       >
         <!-- 当前正在用的那个打勾，其余留空（不给常态留占位） -->
         <span class="tick">
@@ -138,6 +155,14 @@ async function onMenuSelect(env, key) {
         description="还没有环境，点右上角「新建环境」"
       />
     </div>
+
+    <context-menu
+      v-model:show="ctx.show"
+      :x="ctx.x"
+      :y="ctx.y"
+      :options="ctx.env ? menuOptions(ctx.env) : []"
+      @select="onContextSelect"
+    />
   </div>
 </template>
 

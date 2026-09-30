@@ -7,7 +7,7 @@ import { useTreeStore } from '@/stores/tree';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
-import TreeContextMenu from './TreeContextMenu.vue';
+import ContextMenu from '@/components/common/ContextMenu.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import']);
 
@@ -194,6 +194,19 @@ function openMenu(event, node) {
   };
 }
 
+/** 在目录树的空白处右键：新建、全部收起 / 展开（节点上的右键会 stopPropagation，不会走到这里） */
+function openBlankMenu(event) {
+  const options = [];
+  if (projects.canEdit) {
+    options.push({ label: '新建接口', key: 'blank-new-api' });
+    options.push({ label: '新建目录', key: 'blank-new-folder' });
+    options.push({ type: 'divider', key: 'blank-d' });
+  }
+  options.push({ label: anyExpanded.value ? '全部收起' : '全部展开', key: 'blank-toggle' });
+
+  menu.value = { show: true, x: event.clientX, y: event.clientY, node: null, options: options };
+}
+
 function folderMenuOptions() {
   if (!projects.canEdit) return [{ label: '目录设置', key: 'folder-settings' }];
 
@@ -220,6 +233,17 @@ function apiMenuOptions() {
 async function onMenuSelect(key) {
   const node = menu.value.node;
   menu.value.show = false;
+
+  if (key === 'blank-new-api') return emit('new-api', null);
+  if (key === 'blank-new-folder') {
+    try {
+      await createFolder(null);
+    } catch (err) {
+      message.error(err.message);
+    }
+    return;
+  }
+  if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
 
   try {
@@ -459,7 +483,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
 
     <div class="group-title">目录</div>
 
-    <div class="body">
+    <div class="body" @contextmenu.prevent="openBlankMenu">
       <n-spin :show="tree.loading">
         <n-tree
           v-if="displayTree.length"
@@ -491,7 +515,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       </n-spin>
     </div>
 
-    <tree-context-menu
+    <context-menu
       v-model:show="menu.show"
       :x="menu.x"
       :y="menu.y"
