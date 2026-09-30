@@ -8,8 +8,14 @@
  * - `delay` 是「和上一条之间的间隔」：`onOpen` 的第一条相对 `open` 事件，
  *   每条 `reply` 的第一条相对触发它的那条发出消息，之后都相对上一条。
  *
+ * 两处按契约的上限做了截断（不截的话服务端会直接 400，整个场景存不下去）：
+ * - `delay` 超过 60 秒的按 60 秒算，并统计截断了几处；
+ * - 步骤总数超过 1000 的只保留前 1000 步。
+ *
  * 纯函数，不碰网络也不碰 store，方便单独核对。
  */
+
+import { MAX_REPLAY_STEPS, clampReplayDelay } from './replay';
 
 /** 收到的消息按 `any` 规则处理时，回放侧只认文本；这里只挑文本消息 */
 function textMessages(events) {
@@ -42,24 +48,55 @@ export function buildWsScenario(events) {
 
   const onOpen = [];
   const rules = [];
+  /** 发出的文本 → 第一条规则。用来认出重复的发送消息（N1） */
+  const ruleByText = new Map();
+
   let currentRule = null;
+  /** 当前收到的消息属于「被丢掉的重复规则」，一起丢掉，别漏进 onOpen */
+  let skipReplies = false;
+  let steps = 0;
+  let cappedDelays = 0;
+  let truncated = 0;
+  let duplicates = 0;
 
   // 第一条 onOpen 相对 open 事件；没有 open 事件（比如日志被清过）就相对第一条消息
   let previousTime = openEvent ? openEvent.time : (messages[0] ? messages[0].time : Date.now());
 
   messages.forEach(function (message) {
-    const delay = Math.max(0, Math.round(message.time - previousTime));
-    previousTime = message.time;
-
-    if (message.direction === 'out') {
-      currentRule = { match: { type: 'equals', value: message.text }, reply: [] };
-      rules.push(currentRule);
+    // 到上限了：后面的消息一律不再产生步骤和规则，只数还有多少步没保留。
+    // 放在最前面，这样「截断了多少处 delay」统计的是真的被保留的那些消息。
+    if (steps >= MAX_REPLAY_STEPS) {
+      if (message.direction !== 'out') truncated += 1;
       return;
     }
 
-    const step = { delay: delay, send: message.text };
+    const clamped = clampReplayDelay(message.time - previousTime);
+    previousTime = message.time;
+    if (clamped.capped) cappedDelays += 1;
+
+    if (message.direction === 'out') {
+      // 同一段文本发过两次的话，第二条规则永远匹配不到（「第一条匹配上的生效」），
+      // 它的回复也回放不出来，所以整条丢掉，只留第一条，并在预览里说明
+      if (ruleByText.has(message.text)) {
+        duplicates += 1;
+        currentRule = null;
+        skipReplies = true;
+        return;
+      }
+
+      currentRule = { match: { type: 'equals', value: message.text }, reply: [] };
+      ruleByText.set(message.text, currentRule);
+      rules.push(currentRule);
+      skipReplies = false;
+      return;
+    }
+
+    if (skipReplies) return;
+
+    const step = { delay: clamped.delay, send: message.text };
     if (currentRule) currentRule.reply.push(step);
     else onOpen.push(step);
+    steps += 1;
   });
 
   return {
@@ -68,6 +105,9 @@ export function buildWsScenario(events) {
     scenario: { onOpen: onOpen, rules: rules, fallback: 'none' },
     pushed: onOpen.length,
     ruleCount: rules.length,
-    skipped: parsed.skipped
+    skipped: parsed.skipped,
+    cappedDelays: cappedDelays,
+    truncated: truncated,
+    duplicates: duplicates
   };
 }

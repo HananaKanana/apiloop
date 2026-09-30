@@ -59,7 +59,14 @@ const saveForm = ref({ name: '', folderId: null });
 
 const showScenario = ref(false);
 const scenario = ref(null);
-const scenarioStats = ref({ pushed: 0, ruleCount: 0, skipped: 0 });
+const scenarioStats = ref({
+  pushed: 0,
+  ruleCount: 0,
+  skipped: 0,
+  cappedDelays: 0,
+  truncated: 0,
+  duplicates: 0
+});
 const savingScenario = ref(false);
 
 const EMPTY_STATE = {
@@ -348,7 +355,10 @@ function openScenario() {
   scenarioStats.value = {
     pushed: built.pushed,
     ruleCount: built.ruleCount,
-    skipped: built.skipped
+    skipped: built.skipped,
+    cappedDelays: built.cappedDelays,
+    truncated: built.truncated,
+    duplicates: built.duplicates
   };
   showScenario.value = true;
 }

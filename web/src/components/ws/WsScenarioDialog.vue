@@ -11,7 +11,12 @@ import { NAlert, NButton, NModal, NSpace } from 'naive-ui';
 const props = defineProps({
   show: { type: Boolean, default: false },
   scenario: { type: Object, default: null },
-  stats: { type: Object, default: function () { return { pushed: 0, ruleCount: 0, skipped: 0 }; } },
+  stats: {
+    type: Object,
+    default: function () {
+      return { pushed: 0, ruleCount: 0, skipped: 0, cappedDelays: 0, truncated: 0, duplicates: 0 };
+    }
+  },
   saving: { type: Boolean, default: false }
 });
 
@@ -39,6 +44,19 @@ const body = computed(function () {
 
     <n-alert v-if="stats.skipped" type="warning" :show-icon="false" class="notice">
       二进制消息没法按文本匹配，回放时不会出现。
+    </n-alert>
+
+    <n-alert v-if="stats.cappedDelays" type="warning" :show-icon="false" class="notice">
+      有 {{ stats.cappedDelays }} 处间隔超过 60 秒，按 60 秒保存（契约规定的上限）。
+    </n-alert>
+
+    <n-alert v-if="stats.truncated" type="warning" :show-icon="false" class="notice">
+      步骤总数超过 1000，只保留了前 1000 步，还有 {{ stats.truncated }} 步没有保存。
+    </n-alert>
+
+    <n-alert v-if="stats.duplicates" type="info" :show-icon="false" class="notice">
+      有 {{ stats.duplicates }} 条重复的发送消息。规则是「第一条匹配上的生效」，
+      重复的那条和它收到的回复都回放不到，只保留了第一条规则。
     </n-alert>
 
     <p class="label">生成的场景</p>
