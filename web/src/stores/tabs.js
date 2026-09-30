@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import * as apisApi from '@/api/apis';
 import * as streamApi from '@/api/stream';
 import * as historyApi from '@/api/history';
@@ -144,6 +144,46 @@ export const useTabsStore = defineStore('tabs', function () {
     tab.dirty = JSON.stringify(tab.spec) !== tab.savedSnapshot;
   }
 
+  /* ---------------- 预览标签页（和 Postman 一样） ---------------- */
+
+  /**
+   * 目录树里**单击**打开的接口 / 目录是「预览标签页」（标题斜体），整排最多一个：
+   * 再单击别的，就把它**换掉**，而不是越开越多。下面几种情况它会变成普通标签页、不再被换掉：
+   * - 改了内容（dirty）、发过请求（sending / result）—— 由下面的 watch 自动固定；
+   * - 双击标签页、双击目录树里的节点、用别的方式（⌘K、Mock 日志、右键「目录设置」）再打开一次。
+   */
+  function placeTab(tab) {
+    if (tab.preview) {
+      const index = tabs.value.findIndex(function (item) { return item.preview && item.key !== tab.key; });
+      if (index !== -1) {
+        dropTab(tabs.value[index]);
+        tabs.value.splice(index, 1, tab);
+        activeKey.value = tab.key;
+        return;
+      }
+    }
+    tabs.value.push(tab);
+    activeKey.value = tab.key;
+  }
+
+  /** 把预览标签页固定成普通标签页（双击标签页时用） */
+  function pin(key) {
+    const tab = tabs.value.find(function (item) { return item.key === key; });
+    if (tab) tab.preview = false;
+  }
+
+  // 预览标签页一旦改过或发过请求，就固定下来 —— 不能让下一次单击把用户的改动 / 结果顶掉
+  watch(
+    function () {
+      return tabs.value.filter(function (tab) {
+        return tab.preview && (tab.dirty || tab.sending || tab.result);
+      }).map(function (tab) { return tab.key; });
+    },
+    function (keys) {
+      keys.forEach(pin);
+    }
+  );
+
   /**
    * 正在从服务端拉的接口：`key → Promise`。
    * openApi 先查「开没开」、再 await 拉数据、再 push —— 拉数据那一小段时间里再调一次
@@ -152,21 +192,37 @@ export const useTabsStore = defineStore('tabs', function () {
    */
   const pendingOpens = new Map();
 
-  function openApi(apiId) {
+  /**
+   * @param {string} apiId
+   * @param {{ preview?: boolean }} [options] preview：用预览标签页打开（目录树单击），见 placeTab
+   */
+  function openApi(apiId, options) {
+    const preview = Boolean(options && options.preview);
     const key = 'api:' + apiId;
     const existing = tabs.value.find(function (tab) { return tab.key === key; });
     if (existing) {
+      // 不是预览方式再打开一次（双击目录树、⌘K 等）＝ 把它固定下来
+      if (!preview) existing.preview = false;
       activeKey.value = key;
       return Promise.resolve(existing);
     }
 
-    if (pendingOpens.has(key)) return pendingOpens.get(key);
-    const pending = loadApiTab(apiId).finally(function () { pendingOpens.delete(key); });
+    if (pendingOpens.has(key)) {
+      // 还在拉的时候就双击了：等它开出来再固定
+      if (preview) return pendingOpens.get(key);
+      return pendingOpens.get(key).then(function (tab) {
+        // 要改数组里那个响应式的对象，改 loadApiTab 返回的原始对象界面不会跟着变
+        const live = tabs.value.find(function (item) { return item.key === key; });
+        if (live) live.preview = false;
+        return live || tab;
+      });
+    }
+    const pending = loadApiTab(apiId, preview).finally(function () { pendingOpens.delete(key); });
     pendingOpens.set(key, pending);
     return pending;
   }
 
-  async function loadApiTab(apiId) {
+  async function loadApiTab(apiId, preview) {
     const key = 'api:' + apiId;
     const data = await apisApi.getApi(apiId);
 
@@ -176,7 +232,8 @@ export const useTabsStore = defineStore('tabs', function () {
       activeKey.value = key;
       return opened;
     }
-    // WS 接口用 WebSocket 标签页打开（契约第 17 节），不是那套 HTTP 界面
+    // WS 接口用 WebSocket 标签页打开（契约第 17 节），不是那套 HTTP 界面。
+    // 它不走预览：连着的会话被顶掉就断了
     if (data.api.method === 'WS') return pushWsApiTab(data.api);
 
     const spec = specFromApi(data.api);
@@ -198,8 +255,8 @@ export const useTabsStore = defineStore('tabs', function () {
       controller: null
     }, emptyLive());
 
-    tabs.value.push(tab);
-    activeKey.value = key;
+    tab.preview = preview;
+    placeTab(tab);
     return tab;
   }
 
@@ -298,10 +355,13 @@ export const useTabsStore = defineStore('tabs', function () {
    * 打开目录设置。key 里带目录 id，所以**同一个目录只会有一个标签页**。
    * 可编辑的内容放在 `spec` 上，这样「和快照比出 dirty」那套机制可以直接复用。
    */
-  function openFolder(folderId) {
+  /** @param {{ preview?: boolean }} [options] 同 openApi */
+  function openFolder(folderId, options) {
+    const preview = Boolean(options && options.preview);
     const key = 'folder:' + folderId;
     const existing = tabs.value.find(function (tab) { return tab.key === key; });
     if (existing) {
+      if (!preview) existing.preview = false;
       activeKey.value = key;
       return existing;
     }
@@ -328,8 +388,8 @@ export const useTabsStore = defineStore('tabs', function () {
       controller: null
     }, emptyLive());
 
-    tabs.value.push(tab);
-    activeKey.value = key;
+    tab.preview = preview;
+    placeTab(tab);
     return tab;
   }
 
@@ -629,6 +689,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openHistory: openHistory,
     activate: activate,
     close: close,
+    pin: pin,
     closeAll: closeAll,
     syncWithApis: syncWithApis,
     syncWithFolders: syncWithFolders,

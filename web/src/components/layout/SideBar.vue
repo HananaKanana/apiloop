@@ -66,10 +66,10 @@ function onTabClick(key) {
     <div v-show="!collapsed" class="panel">
       <api-tree
         v-show="ui.sidebarTab === 'tree'"
-        @open="(api) => emit('open', api)"
+        @open="(api, options) => emit('open', api, options)"
         @new-api="(folderId) => emit('new-api', folderId)"
         @new-ws="emit('new-ws')"
-        @open-folder="(folderId) => emit('open-folder', folderId)"
+        @open-folder="(folderId, options) => emit('open-folder', folderId, options)"
         @import="emit('import')"
       />
       <env-list v-if="ui.sidebarTab === 'env'" />

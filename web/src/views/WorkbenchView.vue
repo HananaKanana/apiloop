@@ -98,9 +98,9 @@ function onProjectChange(id) {
   // 切了项目：环境由 EnvSwitcher 的 watcher 重新拉，目录树由 ApiTree 的 watcher 重新拉
 }
 
-async function onOpenApi(api) {
+async function onOpenApi(api, options) {
   try {
-    await tabs.openApi(api.id);
+    await tabs.openApi(api.id, options);
   } catch (err) {
     message.error(err.message);
   }
@@ -116,8 +116,8 @@ function onNewWs() {
 }
 
 /** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
-function onOpenFolder(folderId) {
-  tabs.openFolder(folderId);
+function onOpenFolder(folderId, options) {
+  tabs.openFolder(folderId, options);
 }
 
 /**
@@ -288,8 +288,10 @@ onBeforeUnmount(function () {
               v-for="tab in tabs.tabs"
               :key="tab.key"
               class="tab-item"
-              :class="{ active: tab.key === tabs.activeKey }"
+              :class="{ active: tab.key === tabs.activeKey, preview: tab.preview }"
+              :title="tab.preview ? '预览标签页：再单击别的会被替换，双击固定' : ''"
               @click="tabs.activate(tab.key)"
+              @dblclick="tabs.pin(tab.key)"
               @contextmenu.prevent="openTabMenu($event, tab)"
             >
               <span
@@ -483,6 +485,11 @@ onBeforeUnmount(function () {
 .tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 预览标签页：标题斜体（和 Postman / VS Code 一样），再单击别的接口会被替换 */
+.tab-item.preview .tab-title {
+  font-style: italic;
 }
 
 /* 方法缩写：只有文字颜色，没有边框和底色 */

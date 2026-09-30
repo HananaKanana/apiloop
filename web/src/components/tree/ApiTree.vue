@@ -164,14 +164,11 @@ function nodeProps(info) {
      * 打开一个接口、关掉标签页，再点它就打不开了（用户 2026-09-30 报的 bug）。
      */
     onClick: function (event) {
-      const node = info.option;
-      if (node.kind === 'api') {
-        if (node.api) emit('open', node.api);
-        return;
-      }
-      if (node.kind !== 'folder') return;
-      if (event.target && event.target.closest && event.target.closest('.n-tree-node-switcher')) return;
-      emit('open-folder', node.id);
+      openNode(event, info.option, true);
+    },
+    /** 双击：把预览标签页固定下来（和 Postman 一样） */
+    onDblclick: function (event) {
+      openNode(event, info.option, false);
     },
     onContextmenu: function (event) {
       event.preventDefault();
@@ -179,6 +176,20 @@ function nodeProps(info) {
       openMenu(event, info.option);
     }
   };
+}
+
+/**
+ * 单击用预览标签页打开（再单击别的会把它换掉），双击打开成普通标签页。
+ * 只点左边那个小箭头时只展开收起，不开页。
+ */
+function openNode(event, node, preview) {
+  if (node.kind === 'api') {
+    if (node.api) emit('open', node.api, { preview: preview });
+    return;
+  }
+  if (node.kind !== 'folder') return;
+  if (event.target && event.target.closest && event.target.closest('.n-tree-node-switcher')) return;
+  emit('open-folder', node.id, { preview: preview });
 }
 
 /* ---------------- 选中与右键 ---------------- */
