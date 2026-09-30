@@ -99,12 +99,16 @@ test('老地址 /__mock 不再挂管理台页面', async function () {
 test('默认入口是 /index.html，根路径 302 过去', async function () {
     var page = await fetch(ctx.base + '/index.html');
     assert.strictEqual(page.status, 200);
-    assert.ok((await page.text()).indexOf('app.js') > -1, '应该就是管理台页面');
 
-    // 页面用的是相对路径，所以根路径下 app.js / style.css 也必须能取到
-    for (var asset of ['/app.js', '/style.css']) {
-        var res = await fetch(ctx.base + asset);
-        assert.strictEqual(res.status, 200, asset + ' 应该能访问');
+    var html = await page.text();
+    assert.ok(html.indexOf('管理台') > -1, '新版管理台的标题里应包含「管理台」');
+
+    // 前端产物挂在 /__apiloop/ 下，从页面里把真实文件名抠出来，逐个确认能取到
+    var assets = html.match(/\/__apiloop\/[^"']+/g) || [];
+    assert.ok(assets.length >= 1, '页面里应引用 /__apiloop/ 下的资源');
+    for (var asset of assets) {
+        var assetResponse = await fetch(ctx.base + asset);
+        assert.strictEqual(assetResponse.status, 200, asset + ' 应该能访问');
     }
 
     var root = await fetch(ctx.base + '/', { redirect: 'manual' });
