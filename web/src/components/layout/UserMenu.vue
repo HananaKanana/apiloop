@@ -26,6 +26,12 @@ const showPassword = ref(false);
 const saving = ref(false);
 const form = ref({ oldPassword: '', newPassword: '', confirm: '' });
 
+/** 头像里那个字：显示名的第一个字 */
+const avatarText = computed(function () {
+  const name = String(session.displayName || session.username || '').trim();
+  return name ? name.charAt(0).toUpperCase() : '?';
+});
+
 const options = computed(function () {
   const items = [
     { label: '修改密码', key: 'password' },
@@ -85,7 +91,7 @@ async function onSelect(key) {
 
 <template>
   <n-dropdown :options="options" trigger="click" @select="onSelect">
-    <n-button quaternary size="small">{{ session.displayName || '未登录' }}</n-button>
+    <button class="avatar" :title="session.displayName || '未登录'">{{ avatarText }}</button>
   </n-dropdown>
 
   <n-modal
@@ -119,3 +125,27 @@ async function onSelect(key) {
     </template>
   </n-modal>
 </template>
+
+<style scoped>
+/* 头像：主色圆底 + 白字，取显示名的第一个字 */
+.avatar {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--apiloop-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.avatar:hover {
+  opacity: 0.88;
+}
+</style>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { NButton, NEmpty, NInput, NModal, NSpace, useDialog, useMessage } from 'naive-ui';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
+import { useUiStore } from '@/stores/ui';
 import * as importExportApi from '@/api/importExport';
 import { downloadJson } from '@/utils/download';
 import VarTable from '@/components/common/VarTable.vue';
@@ -15,6 +16,7 @@ const emit = defineEmits(['update:show']);
 
 const envs = useEnvStore();
 const projects = useProjectStore();
+const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -45,7 +47,12 @@ watch(
   function () { return props.show; },
   function (visible) {
     if (!visible) return;
-    if (envs.environments.length) {
+    // 侧栏「环境」页点某一条进来时定位到那一个，否则回到当前选中的环境
+    const target = ui.envManagerTarget;
+    const exists = target && envs.environments.some(function (item) { return item.id === target; });
+    if (exists) {
+      activeId.value = target;
+    } else if (envs.environments.length) {
       activeId.value = envs.selectedId || envs.environments[0].id;
     } else {
       activeId.value = '';

@@ -58,6 +58,7 @@
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-xml": "^6.1.0",
+    "@vicons/tabler": "^0.13.0",
     "@vitejs/plugin-vue": "^6.0.9",
     "codemirror": "^6.0.2",
     "naive-ui": "^2.45.3",
