@@ -144,15 +144,38 @@ export const useTabsStore = defineStore('tabs', function () {
     tab.dirty = JSON.stringify(tab.spec) !== tab.savedSnapshot;
   }
 
-  async function openApi(apiId) {
+  /**
+   * 正在从服务端拉的接口：`key → Promise`。
+   * openApi 先查「开没开」、再 await 拉数据、再 push —— 拉数据那一小段时间里再调一次
+   * （连点两下、或者别处同时也要打开），两边都查不到，就会开出两个一样的标签页
+   * （用户 2026-09-30 报的「点一下出现 2 个」）。在途的直接复用同一个 Promise。
+   */
+  const pendingOpens = new Map();
+
+  function openApi(apiId) {
     const key = 'api:' + apiId;
     const existing = tabs.value.find(function (tab) { return tab.key === key; });
     if (existing) {
       activeKey.value = key;
-      return existing;
+      return Promise.resolve(existing);
     }
 
+    if (pendingOpens.has(key)) return pendingOpens.get(key);
+    const pending = loadApiTab(apiId).finally(function () { pendingOpens.delete(key); });
+    pendingOpens.set(key, pending);
+    return pending;
+  }
+
+  async function loadApiTab(apiId) {
+    const key = 'api:' + apiId;
     const data = await apisApi.getApi(apiId);
+
+    // 等数据的这段时间里，别的路径可能已经把它开出来了，那就直接切过去
+    const opened = tabs.value.find(function (tab) { return tab.key === key; });
+    if (opened) {
+      activeKey.value = key;
+      return opened;
+    }
     // WS 接口用 WebSocket 标签页打开（契约第 17 节），不是那套 HTTP 界面
     if (data.api.method === 'WS') return pushWsApiTab(data.api);
 
