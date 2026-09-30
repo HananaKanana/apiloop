@@ -8,6 +8,7 @@ var dbModule = require('../lib/db');
 var projectsRepo = require('../lib/db/repos/projects');
 var apisRepo = require('../lib/db/repos/apis');
 var foldersRepo = require('../lib/db/repos/folders');
+var legacyImport = require('../lib/legacy-import');
 
 /**
  * store 现在是「单个项目的门面」，所以要先开库、建一个项目，再拿它建 store。
@@ -126,29 +127,105 @@ test('load 对缺失的库和空库都返回空列表', function () {
     assert.deepStrictEqual(ctx.store.getGroups(), []);
 });
 
-test.skip('库文件不是 SQLite 时给出可读错误（Task 4 恢复：职责已移到 legacy-import）', function () {
+test('迁移：旧 routes.db 旁边的目录名会成为项目名', function () {
     var ctx = tempStore();
-    // 模拟 --config 指到一个旧的 JSON 配置文件上
-    fs.writeFileSync(ctx.store.filePath, '{ this is not a database');
-    assert.throws(function () { ctx.store.load(); }, /不是 SQLite 数据库/);
+    fs.writeFileSync(path.join(ctx.dir, 'routes.db'), '这不是个数据库');
+    var result = legacyImport.importLegacyDir(ctx.handle, ctx.dir);
+    assert.strictEqual(result.project, null, '读不出来就不该建空项目');
+    assert.strictEqual(result.warnings.length, 1);
+    assert.ok(/不是 SQLite 数据库/.test(result.warnings[0]), result.warnings[0]);
 });
 
-test.skip('旧 routes.json 坏掉时只记警告，不影响启动（Task 4 恢复）', function () {
+test('迁移：旧 routes.json 坏掉时只记警告，不影响启动', function () {
     var ctx = tempStore();
     fs.writeFileSync(path.join(ctx.dir, 'routes.json'), '{ 这不是合法 JSON');
-    assert.deepStrictEqual(ctx.store.load(), [], '坏 JSON 不该让服务起不来');
-    assert.strictEqual(ctx.store.getRoutes().length, 0);
-    assert.strictEqual(ctx.store.getMigrationWarnings().length, 1);
-    assert.ok(/不是合法 JSON/.test(ctx.store.getMigrationWarnings()[0]));
+    var result = legacyImport.importLegacyDir(ctx.handle, ctx.dir);
+    assert.strictEqual(result.project, null);
+    assert.strictEqual(result.warnings.length, 1);
+    assert.ok(/不是合法 JSON/.test(result.warnings[0]), result.warnings[0]);
 });
 
-test.skip('旧 routes.json 支持直接是数组的极简写法（Task 4 恢复）', function () {
-    var ctx = tempStore();
-    fs.writeFileSync(path.join(ctx.dir, 'routes.json'), JSON.stringify([{ path: '/api/a' }]));
-    ctx.store.load();
-    assert.strictEqual(ctx.store.getRoutes().length, 1);
-    assert.strictEqual(ctx.store.getRoutes()[0].path, '/api/a');
-    assert.strictEqual(ctx.store.getMigratedFrom(), path.join(ctx.dir, 'routes.json'));
+test('迁移：旧 routes.json 支持直接是数组的极简写法', function () {
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+    fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify([{ path: '/api/a' }]));
+
+    var result = legacyImport.importLegacyDir(handle, dir);
+    assert.ok(result.project, '应建出项目');
+    assert.strictEqual(result.importedFrom, path.join(dir, 'routes.json'));
+    assert.strictEqual(result.project.name, path.basename(dir), '项目名取目录名');
+
+    var store = storeModule.createStore({ handle: handle, projectId: result.project.id });
+    assert.deepStrictEqual(store.load().map(function (r) { return r.path; }), ['/api/a']);
+    assert.ok(fs.existsSync(path.join(dir, 'routes.json')), '原文件保留不动');
+    handle.close();
+});
+
+test('迁移：目录里同时有 routes.db 和 routes.json 时只认 routes.db', function () {
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+
+    // 造一个 P0 格式的库：它自己的表结构由 legacy 模块负责
+    var legacyDb = require('../lib/legacy/routes-db');
+    var p0 = legacyDb.openDatabase(path.join(dir, 'routes.db'));
+    p0.exec("CREATE TABLE IF NOT EXISTS groups (name TEXT PRIMARY KEY, position INTEGER NOT NULL)");
+    p0.exec("CREATE TABLE IF NOT EXISTS routes (id TEXT PRIMARY KEY, name TEXT, grp TEXT, descr TEXT, " +
+        "enabled INTEGER, method TEXT, path TEXT, status INTEGER, delay INTEGER, cors INTEGER, " +
+        "headers TEXT, query TEXT, body TEXT, response_type TEXT, response TEXT, position INTEGER)");
+    p0.prepare("INSERT INTO routes (id,name,grp,descr,enabled,method,path,status,delay,cors,headers,query,body,response_type,response,position) " +
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .run('r1', '来自库', '', '', 1, 'GET', '/api/from-db', 200, 0, 0, '[]', '[]', '[]', 'json', '{}', 0);
+    legacyDb.close(p0);
+
+    fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify([{ path: '/api/from-json' }]));
+
+    var result = legacyImport.importLegacyDir(handle, dir);
+    assert.strictEqual(result.importedFrom, path.join(dir, 'routes.db'), '应优先 routes.db');
+
+    var store = storeModule.createStore({ handle: handle, projectId: result.project.id });
+    assert.deepStrictEqual(store.load().map(function (r) { return r.path; }), ['/api/from-db']);
+    handle.close();
+});
+
+test('迁移：同一个目录不会重复导入', function () {
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+    fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify([{ path: '/api/a', group: '分组甲' }]));
+
+    var first = legacyImport.importLegacyDir(handle, dir);
+    assert.ok(first.project && first.importedFrom, '第一次应真的导入');
+
+    var second = legacyImport.importLegacyDir(handle, dir);
+    assert.strictEqual(second.project.id, first.project.id, '第二次应返回同一个项目');
+    assert.strictEqual(second.importedFrom, null, '第二次不应再报导入');
+
+    assert.strictEqual(
+        projectsRepo.list(handle).length, 1, '不应产生第二个项目'
+    );
+    var store = storeModule.createStore({ handle: handle, projectId: first.project.id });
+    assert.strictEqual(store.load().length, 1, '接口也不应被导入两次');
+    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['分组甲']);
+    handle.close();
+});
+
+test('迁移：声明的空分组也会按原顺序建出来', function () {
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+    fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({
+        version: 1,
+        groups: ['空的分组', '有接口的'],
+        routes: [{ path: '/api/a', group: '有接口的' }]
+    }));
+
+    var result = legacyImport.importLegacyDir(handle, dir);
+    var store = storeModule.createStore({ handle: handle, projectId: result.project.id });
+    store.load();
+    assert.deepStrictEqual(
+        store.getGroups().map(function (g) { return g.name; }),
+        ['空的分组', '有接口的'],
+        '分组顺序与声明一致，空分组也保留'
+    );
+    handle.close();
 });
 
 test('文件监听：外部改库后触发 change 并重新加载', async function () {
