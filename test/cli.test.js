@@ -196,17 +196,35 @@ test('web：登录后管理台 API 与 mock 路由都可用', async function () 
 
         assert.strictEqual((await (await fetch(base + '/api/users/99')).json()).data.id, '99', '路径参数');
 
-        var groups = await (await adminCall(base, cookie, 'GET', '/groups')).json();
-        var sample = groups.groups.filter(function (g) { return g.name === '用户'; })[0];
-        assert.ok(sample, '应能读到 init 生成的示例分组');
-        assert.strictEqual(sample.count, 3);
+        // init 灌的示例接口落在根项目的「用户」目录下（契约第 3 节的树接口）
+        var projectId = meta.project.id;
+        var tree = await (await adminCall(base, cookie, 'GET', '/projects/' + projectId + '/tree')).json();
+        var folder = tree.folders.filter(function (item) { return item.name === '用户'; })[0];
+        assert.ok(folder, '应能读到 init 生成的示例目录');
+        assert.strictEqual(tree.apis.filter(function (item) { return item.folderId === folder.id; }).length, 3);
 
-        // 新建接口立即生效
-        var created = await adminCall(base, cookie, 'POST', '/routes', {
-            route: { method: 'GET', path: '/api/added', response: '{"added":true}' }
-        });
-        assert.strictEqual((await created.json()).ok, true);
+        // 新建接口立即生效：建接口 → 建示例 → 打开 mock
+        var created = await (await adminCall(base, cookie, 'POST', '/projects/' + projectId + '/apis', {
+            api: { name: '新增', method: 'GET', url: '/api/added' }
+        })).json();
+        assert.strictEqual(created.ok, true, JSON.stringify(created));
+
+        var example = await (await adminCall(base, cookie, 'POST', '/apis/' + created.api.id + '/examples', {
+            example: { name: '默认', status: 200, body: '{"added":true}', responseType: 'json' }
+        })).json();
+        assert.strictEqual(example.ok, true, JSON.stringify(example));
+
+        var enabled = await (await adminCall(base, cookie, 'PUT', '/apis/' + created.api.id, {
+            api: { mock: { enabled: true } }
+        })).json();
+        assert.strictEqual(enabled.ok, true, JSON.stringify(enabled));
+
         assert.strictEqual((await fetch(base + '/api/added')).status, 200);
+
+        // 旧版管理台接口已经删除：请求它应该回统一形状的 404 JSON，而不是被 mock 接走
+        var legacy = await adminCall(base, cookie, 'GET', '/routes');
+        assert.strictEqual(legacy.status, 404);
+        assert.strictEqual((await legacy.json()).ok, false);
 
         assert.ok(output.indexOf('管理台已启动') > -1, '启动日志应包含管理台地址，实际输出：' + output);
     } finally {

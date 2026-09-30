@@ -60,71 +60,35 @@ test('normalizeRoute 过滤空字段行并纠正未知类型', function () {
     assert.strictEqual(route.query[0].type, 'string');
 });
 
-test('CRUD：新建 / 查询 / 更新 / 复制 / 删除', function () {
+test('落盘：整批写入后数据库里是接口 + 示例 + 目录', function () {
     var ctx = tempStore();
     var store = ctx.store;
-    assert.deepStrictEqual(store.load(), []);
 
-    var created = store.create({ path: '/api/a', name: 'A' });
-    assert.strictEqual(store.getRoutes().length, 1);
-    assert.strictEqual(store.getRoute(created.id).name, 'A');
+    // replaceAll 是门面上还在用的那条写入路径（mock init 灌示例走它），
+    // 顺带把 insertRoutes 的落库覆盖了：一条 route → apis + examples + folders
+    store.replaceAll([{ path: '/api/a', group: 'G' }, { path: '/api/b' }]);
 
-    var updated = store.update(created.id, { path: '/api/a', name: 'A2', status: 201 });
-    assert.strictEqual(updated.name, 'A2');
-    assert.strictEqual(updated.id, created.id, '更新不应改变 id');
-    assert.strictEqual(store.getRoutes().length, 1, '更新不应新增');
-
-    var copy = store.duplicate(created.id);
-    assert.notStrictEqual(copy.id, created.id);
-    assert.strictEqual(copy.name, 'A2 副本');
-
-    assert.strictEqual(store.remove(created.id), true);
-    assert.strictEqual(store.remove(created.id), false, '重复删除返回 false');
-    assert.strictEqual(store.getRoutes().length, 1);
-
-    assert.strictEqual(store.update('not-exist', { path: '/x' }), null);
-    assert.strictEqual(store.duplicate('not-exist'), null);
-});
-
-test('落盘：写进数据库并可被重新读取', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.create({ path: '/api/a', group: 'G' });
-    store.create({ path: '/api/b' });
-
-    // 一条 route 现在落在 apis（接口定义）和 folders（分组）里，直接查表核对
     var stored = apisRepo.list(ctx.handle, ctx.projectId);
     assert.deepStrictEqual(stored.map(function (item) { return item.mockPath; }), ['/api/a', '/api/b']);
     assert.deepStrictEqual(
         foldersRepo.list(ctx.handle, ctx.projectId).map(function (folder) { return folder.name; }),
-        ['G'], '分组也要落库'
+        ['G'], '分组（= 顶层目录）也要落库'
     );
+    // 每条 route 都要配一条示例，否则读出来 enabled 是 false、挂不到 mock 上
+    stored.forEach(function (api) {
+        assert.ok(api.mockExampleId, api.mockPath + ' 应指向一条示例');
+    });
+    assert.ok(store.getRoutes().every(function (route) { return route.enabled; }));
 
     var reloaded = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
     assert.deepStrictEqual(reloaded.load().map(function (item) { return item.path; }), ['/api/a', '/api/b']);
-});
-
-test('change 事件在增删改后触发', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    var events = 0;
-    store.on('change', function () { events++; });
-
-    var route = store.create({ path: '/api/a' });
-    store.update(route.id, { path: '/api/a', name: 'x' });
-    store.remove(route.id);
-    assert.strictEqual(events, 3);
-
-    store.addMany([{ path: '/api/b' }, { path: '/api/c' }]);
-    assert.strictEqual(events, 4, '批量导入只触发一次变更');
-    assert.strictEqual(store.getRoutes().length, 2);
 });
 
 test('load 对缺失的库和空库都返回空列表', function () {
     var ctx = tempStore();
     assert.deepStrictEqual(ctx.store.load(), [], '库文件还不存在时应为空');
     assert.deepStrictEqual(ctx.store.load(), [], '库已建好但还是空的时候仍应为空');
-    assert.deepStrictEqual(ctx.store.getGroups(), []);
+    assert.deepStrictEqual(foldersRepo.list(ctx.handle, ctx.projectId), []);
 });
 
 test('迁移：旧 routes.db 旁边的目录名会成为项目名', function () {
@@ -204,7 +168,10 @@ test('迁移：同一个目录不会重复导入', function () {
     );
     var store = storeModule.createStore({ handle: handle, projectId: first.project.id });
     assert.strictEqual(store.load().length, 1, '接口也不应被导入两次');
-    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['分组甲']);
+    assert.deepStrictEqual(
+        foldersRepo.list(handle, first.project.id).map(function (folder) { return folder.name; }),
+        ['分组甲']
+    );
     handle.close();
 });
 
@@ -221,7 +188,7 @@ test('迁移：声明的空分组也会按原顺序建出来', function () {
     var store = storeModule.createStore({ handle: handle, projectId: result.project.id });
     store.load();
     assert.deepStrictEqual(
-        store.getGroups().map(function (g) { return g.name; }),
+        foldersRepo.list(handle, result.project.id).map(function (folder) { return folder.name; }),
         ['空的分组', '有接口的'],
         '分组顺序与声明一致，空分组也保留'
     );
@@ -232,7 +199,12 @@ test('文件监听：外部改库后触发 change 并重新加载', async functi
     var ctx = tempStore();
     var store = ctx.store;
     store.load();
-    store.create({ path: '/api/self' });
+    // 造一条自己的数据（走 repo，门面上的写方法已经删掉了）
+    ctx.handle.transaction(function () {
+        apisRepo.insert(ctx.handle, ctx.projectId, {
+            name: '自写', method: 'GET', url: '/api/self', mockPath: '/api/self'
+        });
+    }, { projectId: ctx.projectId });
     store.startWatching();
     try {
         var events = 0;
@@ -276,128 +248,28 @@ test('示例配置本身合法且能通过校验', function () {
     });
 });
 
-/* ------------------------------------------------------------------ 分组管理 */
+/* ------------------------------------------------------------ 分组（= 顶层目录） */
 
-test('分组管理：新建 / 重命名 / 删除', function () {
+test('insertRoutes：声明过的分组、以及接口上写的分组，都会落成顶层目录', function () {
     var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-    assert.deepStrictEqual(store.getGroups(), []);
+    ctx.store.load();
 
-    store.addGroup('订单');
-    store.addGroup('用户');
-    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['订单', '用户']);
-
-    var route = store.create({ path: '/api/orders', group: '订单' });
-    assert.strictEqual(store.getGroups()[0].count, 1, 'count 应反映分组下接口数');
-
-    var renamed = store.renameGroup('订单', '交易');
-    assert.strictEqual(renamed.moved, 1);
-    assert.strictEqual(store.getRoute(route.id).group, '交易', '重命名应同步改掉接口上的分组');
-    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['交易', '用户']);
-
-    var removed = store.removeGroup('用户');
-    assert.strictEqual(removed.mode, 'move');
-    assert.strictEqual(removed.affected, 0);
-    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['交易']);
-});
-
-test('路由上出现的分组会自动登记', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-    store.create({ path: '/api/a', group: '顺手写的' });
-    assert.deepStrictEqual(store.getGroups().map(function (g) { return g.name; }), ['顺手写的']);
-
-    // 更新接口时换分组同样要登记
-    var route = store.create({ path: '/api/b' });
-    store.update(route.id, { path: '/api/b', group: '另一个' });
-    assert.ok(store.getGroups().map(function (g) { return g.name; }).indexOf('另一个') > -1);
-});
-
-test('删除分组：move 把接口移到未分组，delete 连接口一起删', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-
-    var a = store.create({ path: '/api/a', group: '临时' });
-    var b = store.create({ path: '/api/b', group: '临时' });
-
-    var moved = store.removeGroup('临时', 'move');
-    assert.strictEqual(moved.affected, 2);
-    assert.strictEqual(store.getRoutes().length, 2, 'move 不应删接口');
-    assert.strictEqual(store.getRoute(a.id).group, '');
-    assert.deepStrictEqual(store.getGroups(), [], '分组本身应消失');
-
-    var c = store.create({ path: '/api/c', group: '待删' });
-    var deleted = store.removeGroup('待删', 'delete');
-    assert.strictEqual(deleted.mode, 'delete');
-    assert.strictEqual(deleted.affected, 1);
-    assert.strictEqual(store.getRoute(c.id), null, 'delete 应连接口一起删');
-});
-
-test('分组管理的非法输入', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-    store.addGroup('用户');
-
-    assert.throws(function () { store.addGroup('   '); }, /分组名不能为空/);
-    assert.throws(function () { store.addGroup('用户'); }, /分组已存在/);
-    assert.throws(function () { store.renameGroup('不存在', 'x'); }, /分组不存在/);
-    assert.throws(function () { store.renameGroup('用户', '  '); }, /新分组名不能为空/);
-    store.addGroup('其他');
-    assert.throws(function () { store.renameGroup('用户', '其他'); }, /分组已存在/);
-    assert.throws(function () { store.removeGroup('不存在'); }, /分组不存在/);
-});
-
-test('分组排序：完整重排 / 部分重排 / 非法名字', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-    ['A', 'B', 'C'].forEach(function (name) { store.addGroup(name); });
+    // 这条路径是 legacy 导入与批量导入共用的：groups 先按声明顺序建（空目录也要留下），
+    // route 上的 group 没声明过就顺手补建
+    ctx.handle.transaction(function () {
+        storeModule.insertRoutes(ctx.handle, ctx.projectId, {
+            groups: ['空的分组', '有接口的'],
+            routes: [{ path: '/api/a', group: '有接口的' }, { path: '/api/b', group: '顺手写的' }]
+        });
+    }, { projectId: ctx.projectId });
 
     assert.deepStrictEqual(
-        store.reorderGroups(['C', 'A', 'B']).map(function (g) { return g.name; }),
-        ['C', 'A', 'B']
+        foldersRepo.list(ctx.handle, ctx.projectId).map(function (folder) { return folder.name; }),
+        ['空的分组', '有接口的', '顺手写的'],
+        '顺序与声明一致，空目录也保留'
     );
-
-    // 只提到一部分：没提到的按原顺序排在后面
     assert.deepStrictEqual(
-        store.reorderGroups(['B']).map(function (g) { return g.name; }),
-        ['B', 'C', 'A']
-    );
-
-    // 重复项忽略
-    assert.deepStrictEqual(
-        store.reorderGroups(['A', 'A', 'C']).map(function (g) { return g.name; }),
-        ['A', 'C', 'B']
-    );
-
-    assert.throws(function () { store.reorderGroups(['不存在']); }, /分组不存在/);
-    assert.throws(function () { store.reorderGroups('A'); }, /必须是数组/);
-
-    // 顺序要落盘：换一个 store 实例读回来
-    var reopened = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
-    reopened.load();
-    assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['A', 'C', 'B']);
-});
-
-test('分组会落进数据库，接口上写的新分组名会自动登记', function () {
-    var ctx = tempStore();
-    var store = ctx.store;
-    store.load();
-    store.addGroup('空分组也应保存');
-
-    var reopened = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
-    reopened.load();
-    assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['空分组也应保存']);
-    assert.strictEqual(reopened.getGroups()[0].count, 0, '空分组的接口数是 0');
-
-    // 接口上写了新分组名会自动登记（旧 routes.json 的 groups 推导见 Task 4 的 legacy-import）
-    store.create({ path: '/api/a', group: '顺手写的' });
-    assert.ok(
-        store.getGroups().map(function (g) { return g.name; }).indexOf('顺手写的') > -1,
-        '接口上写的新分组名应自动登记'
+        foldersRepo.list(ctx.handle, ctx.projectId).filter(function (folder) { return !folder.parentId; }).length,
+        3, '都建在顶层'
     );
 });

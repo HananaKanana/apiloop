@@ -13,7 +13,6 @@ var projectsRepo = require('../lib/db/repos/projects');
 var apisRepo = require('../lib/db/repos/apis');
 var usersRepo = require('../lib/db/repos/users');
 var auth = require('../lib/auth');
-var foldersRepo = require('../lib/db/repos/folders');
 var examplesRepo = require('../lib/db/repos/examples');
 var runtimeModule = require('../lib/mock-runtime');
 var adminModule = require('../lib/admin');
@@ -63,6 +62,7 @@ test.before(async function () {
     ctx = {
         store: store,
         handle: handle,
+        project: project,
         server: server,
         dir: dir,
         base: base,
@@ -76,10 +76,41 @@ test.before(async function () {
                 return res.json().then(function (json) { return { status: res.status, body: json }; });
             });
         },
+        /**
+         * 造一条能挂出去的 mock 数据。
+         *
+         * 旧版是一次 `POST /routes` 就完事，2.0 按契约第 3 节要走三步：
+         * 建接口 → 建示例 → 打开 mock（没有示例时不允许打开）。
+         */
         createRoute: async function (route) {
-            var res = await ctx.api('POST', '/routes', { route: route });
-            assert.strictEqual(res.body.ok, true, JSON.stringify(res.body));
-            return res.body.route;
+            var created = await ctx.api('POST', '/projects/' + ctx.project.id + '/apis', {
+                api: {
+                    name: route.name || '',
+                    method: route.method || 'GET',
+                    url: route.path || '',
+                    mock: { delay: route.delay || 0, cors: route.cors === true }
+                }
+            });
+            assert.strictEqual(created.status, 200, JSON.stringify(created.body));
+
+            var apiId = created.body.api.id;
+            var example = await ctx.api('POST', '/apis/' + apiId + '/examples', {
+                example: {
+                    name: '默认',
+                    status: route.status === undefined ? 200 : route.status,
+                    headers: route.headers || [],
+                    body: route.response === undefined ? '' : route.response,
+                    responseType: route.responseType || 'json'
+                }
+            });
+            assert.strictEqual(example.status, 200, JSON.stringify(example.body));
+
+            if (route.enabled !== false) {
+                var enabled = await ctx.api('PUT', '/apis/' + apiId, { api: { mock: { enabled: true } } });
+                assert.strictEqual(enabled.status, 200, JSON.stringify(enabled.body));
+            }
+
+            return { id: apiId, exampleId: example.body.example.id };
         }
     };
 });
@@ -152,18 +183,22 @@ test('新建接口立刻生效，无需重启', async function () {
     assert.strictEqual(body.pong, true);
     assert.strictEqual(typeof body.n, 'number');
     ctx.pingId = route.id;
+    ctx.pingExampleId = route.exampleId;
 });
 
 test('状态码 / 自定义头 / CORS / 延时 / OPTIONS 预检', async function () {
     var start = Date.now();
-    await ctx.api('PUT', '/routes/' + ctx.pingId, {
-        route: {
-            name: 'Ping', method: 'GET', path: '/api/ping',
-            status: 201, delay: 120, cors: true,
-            headers: [{ key: 'X-Custom', value: 'hi' }],
-            response: '{"pong":true}'
-        }
+    // 延时和跨域挂在接口上，状态码和响应头属于「示例」—— 契约第 3 节就是这么分的
+    var patchedApi = await ctx.api('PUT', '/apis/' + ctx.pingId, {
+        api: { name: 'Ping', mock: { delay: 120, cors: true } }
     });
+    assert.strictEqual(patchedApi.status, 200, JSON.stringify(patchedApi.body));
+
+    var patchedExample = await ctx.api('PUT', '/examples/' + ctx.pingExampleId, {
+        example: { status: 201, headers: [{ key: 'X-Custom', value: 'hi' }], body: '{"pong":true}' }
+    });
+    assert.strictEqual(patchedExample.status, 200, JSON.stringify(patchedExample.body));
+
     var res = await fetch(ctx.base + '/api/ping');
     var elapsed = Date.now() - start;
 
@@ -179,15 +214,13 @@ test('状态码 / 自定义头 / CORS / 延时 / OPTIONS 预检', async function
 });
 
 test('停用接口后返回 404', async function () {
-    await ctx.api('PUT', '/routes/' + ctx.pingId, {
-        route: { name: 'Ping', method: 'GET', path: '/api/ping', enabled: false, response: '{}' }
-    });
-    var res = await fetch(ctx.base + '/api/ping');
-    assert.strictEqual(res.status, 404);
+    var off = await ctx.api('PUT', '/apis/' + ctx.pingId, { api: { mock: { enabled: false } } });
+    assert.strictEqual(off.status, 200, JSON.stringify(off.body));
+    assert.strictEqual((await fetch(ctx.base + '/api/ping')).status, 404);
 
-    await ctx.api('PUT', '/routes/' + ctx.pingId, {
-        route: { name: 'Ping', method: 'GET', path: '/api/ping', enabled: true, response: '{"pong":true}', status: 200, delay: 0 }
-    });
+    // 复原成 200（上面那条用例把示例改成了 201）
+    await ctx.api('PUT', '/examples/' + ctx.pingExampleId, { example: { status: 200 } });
+    await ctx.api('PUT', '/apis/' + ctx.pingId, { api: { mock: { enabled: true, delay: 0 } } });
     assert.strictEqual((await fetch(ctx.base + '/api/ping')).status, 200);
 });
 
@@ -280,10 +313,10 @@ test('导入 cURL 与 OpenAPI 并落库', async function () {
     assert.strictEqual(openapi.body.routes.length, 1);
     assert.strictEqual(openapi.body.routes[0].path, '/api/spec/:id');
 
-    var added = await ctx.api('POST', '/import/routes', {
+    var added = await ctx.api('POST', '/projects/' + ctx.project.id + '/import/routes', {
         routes: curl.body.routes.concat(openapi.body.routes)
     });
-    assert.strictEqual(added.body.routes.length, 2);
+    assert.strictEqual(added.body.apis.length, 2);
 
     var hit = await fetch(ctx.base + '/v1/goods/9?from=web', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"sku":"A-1"}'
@@ -297,14 +330,6 @@ test('导入 cURL 与 OpenAPI 并落库', async function () {
     var badCurl = await ctx.api('POST', '/import/curl', { text: 'curl -X GET' });
     assert.strictEqual(badCurl.status, 400);
     assert.ok(badCurl.body.error);
-});
-
-test('导出 JSON', async function () {
-    var res = await ctx.api('GET', '/export');
-    assert.strictEqual(res.body.filename, 'routes.json');
-    var doc = JSON.parse(res.body.json);
-    assert.strictEqual(doc.version, 1);
-    assert.ok(doc.routes.length > 0);
 });
 
 test('外部改数据库触发热更新', async function () {
@@ -336,23 +361,39 @@ test('外部改数据库触发热更新', async function () {
 });
 
 test('删除接口后返回 404', async function () {
-    var res = await ctx.api('DELETE', '/routes/' + ctx.pingId);
+    var res = await ctx.api('DELETE', '/apis/' + ctx.pingId);
     assert.strictEqual(res.body.ok, true);
     assert.strictEqual((await fetch(ctx.base + '/api/ping')).status, 404);
-    var again = await ctx.api('DELETE', '/routes/' + ctx.pingId);
+    var again = await ctx.api('DELETE', '/apis/' + ctx.pingId);
     assert.strictEqual(again.status, 404);
 });
 
 test('校验失败返回 400 且带可读错误', async function () {
-    var reserved = await ctx.api('POST', '/routes', { route: { path: '/__admin/hack' } });
-    assert.strictEqual(reserved.status, 400);
-    assert.ok(reserved.body.error.indexOf('管理台') > -1);
+    // mock 路径必须是 Express 能编译的（括号不成对就不行）。这条挡在写入层，
+    // 因为坏路径进了热更新会在定时器回调里把进程带走。
+    var badPath = await ctx.api('POST', '/projects/' + ctx.project.id + '/apis', {
+        api: { url: '/api/ok', mock: { path: '/api/:id(' } }
+    });
+    assert.strictEqual(badPath.status, 400);
+    assert.ok(badPath.body.error.indexOf('mock 路径不合法') > -1, badPath.body.error);
 
-    var method = await ctx.api('POST', '/routes', { route: { path: '/a', method: 'FETCH' } });
+    var method = await ctx.api('POST', '/projects/' + ctx.project.id + '/apis', {
+        api: { url: '/a', method: 'FETCH' }
+    });
     assert.strictEqual(method.status, 400);
 
-    var empty = await ctx.api('POST', '/routes', { route: { path: '' } });
-    assert.strictEqual(empty.status, 400);
+    // 示例的状态码越界会让 mock 运行时的 res.status() 抛错，同样挡在入口。
+    // （上面那条用例已经把 Ping 删掉了，这里现建一个接口来试）
+    var holder = await ctx.api('POST', '/projects/' + ctx.project.id + '/apis', {
+        api: { url: '/api/holder' }
+    });
+    assert.strictEqual(holder.status, 200, JSON.stringify(holder.body));
+
+    var badStatus = await ctx.api('POST', '/apis/' + holder.body.api.id + '/examples', {
+        example: { status: 999 }
+    });
+    assert.strictEqual(badStatus.status, 400);
+    assert.ok(badStatus.body.error.indexOf('100~599') > -1, badStatus.body.error);
 });
 
 test('未知管理台接口返回 JSON 404', async function () {
@@ -361,125 +402,49 @@ test('未知管理台接口返回 JSON 404', async function () {
     assert.strictEqual(res.body.ok, false);
 });
 
-/* ------------------------------------------------------------------ 分组管理 */
+/* ------------------------------------------------ 目录：契约第 3 节的树接口 */
 
-test('GET /routes 会带上分组列表', async function () {
-    var res = await ctx.api('GET', '/routes');
-    assert.strictEqual(res.body.ok, true);
-    assert.ok(Array.isArray(res.body.groups), 'routes 响应应包含 groups');
-    res.body.groups.forEach(function (group) {
-        assert.strictEqual(typeof group.name, 'string');
-        assert.strictEqual(typeof group.count, 'number');
-    });
-});
-
-test('分组的 HTTP 接口：新建 / 列表 / 重命名 / 删除', async function () {
-    // 新建（中文分组名要能正确编码解析）
-    var created = await ctx.api('POST', '/groups', { name: '订单管理' });
+test('目录接口：新建 / 重名报错 / 移动接口进去', async function () {
+    var created = await ctx.api('POST', '/projects/' + ctx.project.id + '/folders', { name: '订单管理' });
     assert.strictEqual(created.status, 200);
-    assert.strictEqual(created.body.group.name, '订单管理');
-    assert.strictEqual(created.body.group.count, 0, '空分组也要能建');
-    assert.ok(Array.isArray(created.body.routes), '分组写接口应回带最新 routes，省掉二次请求');
+    assert.strictEqual(created.body.folder.name, '订单管理');
 
-    // 空分组应该出现在列表里
-    var list = await ctx.api('GET', '/groups');
-    assert.ok(list.body.groups.map(function (g) { return g.name; }).indexOf('订单管理') > -1);
-
-    // 重名报错
-    var dup = await ctx.api('POST', '/groups', { name: '订单管理' });
+    var dup = await ctx.api('POST', '/projects/' + ctx.project.id + '/folders', { name: '订单管理' });
     assert.strictEqual(dup.status, 400);
-    assert.ok(dup.body.error.indexOf('已存在') > -1);
+    assert.ok(dup.body.error.indexOf('已存在') > -1, dup.body.error);
 
-    var empty = await ctx.api('POST', '/groups', { name: '   ' });
+    var empty = await ctx.api('POST', '/projects/' + ctx.project.id + '/folders', { name: '   ' });
     assert.strictEqual(empty.status, 400);
 
-    // 往这个分组里放两个接口
-    await ctx.createRoute({ name: 'G1', method: 'GET', path: '/api/g1', group: '订单管理', response: '{}' });
-    await ctx.createRoute({ name: 'G2', method: 'GET', path: '/api/g2', group: '订单管理', response: '{}' });
+    var g1 = await ctx.createRoute({ name: 'G1', method: 'GET', path: '/api/g1', response: '{}' });
+    var g2 = await ctx.createRoute({ name: 'G2', method: 'GET', path: '/api/g2', response: '{}' });
 
-    var withRoutes = await ctx.api('GET', '/groups');
-    var found = withRoutes.body.groups.filter(function (g) { return g.name === '订单管理'; })[0];
-    assert.strictEqual(found.count, 2);
+    // 目录树里能看到这两个接口
+    var tree = await ctx.api('GET', '/projects/' + ctx.project.id + '/tree');
+    assert.strictEqual(tree.status, 200);
+    assert.ok(tree.body.folders.some(function (f) { return f.id === created.body.folder.id; }));
 
-    // 重命名，接口上的分组要跟着改（响应里直接就是新的，不用再 GET 一次）
-    var renamed = await ctx.api('PUT', '/groups/' + encodeURIComponent('订单管理'), { name: '交易管理' });
-    assert.strictEqual(renamed.status, 200);
-    assert.strictEqual(renamed.body.moved, 2);
-    var renamedInResponse = renamed.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
-    assert.strictEqual(renamedInResponse.length, 2);
-    renamedInResponse.forEach(function (route) {
-        assert.strictEqual(route.group, '交易管理');
+    // 把接口移进目录
+    var moved = await ctx.api('POST', '/projects/' + ctx.project.id + '/move', {
+        kind: 'api', id: g1.id, parentId: created.body.folder.id, index: 0
     });
+    assert.strictEqual(moved.status, 200, JSON.stringify(moved.body));
+    assert.strictEqual(moved.body.apis.filter(function (a) { return a.id === g1.id; })[0].folderId,
+        created.body.folder.id);
 
-    var afterRename = await ctx.api('GET', '/routes');
-    var renamedRoutes = afterRename.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
-    assert.strictEqual(renamedRoutes.length, 2);
-    renamedRoutes.forEach(function (route) {
-        assert.strictEqual(route.group, '交易管理');
-    });
-
-    // 重命名到已存在的分组要报错
-    await ctx.api('POST', '/groups', { name: '另一个组' });
-    var conflict = await ctx.api('PUT', '/groups/' + encodeURIComponent('交易管理'), { name: '另一个组' });
-    assert.strictEqual(conflict.status, 400);
-
-    // 删除分组（默认 move）：接口保留并落到未分组
-    var removed = await ctx.api('DELETE', '/groups/' + encodeURIComponent('交易管理'));
+    // 删目录（默认 move）：接口保留、落到父级
+    var removed = await ctx.api('DELETE', '/folders/' + created.body.folder.id);
     assert.strictEqual(removed.status, 200);
-    assert.strictEqual(removed.body.removed.mode, 'move');
-    assert.strictEqual(removed.body.removed.affected, 2);
-    var afterRemove = await ctx.api('GET', '/routes');
-    var kept = afterRemove.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
-    assert.strictEqual(kept.length, 2, 'move 模式不应删接口');
-    kept.forEach(function (route) { assert.strictEqual(route.group, ''); });
+    var after = await ctx.api('GET', '/apis/' + g1.id);
+    assert.strictEqual(after.body.api.folderId, null, 'move 模式不应删接口');
 
-    // 删除分组（delete）：连接口一起删
-    await ctx.createRoute({ name: 'G3', method: 'GET', path: '/api/g3', group: '另一个组', response: '{}' });
-    var hard = await ctx.api('DELETE', '/groups/' + encodeURIComponent('另一个组') + '?routes=delete');
-    assert.strictEqual(hard.body.removed.mode, 'delete');
-    assert.strictEqual(hard.body.removed.affected, 1);
-    var finalRoutes = await ctx.api('GET', '/routes');
-    assert.strictEqual(finalRoutes.body.routes.filter(function (r) { return r.path === '/api/g3'; }).length, 0);
-    assert.strictEqual((await fetch(ctx.base + '/api/g3')).status, 404, '被删的接口应立刻失效');
-
-    // 删除不存在的分组
-    var missing = await ctx.api('DELETE', '/groups/' + encodeURIComponent('查无此组'));
-    assert.strictEqual(missing.status, 400);
-    assert.ok(missing.body.error.indexOf('不存在') > -1);
-});
-
-test('分组排序接口', async function () {
-    await ctx.api('POST', '/groups', { name: '排序甲' });
-    await ctx.api('POST', '/groups', { name: '排序乙' });
-    await ctx.api('POST', '/groups', { name: '排序丙' });
-
-    var before = await ctx.api('GET', '/groups');
-    var names = before.body.groups.map(function (g) { return g.name; });
-    assert.ok(names.indexOf('排序甲') < names.indexOf('排序乙'));
-
-    var reordered = await ctx.api('POST', '/groups/reorder', {
-        names: ['排序丙', '排序乙', '排序甲']
+    // 删目录（delete）：连接口一起删
+    var second = await ctx.api('POST', '/projects/' + ctx.project.id + '/folders', { name: '待删目录' });
+    await ctx.api('POST', '/projects/' + ctx.project.id + '/move', {
+        kind: 'api', id: g2.id, parentId: second.body.folder.id, index: 0
     });
-    assert.strictEqual(reordered.status, 200);
-    var after = reordered.body.groups.map(function (g) { return g.name; });
-    assert.ok(after.indexOf('排序丙') < after.indexOf('排序乙'));
-    assert.ok(after.indexOf('排序乙') < after.indexOf('排序甲'));
-
-    // 顺序要真的落盘
-    var stored = foldersRepo.list(ctx.handle, ctx.store.projectId).map(function (folder) { return folder.name; });
-    assert.ok(stored.indexOf('排序丙') < stored.indexOf('排序甲'), '分组顺序应写进数据库');
-
-    // 非法输入
-    var bad = await ctx.api('POST', '/groups/reorder', { names: ['查无此组'] });
-    assert.strictEqual(bad.status, 400);
-    assert.ok(bad.body.error.indexOf('不存在') > -1);
-    var notArray = await ctx.api('POST', '/groups/reorder', { names: '排序甲' });
-    assert.strictEqual(notArray.status, 400);
-});
-
-test('导出内容包含分组', async function () {
-    var res = await ctx.api('GET', '/export');
-    var doc = JSON.parse(res.body.json);
-    assert.ok(Array.isArray(doc.groups));
-    assert.ok(Array.isArray(doc.routes));
+    var hard = await ctx.api('DELETE', '/folders/' + second.body.folder.id + '?apis=delete');
+    assert.strictEqual(hard.status, 200);
+    assert.strictEqual((await ctx.api('GET', '/apis/' + g2.id)).status, 404, '接口应一起被删');
+    assert.strictEqual((await fetch(ctx.base + '/api/g2')).status, 404, '被删的接口应立刻失效');
 });
