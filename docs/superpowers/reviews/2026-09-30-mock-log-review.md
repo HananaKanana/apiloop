@@ -1,0 +1,39 @@
+# Mock 调用日志审阅意见（第 1 轮）
+
+> 审阅范围：8fcf604、d6e8829、20ee73f。`npm test` 82/82 全部通过。
+> 审阅方式：读代码 + 一次性脚本实测（已删除）。
+
+## 总体评价
+
+审阅重点第 2、3、4 条已经实测通过：
+- 设置了 `delay: 300` 的接口，记录到的 `durationMs` 为 304；
+- `Authorization` 和 `Cookie` 的值都显示为 `***`；
+- `/mock/<slug>/不存在的路径` 被记录为 `matched: null`、状态码 404；
+- 用 `after=lastSeq` 增量拉取时，没有新记录就返回空列表；
+- 两条日志路由都挂了 guard，删除项目时会调用 `forget`。
+
+整体结构清楚，写日志的逻辑包在 try/catch 里，不会拖累 mock 响应本身。**只有审阅重点第 1 条没通过。**
+
+## 必修
+
+### M1. 4KB 的预览会把整段原始响应留在内存里（V8 的 SlicedString）
+
+- **位置**：`lib/mock-log.js` 的 `preview`，`text.slice(0, PREVIEW_LIMIT)`。
+- **原因**：V8 对堆上的长字符串做 `slice`，返回的是一个 **SlicedString**，它内部保留着对原字符串的引用。所以日志里只要还存着这 4KB 的预览，那段 5MB 的原始响应就无法被垃圾回收。
+- **实测**：用模板引擎渲染 40 份 5MB 的响应，每份只留 4KB 预览，**堆内存增长了 205MB**。按每个项目保留 200 条算，一个会返回大响应的项目就能占掉约 1GB。服务长时间运行后内存会一直涨，最终被 OOM 杀掉。
+  - 顺带说明：如果用 `Buffer#toString` 生成的字符串来测，**看不出这个问题**。那种字符串在 V8 里是外部字符串，slice 时本来就会复制。所以自测必须用模板引擎渲染出来的字符串。
+- **修法**：`preview` 截取完之后，强制复制出一份独立的字符串：
+  ```js
+  // slice 出来的是 SlicedString，会拽着整段原串不放；过一遍 Buffer 得到独立的拷贝
+  var cut = text.length > PREVIEW_LIMIT ? text.slice(0, PREVIEW_LIMIT) : text;
+  return Buffer.from(cut, 'utf8').toString('utf8');
+  ```
+  已验证：同样 40 份 5MB 的响应，改完后堆内存只增长 10MB，剩下的是测试脚本自身的开销。
+  - 截断的位置可能正好落在一个 emoji 的代理对中间。`Buffer.from` 会把落单的那一半替换成 U+FFFD。这只影响预览里的最后一个字符，可以接受。
+  - `bodyPreview` 同样经过 `preview` 处理，这次修改一并覆盖。
+- **修完后自测**：用上面的方法（引擎渲染出的 5MB 响应 × 40 条，前后各执行一次 `gc()` 再比较 `heapUsed`），确认堆内存增长在 20MB 以内。
+
+## 交付
+
+- 单独一个提交：`fix: mock 日志预览不再拽住整段响应`，只提交 `lib/mock-log.js`。
+- 回报时附上修完后自测的堆内存增长数字。
