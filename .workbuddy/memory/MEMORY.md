@@ -203,6 +203,21 @@ web/                  Vue 源码；sample/ test/ docs/
   没有改；README 的已知限制里写明了。要改得在 `readResponse` 里维护已收到的 chunks，并在
   `abortWith` 里组装部分 response。
 
+## 变量与鉴权继承（契约第 5 节第 1、2 步）
+
+- **变量优先级：项目 < 外层目录 < 内层目录 < 环境**（2026-09-30 修订，原来漏掉了目录）。
+  拼接顺序是「项目 → 目录链（从外到内）→ 环境」，**后面的覆盖前面同名的**。
+  目录变量曾经完全不参与替换，导致「导入到当前项目」时集合变量（存在顶层目录上）全部丢失。
+- **目录链统一由 `lib/api/send.js` 的 `shared.folderChain(project, apiId)` 提供，
+  它只维护一种顺序：「从最外层到最内层」**。两处用法方向相反 ——
+  鉴权是「最近的一级优先」（倒着遍历），变量是「后者覆盖前者」（正着拼）。
+  **不要在调用处各记一套顺序**，写反了在界面上根本看不出来。
+- 三处共用 `shared.resolveVariables(project, apiId, environment)`：
+  `/send`、`/send/stream`（同一个 `prepareSend`）、以及 `lib/api/ws.js`（传 `apiId = null`，
+  目录链天然为空）。
+- 接口不属于本项目时目录链直接为空（`folderChain` 里判 `api.projectId !== project.id`）——
+  少了这一句就会顺着别人的目录树往上找。
+
 ## 发布与工程约定
 - `files` 是 `["bin","lib","sample","README.md","docs/api.md"]` —— **`docs/api.md` 是唯一的单文件条目**
   （README 的链接因此不是死链），其余设计文档 / 计划 / 测试不进包。
