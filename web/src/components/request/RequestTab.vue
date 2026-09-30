@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   NButton,
+  NCheckbox,
   NForm,
   NFormItem,
   NInput,
@@ -18,6 +19,7 @@ import { useTabsStore, specFromApi } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
+import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import UrlBar from './UrlBar.vue';
 import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
@@ -47,6 +49,13 @@ const saving = ref(false);
 const savingExample = ref(false);
 const showSaveDialog = ref(false);
 const saveForm = ref({ name: '', folderId: null });
+
+/* 「保存为示例」弹窗：可选先做智能模板化 */
+const showSaveExample = ref(false);
+const saveExampleName = ref('');
+const saveExampleTemplatize = ref(false);
+const showTemplatize = ref(false);
+const templatizeBody = ref('');
 
 const spec = computed(function () {
   return props.tab.spec;
@@ -259,14 +268,68 @@ function stamp() {
     ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 }
 
-async function saveExample() {
+/** 录制的响应是不是 JSON —— 只有 JSON 才谈得上「智能模板化」 */
+const recordedResponseType = computed(function () {
+  const response = props.tab.result && props.tab.result.response;
+  return response ? guessResponseType(response.headers) : 'text';
+});
+
+const canTemplatize = computed(function () {
+  return recordedResponseType.value === 'json';
+});
+
+/** 点「保存为示例」：先开弹窗，让用户决定要不要模板化 */
+function openSaveExample() {
+  const response = props.tab.result && props.tab.result.response;
+  if (!response || !props.tab.apiId) return;
+
+  saveExampleName.value = response.status + ' 录制于 ' + stamp();
+  // 只有 JSON 默认勾选；其他类型连这个选项都不显示
+  saveExampleTemplatize.value = canTemplatize.value;
+  showSaveExample.value = true;
+}
+
+function confirmSaveExample() {
+  const response = props.tab.result && props.tab.result.response;
+  if (!response) return;
+
+  showSaveExample.value = false;
+
+  if (!saveExampleTemplatize.value) {
+    saveExample(response.body, false);
+    return;
+  }
+
+  // 先看替换清单，确认了才动数据
+  templatizeBody.value = response.body;
+  showTemplatize.value = true;
+}
+
+/**
+ * 模板化确认回调。服务端说 skipped（不是合法 JSON / 换完解析不过）时，
+ * 原样提示原因，并按**原文**保存 —— 用户要的是「存下来」，不能因为模板化失败就丢掉。
+ */
+function onTemplatizeConfirm(payload) {
+  const response = props.tab.result && props.tab.result.response;
+  if (!response) return;
+
+  if (payload.skipped) {
+    message.warning(payload.skipped);
+    saveExample(response.body, false);
+    return;
+  }
+
+  saveExample(payload.body, true);
+}
+
+async function saveExample(body, isTemplate) {
   const response = props.tab.result && props.tab.result.response;
   if (!response || !props.tab.apiId) return;
 
   savingExample.value = true;
   try {
     const data = await apisApi.createExample(props.tab.apiId, {
-      name: response.status + ' 录制于 ' + stamp(),
+      name: saveExampleName.value || (response.status + ' 录制于 ' + stamp()),
       status: response.status,
       headers: (response.headers || []).map(function (pair) {
         return {
@@ -278,13 +341,14 @@ async function saveExample() {
           enabled: true
         };
       }),
-      body: response.body,
-      responseType: guessResponseType(response.headers),
+      body: body,
+      responseType: recordedResponseType.value,
+      isTemplate: Boolean(isTemplate),
       source: 'recorded'
     });
 
     props.tab.api = data.api;
-    message.success('已存为示例');
+    message.success(isTemplate ? '已存为模板示例' : '已存为示例');
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -393,9 +457,38 @@ onBeforeUnmount(function () {
       <response-panel
         :tab="tab"
         :saving-example="savingExample"
-        @save-example="saveExample"
+        @save-example="openSaveExample"
       />
     </div>
+
+    <n-modal
+      v-model:show="showSaveExample"
+      preset="card"
+      title="保存为示例"
+      style="width: 520px; max-width: 94vw"
+    >
+      <n-form>
+        <n-form-item label="名称">
+          <n-input v-model:value="saveExampleName" placeholder="示例名称" />
+        </n-form-item>
+        <n-form-item v-if="canTemplatize" :show-feedback="false">
+          <n-checkbox v-model:checked="saveExampleTemplatize">
+            智能模板化（把手机号、姓名、时间等换成每次随机的数据）
+          </n-checkbox>
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showSaveExample = false">取消</n-button>
+          <n-button type="primary" @click="confirmSaveExample">
+            {{ saveExampleTemplatize && canTemplatize ? '下一步' : '保存' }}
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <templatize-dialog v-model:show="showTemplatize" :body="templatizeBody" @confirm="onTemplatizeConfirm" />
 
     <n-modal
       v-model:show="showSaveDialog"
