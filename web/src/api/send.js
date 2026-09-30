@@ -1,14 +1,10 @@
 import { post, request } from './client';
 
 /**
- * 发送请求。request 是当前编辑中的 spec，不需要先保存。
- * signal 用来取消（前端点「取消」时 abort）。
+ * 发送请求改走流式接口了（契约第 14 节），实现在 `api/stream.js`：
+ * 只有它能一边下一边显示，并且随时可以取消。`POST /send` 服务端仍然保留，
+ * 但管理台不再用它，所以这里没有对应的封装。
  */
-export function send(pid, payload, signal) {
-  return request('POST', '/projects/' + encodeURIComponent(pid) + '/send', payload, {
-    signal: signal
-  });
-}
 
 /**
  * 上传文件（formdata 的文件行、binary 模式都用它）。

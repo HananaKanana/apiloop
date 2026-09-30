@@ -35,7 +35,12 @@ function parseJson(text) {
   }
 }
 
-async function toError(res) {
+/**
+ * 把失败响应转成可以直接给用户看的 Error。
+ * 导出是给 stream.js 用的：流式接口在返回 200 之前出错时也是普通 JSON，
+ * 必须和普通接口抛出一模一样的错误，上层处理 403 / 404 的代码才不用改。
+ */
+export async function toError(res) {
   const text = await res.text().catch(() => '');
   const data = parseJson(text);
   const message = data && data.error
