@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # apiloop 运行镜像。前端页面使用仓库里已提交的 lib/web 构建产物，镜像内不编译前端。
 #
-# 几个约定（详见 docs/docker.md）：
+# 几个约定（详见 README 的「Docker 部署」一节）：
 # - 应用代码在 /app，数据在 /app/data（APILOOP_HOME）：SQLite 库 data.db + 上传文件 files/，请挂载出去
 # - 工作目录是 /app/workspace，不是 /app：服务会从工作目录读 router.js、旧 routes.json、静态文件，
 #   还会往里写 .router.js，而仓库根目录本身带一个示例 router.js，不能混在一起
