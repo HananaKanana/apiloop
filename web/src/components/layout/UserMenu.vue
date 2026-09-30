@@ -13,11 +13,13 @@ import {
 } from 'naive-ui';
 import { changePassword } from '@/api/auth';
 import { useSessionStore } from '@/stores/session';
+import { useTabsStore } from '@/stores/tabs';
 
 const emit = defineEmits(['about']);
 
 const router = useRouter();
 const session = useSessionStore();
+const tabs = useTabsStore();
 const message = useMessage();
 
 const showPassword = ref(false);
@@ -71,6 +73,10 @@ async function onSelect(key) {
   if (key === 'settings') return router.push('/settings');
   if (key === 'about') return emit('about');
   if (key === 'logout') {
+    // 标签页里揣着这个用户正在编辑的请求和上一次的响应（很可能带 token），
+    // 不清掉的话，换个人在同一个浏览器登录还能看见。
+    // closeAll 顺带会 abort 在飞的请求、销毁服务端的 WebSocket 会话。
+    tabs.closeAll();
     await session.logout();
     router.replace('/login');
   }
