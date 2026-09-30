@@ -8,17 +8,22 @@ import {
   NInputNumber,
   NModal,
   NSelect,
+  NTag,
   useMessage
 } from 'naive-ui';
 import * as apisApi from '@/api/apis';
 import * as sendApi from '@/api/send';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
+import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import PlaceholderMenu from './PlaceholderMenu.vue';
 
 /**
  * 示例编辑器：状态码、响应类型、响应头、响应体。
- * 改动 600ms 防抖后自动保存，不用点保存按钮。
+ *
+ * 普通改动 600ms 防抖后自动保存，不用点保存按钮。
+ * 唯一的例外是「智能模板化」——它会整段改写响应体，改完只标成未保存，
+ * 由用户自己点「保存」才落库（见 dirty）。
  */
 const props = defineProps({
   example: { type: Object, required: true },
@@ -41,6 +46,9 @@ const editorRef = ref(null);
 const previewing = ref(false);
 const previewResult = ref(null);
 const showPreview = ref(false);
+/** 有改动还没落库。自动保存的路径会在保存成功后清掉它 */
+const dirty = ref(false);
+const showTemplatize = ref(false);
 
 let saveTimer = null;
 
@@ -50,8 +58,10 @@ function reset(source) {
     status: typeof source.status === 'number' ? source.status : 200,
     responseType: source.responseType || 'json',
     headers: JSON.parse(JSON.stringify(source.headers || [])),
-    body: typeof source.body === 'string' ? source.body : ''
+    body: typeof source.body === 'string' ? source.body : '',
+    isTemplate: source.isTemplate === true
   };
+  dirty.value = false;
 }
 
 watch(
@@ -61,6 +71,7 @@ watch(
 );
 
 function scheduleSave() {
+  dirty.value = true;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(save, 600);
 }
@@ -68,18 +79,52 @@ function scheduleSave() {
 async function save() {
   if (!draft.value || !props.example || !props.example.id) return;
 
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+
   try {
     const data = await apisApi.updateExample(props.example.id, {
       name: draft.value.name,
       status: draft.value.status,
       responseType: draft.value.responseType,
       headers: draft.value.headers,
-      body: draft.value.body
+      body: draft.value.body,
+      isTemplate: draft.value.isTemplate
     });
+    dirty.value = false;
     emit('saved', data.example);
   } catch (err) {
     message.error(err.message);
   }
+}
+
+/* ---------------- 智能模板化 ---------------- */
+
+function openTemplatize() {
+  if (!draft.value) return;
+  showTemplatize.value = true;
+}
+
+/**
+ * 确认替换后只改编辑器里的内容，**不自动保存**：这一步整段换掉了响应体，
+ * 用户得自己看一眼、点一次保存。
+ */
+function onTemplatizeConfirm(payload) {
+  if (payload.skipped) {
+    message.warning(payload.skipped);
+    return;
+  }
+
+  draft.value.body = payload.body;
+  draft.value.isTemplate = true;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  dirty.value = true;
+  message.info('已替换内容，确认后点「保存」');
 }
 
 const templateOptions = computed(function () {
@@ -142,6 +187,10 @@ async function runPreview() {
 
       <span class="spacer" />
 
+      <n-tag v-if="dirty" size="tiny" :bordered="false" type="warning">未保存</n-tag>
+
+      <n-button size="small" secondary :disabled="!dirty" @click="save">保存</n-button>
+
       <placeholder-menu :placeholders="placeholders" @insert="insertPlaceholder">
         <n-button size="small" quaternary>插入 Mock 字段</n-button>
       </placeholder-menu>
@@ -154,6 +203,8 @@ async function runPreview() {
       >
         <n-button size="small" quaternary>常用模板</n-button>
       </n-dropdown>
+
+      <n-button size="small" quaternary @click="openTemplatize">智能模板化</n-button>
 
       <n-button size="small" secondary type="primary" :loading="previewing" @click="runPreview">
         预览
@@ -204,6 +255,12 @@ async function runPreview() {
         <pre class="preview-body">{{ previewResult.rendered }}</pre>
       </template>
     </n-modal>
+
+    <templatize-dialog
+      v-model:show="showTemplatize"
+      :body="draft.body"
+      @confirm="onTemplatizeConfirm"
+    />
   </div>
 </template>
 
