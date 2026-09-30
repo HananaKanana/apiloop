@@ -21,7 +21,9 @@ const METHOD_COLORS = {
   PATCH: '#8a2be2',
   DELETE: '#d03050',
   HEAD: '#909399',
-  OPTIONS: '#909399'
+  OPTIONS: '#909399',
+  // WebSocket 接口（契约第 17 节）：给它一个自己的颜色，扫一眼就能和 HTTP 分开
+  WS: '#13a8a8'
 };
 
 const searchText = ref('');
