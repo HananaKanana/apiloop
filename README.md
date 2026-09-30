@@ -396,7 +396,8 @@ curl -i 'http://localhost:8080/api/users?id=404'
 * 匹配按 RFC 6265：`Domain` 和请求主机对得上、`Path` 是请求路径的前缀、`Secure` 的只能走
   https、过期的不再发送（并会从库里删掉，`Max-Age=0` 就是立即删除）。
   没写 `Domain` 的是 host-only，只发给完全相同的主机名。
-* 带 `Secure` 属性的 cookie 不会通过 http 发出去，界面上也只显示打码后的值。
+* `Secure` 的 cookie 只走 https：http 响应里带 `Secure` 的 `Set-Cookie` 会被直接丢掉
+  （中间人可能借此往你身上钉一个会话），http 响应也不能覆盖已有的同名 `Secure` cookie。
 
 **历史记录里的打码**（历史是项目里所有成员都能看的，所以写进去之前先处理，
 **返回给发送者本人的结果保持原样**）：
@@ -405,6 +406,12 @@ curl -i 'http://localhost:8080/api/users?id=404'
 | --- | --- |
 | 请求头 `Cookie` / `Authorization` / `Proxy-Authorization` | 值换成 `***` |
 | 响应头 `Set-Cookie` | 保留 cookie 名和各项属性，只把值换成 `***`，例如 `sid=***; Path=/; HttpOnly` |
+| 原始请求 `request.spec` | `params.headers` 里上面那三种请求头的值、`auth` 里的 token / password / value 换成 `***` |
+
+`request.spec` 是「用户输入的原始请求」，**库里存的是完整原文**（发起人点重放要用），
+只在 `GET /history/:id` 里按查看者区分：不是发起人（包括管理员）才看到打码后的版本。
+另外，**响应体里的内容不做处理** —— 那是服务端回显回来的数据，我们无从判断里面
+哪一段是凭据，看到什么就是什么。
 
 **代理**支持 http 代理：目标是 http 时直接转发，目标是 https 时用 `CONNECT` 建隧道
 （隧道里目标服务器的证书仍然按「是否校验证书」处理，隧道只解决怎么连过去）。
