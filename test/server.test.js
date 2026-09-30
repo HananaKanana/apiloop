@@ -98,7 +98,7 @@ test('老地址 /__mock 不再挂管理台页面', async function () {
 test('默认入口是 /index.html，根路径 302 过去', async function () {
     var page = await fetch(ctx.base + '/index.html');
     assert.strictEqual(page.status, 200);
-    assert.ok((await page.text()).indexOf('server-mock 管理台') > -1);
+    assert.ok((await page.text()).indexOf('app.js') > -1, '应该就是管理台页面');
 
     // 页面用的是相对路径，所以根路径下 app.js / style.css 也必须能取到
     for (var asset of ['/app.js', '/style.css']) {

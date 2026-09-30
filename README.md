@@ -1,44 +1,64 @@
-# server-mock
+# apiloop
 
-启动一个 Web 服务器并 mock 数据，写法参考 Express，另外内置一个**可视化管理台**——不写代码也能配出接口。
+**本地接口调试 + mock 工具。** 起一个服务，配好接口就能拿到假数据；调通的真实响应可以一键变成 mock。
+数据全部放在本地 SQLite 里，不上云、不登录也能用。
 
 ## 安装
 
 ```bash
-npm install -g server-mock
+npm install -g apiloop
 # 或者从本仓库安装
 npm install -g .
 ```
+
+要求 **Node 22.13 及以上**（用的是内置的 `node:sqlite`）。
 
 ## 快速开始
 
 ```bash
 mkdir demo && cd demo
-mock init      # 生成示例 router.js 和示例数据库 routes.db
-mock web       # 启动服务并打开管理台
+apiloop init      # 生成示例 router.js，并把示例接口灌进一个绑定该目录的项目
+apiloop web       # 启动服务并打开管理台
 ```
 
-打开 <http://localhost:8080/index.html> 就能在页面上增删改接口，保存后立即生效，不用重启。直接访问 <http://localhost:8080> 会自动跳到这个页面。
+首次启动会创建一个管理员 `admin` 并**把初始密码打印在终端**（只显示一次），
+打开 <http://localhost:8080/index.html> 用它能登录。直接访问 <http://localhost:8080> 会自动跳过去。
 
-也可以完全不用管理台，直接跑 `mock start`，它读的是同一个数据库。
+也可以完全不用管理台，直接跑 `apiloop start`。
+
+## 从 server-mock 迁移
+
+**老命令 `mock` 仍然可用**（`apiloop` 和 `mock` 指向同一个 CLI）。升级到 apiloop 之后：
+
+- 当前目录里如果有旧的 `routes.db`（更早的版本）或 `routes.json`，第一次启动会自动把它
+  导入成一个绑定该目录的项目，**原文件保留不删**，以后再启动不会重复导入。
+- 两个文件都在时只认 `routes.db`。
+- 老的 `router.js`、`{{@...}}` 模板语法都照旧可用。
+- 接口原来配在 `/api/xxx` 这类根路径下，升级后 URL 不需要改（根项目仍然挂在根路径）。
 
 ## 命令
 
 | 命令 | 作用 |
 | --- | --- |
-| `mock web` | 启动服务 + 可视化管理台（默认入口 `/index.html`） |
-| `mock start` | 只启动服务（也读同一个数据库） |
-| `mock open` | 启动服务并自动打开目录里的 html |
-| `mock init` | 生成示例文件：`router.js` 和示例数据库 `routes.db` |
+| `apiloop web` | 启动服务 + 可视化管理台（默认入口 `/index.html`） |
+| `apiloop start` | 只启动服务 |
+| `apiloop open` | 启动服务并自动打开目录里的 html |
+| `apiloop init` | 生成示例 `router.js`，并把示例接口灌进一个绑定当前目录的项目 |
+| `apiloop user add <用户名>` | 新建用户（`--admin` 建管理员，`--password xx` 指定密码，不指定就随机生成并打印一次） |
+| `apiloop user list` | 列出用户 |
+| `apiloop user reset-password <用户名>` | 重置密码并打印新密码 |
 
 通用参数：
 
 ```bash
-mock web --port 3000              # 端口，默认 8080
-mock web --public public          # 静态目录，默认当前目录
-mock web --views views            # 模板目录，默认当前目录
-mock web --tpl ejs                # 模板引擎，默认 ejs
-mock web --config mock/routes.db   # 接口数据库文件，默认当前目录的 routes.db
+apiloop web --port 3000                 # 端口，默认 8080
+apiloop web --host 0.0.0.0              # 监听地址，默认 127.0.0.1
+apiloop web --db ~/.apiloop/data.db     # 数据库文件，默认 ~/.apiloop/data.db
+apiloop web --project my-project        # 指定哪个项目当根项目（按 slug）
+apiloop web --public public             # 静态目录，默认当前目录
+apiloop web --views views               # 模板目录，默认当前目录
+apiloop web --tpl ejs                   # 模板引擎，默认 ejs
+apiloop web --config routes.json        # 首次启动时要导入的旧配置文件
 ```
 
 ## 可视化管理台
@@ -70,24 +90,61 @@ mock web --config mock/routes.db   # 接口数据库文件，默认当前目录�
 
 界面完全离线可用：零构建、无 CDN、无外部字体和图标。
 
+## 登录与用户
+
+管理台需要登录（`/__admin/api/*` 全部要求登录，只有登录接口本身是公开的）。
+**被 mock 的接口本身不需要登录** —— 被测试的前端要能直接访问。
+
+- 第一次启动时自动创建一个管理员 `admin`，密码取自环境变量 `APILOOP_ADMIN_PASSWORD`，
+  没设就随机生成 16 位并打印在终端（**只显示这一次**）。
+- 用户管理用 `apiloop user` 命令，也可以直接调 `/__admin/api/users/*`。
+  界面上的用户管理留到后续版本。
+- 密码用 scrypt 加盐哈希存储，会话只存 token 的 sha256，cookie 是 `HttpOnly` + `SameSite=Lax`。
+- 连续 5 次登录失败会锁定该用户名 60 秒。
+- 把用户禁用会立刻踢掉他所有已登录的会话。
+- **不能**删除、禁用或降级自己；任何会让「可用的管理员」归零的操作都会被拒绝。
+
+默认只监听 `127.0.0.1`。要开放给局域网得显式 `--host 0.0.0.0`，终端会额外提醒确认密码强度。
+
 ## 数据存储
 
-管理台的所有配置都存进一个 SQLite 库文件，默认是当前目录的 `routes.db`，可用 `--config` 指定。
+数据全部放在**一个全局库**里，默认 `~/.apiloop/data.db`，可用 `--db` 指定，
+环境变量 `APILOOP_DB` 也可以（优先级：`--db` > `APILOOP_DB` > 默认值）。
 
-用的是 Node 内置的 `node:sqlite`，**不需要安装任何依赖**，但要求 **Node 22.13 及以上**
+用 Node 内置的 `node:sqlite`，**不需要安装任何依赖**，但要求 **Node 22.13 及以上**
 （`node:sqlite` 自 22.5.0 提供，22.13.0 之前还需要 `--experimental-sqlite` 标志）。
 
-库里三张表：`routes` 存接口、`groups` 存分组名与顺序、`meta` 存格式版本。
+### 项目与 URL
 
-### 从老的 routes.json 迁移
+库里可以放多个项目，接口按项目隔离：
 
-`routes.db` **不存在**时，如果同目录下有 `routes.json`，首次启动会自动把它导进去，
-原 JSON 保留不删，启动日志里会说明导入了哪份文件。库里已经有数据就不会重复导入。
+| 项目 | 挂在哪 |
+| --- | --- |
+| 根项目 | 根路径，例如 `http://localhost:8080/api/users` |
+| 其他项目 | `/mock/<项目标识>`，例如 `http://localhost:8080/mock/my-app/api/users` |
+
+根项目是给老用法留的。每个项目有自己的项目标识（slug）：目录名里的中文或特殊字符会
+退化成 `p-` 加一段短码，重名会自动加 `-2`、`-3`。
+
+哪个项目当根项目，按这个顺序决定：`--project` 指定 → 当前目录的旧配置导入 →
+已有的默认项目 → 新建一个默认项目。
+
+### 表结构
+
+| 表 | 存什么 |
+| --- | --- |
+| `apis` | 接口定义：方法、路径、mock 开关、延时、跨域…… |
+| `examples` | 示例响应：状态码、响应头、响应体。**一处数据两用** —— 调试时是保存下来的响应，mock 时就是返回的数据 |
+| `folders` | 分组（对应管理台侧边栏的分组，重命名会自动同步组内接口） |
+| `users` / `sessions` | 用户与登录态 |
+| `projects` / `project_members` | 项目与成员 |
+| `legacy_imports` | 记下哪些旧配置文件已经导入过，避免重复导入 |
+| `environments` / `history` / `mock_expectations` | 已建表，留给后续版本 |
 
 想直接看或改数据，用 `sqlite3` 命令行即可（改完服务会自动热更新）：
 
 ```bash
-sqlite3 routes.db 'select position, method, path from routes order by position'
+sqlite3 ~/.apiloop/data.db 'select position, method, mock_path from apis order by position'
 ```
 
 ### 接口字段
@@ -102,11 +159,105 @@ sqlite3 routes.db 'select position, method, path from routes order by position'
 | `responseType` | `json` / `text` / `html` |
 | `response` | 响应体模板，支持下面的占位符语法，**每个请求都会重新渲染** |
 | `query` / `body` | 只是入参描述，用于文档和自测面板预填，不做强制校验 |
+| `enabled` | 关掉后返回 404。**没有示例的接口不算启用** |
 
-`groups` 表里存的是分组的名字与顺序，决定侧边栏里分组的名字和顺序。它可以为空，
-也可以包含还没有接口的分组；接口上只要写了新分组名，会自动登记进来。
+「导出 JSON」导出的仍是老的 `routes.json` 格式，可以直接拿去分享或留档，
+也正是首次启动时能自动导入的那种格式。
 
-「导出 JSON」导出的就是老的 `routes.json` 格式，可以直接拿去分享或留档，也是首次启动时能自动导入的那种格式。
+## Mock 数据模板
+
+写在 `response` 里，每次请求都会重新生成。
+
+### 文本
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@cname}}` | 随机中文姓名 |
+| `{{@firstname}}` | 随机中文姓氏 |
+| `{{@ename}}` | 随机英文姓名 |
+| `{{@word}}` | 随机词语 |
+| `{{@words(3)}}` | 3 个随机词语（空格分隔） |
+| `{{@sentence}}` | 随机一句话 |
+| `{{@paragraph}}` | 随机一段话 |
+| `{{@title}}` | 随机标题 |
+| `{{@company}}` | 随机公司名 |
+| `{{@job}}` | 随机职位 |
+| `{{@university}}` | 随机大学 |
+| `{{@city}}` | 随机城市 |
+| `{{@province}}` | 随机省份 |
+| `{{@address}}` | 随机详细地址 |
+
+### 数字
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@int(1,100)}}` | 区间内随机整数 |
+| `{{@float(1,100,2)}}` | 区间内随机小数，保留 2 位 |
+| `{{@price(1,999)}}` | 随机价格（两位小数） |
+| `{{@id}}` | 自增 ID，从 1 开始，每次请求递增；`{{@id(1000)}}` 可指定起点 |
+
+### 其他
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@bool}}` | 随机 `true` / `false` |
+| `{{@pick(待付款,已付款,已发货)}}` | 从候选值里随机取一个 |
+
+### 时间
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@date}}` | 今天日期 `YYYY-MM-DD` |
+| `{{@time}}` | 当前时间 `HH:mm:ss` |
+| `{{@datetime}}` | 当前日期时间 |
+| `{{@timestamp}}` | 当前毫秒时间戳 |
+| `{{@dateOffset(-3)}}` | 相对今天偏移 n 天的日期 |
+| `{{@datetimeOffset(7)}}` | 相对当前时间偏移 n 天的日期时间 |
+
+### 网络 / 标识
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@uuid}}` | 随机 UUID |
+| `{{@phone}}` | 随机手机号 |
+| `{{@email}}` | 随机邮箱 |
+| `{{@url}}` | 随机 URL |
+| `{{@image(200x200)}}` | 随机图片地址 |
+| `{{@ip}}` | 随机 IP |
+| `{{@color}}` | 随机十六进制颜色 |
+| `{{@token}}` | 32 位随机 token |
+
+### 输入回显
+
+| 写法 | 说明 |
+| --- | --- |
+| `{{@query(id)}}` | 回显 URL 查询参数 |
+| `{{@body(name)}}` | 回显请求体字段，支持 `{{@body(user.name)}}` 取嵌套 |
+| `{{@params(id)}}` | 回显路径参数 |
+| `{{@header(token)}}` | 回显请求头 |
+
+### 列表重复
+
+```json
+{
+  "list": [
+{{@repeat(3)}}    { "id": "{{@id}}", "name": "{{@cname}}" }
+{{/repeat}}  ]
+}
+```
+
+* `{{@repeat(3)}}` 重复 3 份，`{{@repeat(2-5)}}` 随机 2~5 份，支持嵌套。
+* 重复出来的多个 JSON 值之间**不必写逗号**，服务端会自动补上，也会忽略多余的尾逗号，所以不用纠结最后一个元素后面要不要逗号。
+
+### 类型自动匹配
+
+占满整个 JSON 字符串的数值类占位符会自动去掉引号：
+
+```json
+{ "age": "{{@int(18,60)}}", "vip": "{{@bool}}" }
+```
+
+实际返回 `{ "age": 42, "vip": true }`（数字和布尔，而不是字符串）。写在文字中间则保持字符串，例如 `"msg": "你好 {{@cname}}"`。
 
 ## 兼容手写 router.js
 
@@ -129,7 +280,24 @@ router.use('/hi', (req, res) => {
 
 ## 管理台 API
 
-管理台前端用的就是这些接口，也可以直接调：
+管理台前端用的就是这些接口，也可以直接调。**除登录接口外都需要先登录**，
+请求要带上登录返回的 cookie：
+
+登录与用户：
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /__admin/api/auth/login` | 登录，body `{username, password}`，成功种 cookie。**公开** |
+| `POST /__admin/api/auth/logout` | 退出 |
+| `GET /__admin/api/auth/me` | 当前登录用户 |
+| `PUT /__admin/api/auth/password` | 改密码，body `{oldPassword, newPassword}` |
+| `GET /__admin/api/users` | 用户列表 |
+| `POST /__admin/api/users` | 新建用户；没传密码会随机生成并在响应里返回一次 |
+| `PUT /__admin/api/users/:id` | 改显示名 / 角色 / 禁用 |
+| `POST /__admin/api/users/:id/reset-password` | 重置密码并返回一次 |
+| `DELETE /__admin/api/users/:id` | 删除用户 |
+
+其余接口（**都需要登录**）：
 
 | 方法与路径 | 说明 |
 | --- | --- |
@@ -158,21 +326,31 @@ router.use('/hi', (req, res) => {
 npm test
 ```
 
-79 个用例，覆盖模板引擎与 JSON 容错、cURL / OpenAPI 导入、配置存储与热更新、旧配置迁移、分组管理、管理台 API、以及 CLI 端到端（`init` / `web` / `start` / 端口占用 / 帮助信息）。
+82 个用例，覆盖模板引擎与 JSON 容错、cURL / OpenAPI 导入、配置存储与热更新、旧配置迁移、分组管理、登录与用户管理、mock 按项目挂载、管理台 API、以及 CLI 端到端（`init` / `web` / `start` / 端口占用 / 帮助信息）。
+
+测试一律用 `--db` 指到临时目录，**不会碰真实的 `~/.apiloop`**。
 
 ## 目录结构
 
 ```
 bin/server            CLI 入口（yargs 17）
-lib/command.js        start / open / web / init 命令实现
-lib/db.js             SQLite 持久化（node:sqlite，零依赖）
-lib/routes-store.js   配置读写、校验、分组管理、文件监听
+lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只动这里）
+lib/command.js        start / open / web / init / user 命令实现
+lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
+lib/db/repos/         各表的增删改查
+lib/routes-store.js   单个项目的门面（对外 API 与老版本一致）
+lib/project-stores.js 每个项目只建一个 store 实例，缓存复用
+lib/mock-host.js      按项目挂载 mock：根路径 + /mock/<slug>
+lib/auth.js           密码哈希、会话、登录中间件、初始管理员
+lib/admin-auth.js     /auth/* 与 /users/* 接口
+lib/admin.js          管理台后端 API 与静态页
+lib/legacy-import.js  把目录里的旧配置导入成项目
+lib/legacy/           只读的 P0 格式库读取器
 lib/mock-engine.js    模板渲染与随机数据生成
 lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新
-lib/importers.js      cURL / OpenAPI 解析
-lib/admin.js          管理台后端 API
+lib/importers.js      cURL / OpenAPI(Swagger) 解析
 lib/web/              管理台前端（零构建：index.html + app.js + style.css）
-sample/               mock init 用的示例文件
+sample/               `apiloop init` 用的示例文件
 test/                 node:test 测试
 ```
 
