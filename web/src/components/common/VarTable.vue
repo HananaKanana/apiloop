@@ -1,13 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { NCheckbox, NIcon, NInput, NSelect } from 'naive-ui';
-import { Trash } from '@vicons/tabler';
-import { BARE_INPUT_THEME, BARE_SELECT_THEME } from '@/utils/bareInput';
+import { NCheckbox, NIcon, NInput } from 'naive-ui';
+import { Eye, EyeOff, Trash } from '@vicons/tabler';
+import { BARE_INPUT_THEME } from '@/utils/bareInput';
 
 /**
- * 变量表格：key、value、启用、secret。
- * secret 的行直接把输入框换成 password 类型，Naive UI 自带「眼睛」开关，
- * 默认就是圆点，点一下才显示明文。
+ * 变量表格：启用 | 变量名 | 值 | 保密 | 描述 | 删除。
+ * 「值」后面那个眼睛就是保密开关：点成闭眼，这一行的值就遮成圆点（password 输入框）；
+ * 再点一下改回明文。想临时看一眼保密值，也是点这个眼睛。
  *
  * 最后永远留一行空行，在空行里一输入就自动变成真行并再补一行空的。
  */
@@ -32,8 +32,10 @@ const emit = defineEmits(['update:modelValue']);
  */
 const KEY_WIDTH_KEY = 'apiloop.varTable.keyWidth';
 const MIN_KEY = 80;
-/** 其余几列的固定宽度（勾选 32 + 类型 92 + 删除 40），再给「值」至少留 120 */
-const FIXED_COLS = 32 + 92 + 40;
+/** 其余几列的固定宽度（勾选 32 + 眼睛 36 + 删除 40），再给「值」至少留 120 */
+const FIXED_COLS = 32 + 36 + 40;
+/** 「描述」那一列占整张表的比例，和样式里的 24% 一致 */
+const DESC_RATIO = 0.24;
 const MIN_VALUE = 120;
 
 function readKeyWidth() {
@@ -65,7 +67,8 @@ function startResize(event) {
 
 function onResize(event) {
   if (!resizeStart || !tableRef.value) return;
-  const max = tableRef.value.clientWidth - FIXED_COLS - MIN_VALUE;
+  const total = tableRef.value.clientWidth;
+  const max = total - total * DESC_RATIO - FIXED_COLS - MIN_VALUE;
   const next = resizeStart.width + event.clientX - resizeStart.x;
   keyWidth.value = Math.round(Math.max(MIN_KEY, Math.min(next, max)));
 }
@@ -85,12 +88,6 @@ function stopResize() {
 }
 
 onBeforeUnmount(stopResize);
-
-/** 「类型」那一列：和 Postman 的 default / secret 对应 */
-const TYPE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '保密', value: 'secret' }
-];
 
 function normalize(rows) {
   return (rows || []).map(function (row) {
@@ -162,8 +159,9 @@ function removeRow(index) {
         <!-- 拖这条竖线调「变量名」这一列的宽度 -->
         <span class="col-resizer" title="拖动调整列宽" @mousedown.prevent="startResize" />
       </div>
-      <div class="cell type">类型</div>
       <div class="cell value">值</div>
+      <div class="cell secret" />
+      <div class="cell desc">描述</div>
       <div class="cell action" />
     </div>
 
@@ -194,23 +192,11 @@ function removeRow(index) {
         />
       </div>
 
-      <div class="cell type">
-        <n-select
-          size="small"
-          :value="item.row.secret ? 'secret' : 'default'"
-          :options="TYPE_OPTIONS"
-          :disabled="disabled"
-          :theme-overrides="BARE_SELECT_THEME"
-          @update:value="(v) => { updateRow(item.index, { secret: v === 'secret' }); }"
-        />
-      </div>
-
       <div class="cell value">
         <n-input
           size="small"
           :value="item.row.value"
           :type="item.row.secret ? 'password' : 'text'"
-          :show-password-on="item.row.secret ? 'click' : undefined"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
           placeholder="值"
@@ -218,9 +204,37 @@ function removeRow(index) {
         />
       </div>
 
+      <!--
+        保密开关：睁眼 = 明文显示，闭眼 = 保密（值遮成圆点）。
+        用户要的就是一个眼睛图标，不要「类型」下拉（2026-09-30）。
+      -->
+      <div class="cell secret">
+        <button
+          v-if="!item.row.__draft"
+          class="icon-button"
+          :class="{ on: item.row.secret }"
+          :disabled="disabled"
+          :title="item.row.secret ? '已保密，点一下改回明文显示' : '点一下设为保密（值遮住显示）'"
+          @click="updateRow(item.index, { secret: !item.row.secret })"
+        >
+          <n-icon size="15" :component="item.row.secret ? EyeOff : Eye" />
+        </button>
+      </div>
+
+      <div class="cell desc">
+        <n-input
+          size="small"
+          :value="item.row.desc || ''"
+          :disabled="disabled"
+          :theme-overrides="BARE_INPUT_THEME"
+          placeholder="描述"
+          @update:value="(v) => { updateRow(item.index, { desc: v }); }"
+        />
+      </div>
+
       <div class="cell action">
         <button
-          v-if="!disabled && (item.row.key || item.row.value)"
+          v-if="!disabled && (item.row.key || item.row.value || item.row.desc)"
           class="delete-button"
           title="删除这一行"
           @click="removeRow(item.index)"
@@ -238,8 +252,8 @@ function removeRow(index) {
  * 格子里的输入框没有边框和底色。列宽写在一个变量里，改列只改一处。
  */
 .var-table {
-  /* 列顺序：勾选 | 变量名 | 类型 | 值 | 删除。表头和每一行都必须按这个顺序排格子 */
-  --var-cols: 32px minmax(0, var(--var-key, 28%)) 92px minmax(0, 1fr) 40px;
+  /* 列顺序：勾选 | 变量名 | 值 | 保密（眼睛） | 描述 | 删除。表头和每一行都必须按这个顺序排格子 */
+  --var-cols: 32px minmax(0, var(--var-key, 28%)) minmax(0, 1fr) 36px minmax(0, 24%) 40px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
   border-radius: 4px;
   overflow: hidden;
@@ -290,6 +304,7 @@ function removeRow(index) {
 }
 
 .cell.check,
+.cell.secret,
 .cell.action {
   justify-content: center;
   padding: 0;
@@ -297,7 +312,8 @@ function removeRow(index) {
 
 /* 停用的行：文字半透明（勾选框保持清楚） */
 .row.off .cell.key,
-.row.off .cell.value {
+.row.off .cell.value,
+.row.off .cell.desc {
   opacity: 0.5;
 }
 
@@ -318,6 +334,36 @@ function removeRow(index) {
 
 .col-resizer:hover {
   background: var(--apiloop-primary);
+}
+
+.icon-button {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.45;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+/* 已保密的那一行，眼睛常亮成主色，一眼能看出哪些是保密的 */
+.icon-button.on {
+  color: var(--apiloop-primary);
+  opacity: 1;
+}
+
+.icon-button:disabled {
+  cursor: default;
 }
 
 .delete-button {
