@@ -12,6 +12,7 @@ import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { autocompletion, completionStatus } from '@codemirror/autocomplete';
 import { history, historyKeymap, defaultKeymap, standardKeymap } from '@codemirror/commands';
 import { findVariables } from '@/utils/variables';
+import { BARE_INPUT_THEME } from '@/utils/bareInput';
 
 /**
  * 带 `{{变量}}` 高亮 / 补全 / 悬停提示的**单行**输入框。
@@ -467,12 +468,12 @@ defineExpose({ focus: focus });
   <!-- 没给作用域、或者这一格还用不着编辑器：普通输入框 -->
   <n-input
     v-else
-    :class="{ 'bare-input': bare }"
     size="small"
     :value="modelValue"
     :placeholder="placeholder"
     :readonly="readonly"
     :bordered="!borderless && !bare"
+    :theme-overrides="bare ? BARE_INPUT_THEME : undefined"
     @focus="onPlainFocus"
     @update:value="(v) => emit('update:modelValue', v)"
     @keyup.enter="emit('enter')"
@@ -522,19 +523,6 @@ defineExpose({ focus: focus });
   border-color: transparent;
 }
 
-/* 普通输入框那一路的 bare：把 naive-ui 自己的边框和内外边距都清掉 */
-.bare-input {
-  --n-border: none;
-  --n-border-hover: none;
-  --n-border-focus: none;
-  --n-box-shadow-focus: none;
-  --n-color: transparent;
-  --n-color-hover: transparent;
-  --n-color-focus: transparent;
-  --n-padding-left: 0;
-  --n-padding-right: 0;
-  --n-padding-vertical: 0;
-}
 
 .var-input :deep(.cm-editor) {
   width: 100%;

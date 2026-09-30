@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { NButton, NCheckbox, NIcon, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
 import { File, Trash } from '@vicons/tabler';
+import { BARE_INPUT_THEME } from '@/utils/bareInput';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import VarInput from '@/components/common/VarInput.vue';
 import * as sendApi from '@/api/send';
@@ -216,6 +217,7 @@ async function onFilePicked(event) {
               <n-input
                 size="small"
                 :value="row.key"
+                :theme-overrides="BARE_INPUT_THEME"
                 placeholder="名称"
                 @update:value="(v) => updateFormRow(index, { key: v })"
               />
@@ -387,20 +389,6 @@ async function onFilePicked(event) {
 .row.off .cell.key,
 .row.off .cell.value {
   opacity: 0.5;
-}
-
-/* 格子里的输入框去掉边框、底色和内外边距 */
-.row .cell :deep(.n-input) {
-  --n-border: none;
-  --n-border-hover: none;
-  --n-border-focus: none;
-  --n-box-shadow-focus: none;
-  --n-color: transparent;
-  --n-color-hover: transparent;
-  --n-color-focus: transparent;
-  --n-padding-left: 0;
-  --n-padding-right: 0;
-  --n-padding-vertical: 0;
 }
 
 .file-tag,

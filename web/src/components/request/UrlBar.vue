@@ -3,6 +3,7 @@ import { computed, h } from 'vue';
 import { NButton, NSelect } from 'naive-ui';
 import VarInput from '@/components/common/VarInput.vue';
 import { methodColor } from '@/utils/method';
+import { BARE_SELECT_THEME } from '@/utils/bareInput';
 
 /**
  * 地址栏：method 下拉（允许输入自定义方法）+ url 输入框 + 发送 / 取消。
@@ -59,6 +60,7 @@ function renderMethodOption(option) {
         filterable
         :options="methodOptions"
         :render-label="renderMethodOption"
+        :theme-overrides="BARE_SELECT_THEME"
         :value="String(method || 'GET').toUpperCase()"
         @update:value="(v) => emit('update:method', String(v).toUpperCase())"
       />
@@ -122,19 +124,6 @@ function renderMethodOption(option) {
 
 .url-box:focus-within {
   border-color: var(--apiloop-primary);
-}
-
-/* 方法下拉去掉自己的边框和底色，融进外面那个框 */
-.url-box :deep(.n-base-selection) {
-  --n-border: none;
-  --n-border-hover: none;
-  --n-border-focus: none;
-  --n-border-active: none;
-  --n-box-shadow-focus: none;
-  --n-box-shadow-hover: none;
-  --n-color: transparent;
-  --n-color-active: transparent;
-  background-color: transparent;
 }
 
 .method {
