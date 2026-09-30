@@ -15,6 +15,7 @@ import EnvTab from '@/components/env/EnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
+import ContextMenu from '@/components/common/ContextMenu.vue';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
@@ -146,6 +147,61 @@ function closeTab(tab) {
   });
 }
 
+/* ---------------- 标签页右键菜单 ---------------- */
+
+const tabMenu = ref({ show: false, x: 0, y: 0, tab: null });
+
+const TAB_MENU_OPTIONS = [
+  { label: '关闭', key: 'close' },
+  { label: '关闭其他', key: 'others' },
+  { label: '关闭右侧', key: 'right' },
+  { type: 'divider', key: 'd' },
+  { label: '关闭全部', key: 'all' }
+];
+
+function openTabMenu(event, tab) {
+  tabMenu.value = { show: true, x: event.clientX, y: event.clientY, tab: tab };
+}
+
+/**
+ * 一次关好几个：里面有没保存的，就问一次（说清楚有几个），确定了一起关。
+ */
+function closeTabs(list) {
+  if (!list.length) return;
+  const dirty = list.filter(function (tab) { return tab.dirty; });
+  const doClose = function () {
+    list.forEach(function (tab) { tabs.close(tab.key); });
+  };
+
+  if (!dirty.length) {
+    doClose();
+    return;
+  }
+
+  dialog.warning({
+    title: '关闭标签页',
+    content: '其中 ' + dirty.length + ' 个标签页有没保存的修改，关掉就没了。确定关闭吗？',
+    positiveText: '关闭',
+    negativeText: '取消',
+    onPositiveClick: doClose
+  });
+}
+
+function onTabMenuSelect(key) {
+  const target = tabMenu.value.tab;
+  tabMenu.value.show = false;
+  if (!target) return;
+
+  const list = tabs.tabs.slice();
+  const index = list.findIndex(function (tab) { return tab.key === target.key; });
+  if (index === -1) return;
+
+  if (key === 'close') return closeTab(target);
+  if (key === 'others') return closeTabs(list.filter(function (tab) { return tab.key !== target.key; }));
+  if (key === 'right') return closeTabs(list.slice(index + 1));
+  if (key === 'all') return closeTabs(list);
+}
+
 // 接口被删掉之后，把对应的标签页收掉，别留着一个点开就报错的页
 watch(
   function () { return tree.apis; },
@@ -234,6 +290,7 @@ onBeforeUnmount(function () {
               class="tab-item"
               :class="{ active: tab.key === tabs.activeKey }"
               @click="tabs.activate(tab.key)"
+              @contextmenu.prevent="openTabMenu($event, tab)"
             >
               <span
                 v-if="tabMethod(tab)"
@@ -288,6 +345,14 @@ onBeforeUnmount(function () {
         </div>
       </main>
     </div>
+
+    <context-menu
+      v-model:show="tabMenu.show"
+      :x="tabMenu.x"
+      :y="tabMenu.y"
+      :options="TAB_MENU_OPTIONS"
+      @select="onTabMenuSelect"
+    />
 
     <mock-log-drawer />
     <import-dialog />
