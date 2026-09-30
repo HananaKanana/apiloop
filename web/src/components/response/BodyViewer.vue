@@ -100,6 +100,50 @@ watch(
   { immediate: true }
 );
 
+/**
+ * 下载文件名按 content-type 取扩展名。
+ * 以前只要是图片就一律写 response.png，jpeg / gif / webp / svg 都会存成错的扩展名，
+ * 双击打不开或者被系统当成 png。
+ */
+const EXTENSIONS = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'image/bmp': 'bmp',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
+  'image/avif': 'avif',
+  'image/tiff': 'tiff',
+  'application/json': 'json',
+  'application/xml': 'xml',
+  'text/xml': 'xml',
+  'text/html': 'html',
+  'text/plain': 'txt',
+  'text/css': 'css',
+  'text/csv': 'csv',
+  'application/javascript': 'js',
+  'text/javascript': 'js',
+  'application/pdf': 'pdf',
+  'application/zip': 'zip',
+  'application/gzip': 'gz',
+  'application/octet-stream': 'bin'
+};
+
+function downloadName() {
+  const type = lowerType.value.split(';')[0].trim();
+  if (EXTENSIONS[type]) return 'response.' + EXTENSIONS[type];
+
+  // 认不出来的图片类型：拿子类型当扩展名，总比给个 .bin 强
+  if (type.indexOf('image/') === 0) {
+    const subtype = type.slice(6).split('+')[0].replace(/^x-/, '').replace(/[^a-z0-9]/g, '');
+    if (subtype) return 'response.' + subtype;
+  }
+  return 'response.bin';
+}
+
 function download() {
   let blob;
 
@@ -115,7 +159,7 @@ function download() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = isImage.value ? 'response.png' : 'response.bin';
+  link.download = downloadName();
   document.body.appendChild(link);
   link.click();
   link.remove();
