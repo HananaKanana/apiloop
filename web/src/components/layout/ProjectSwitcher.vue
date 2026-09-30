@@ -41,17 +41,19 @@ function renderLabel(option) {
    * 组件的 scoped 样式（包括 :deep）够不着它。之前写在组件样式里，结果名字和标识
    * 挤成一串，「qb」显示成「qbqb」。
    *
-   * 标识显示成它的 mock 前缀（/mock/qb），一眼能看出是什么，不会像名字重复了一遍；
-   * 根项目挂在根路径，不显示标识（原来的「根」标签用户觉得多余，2026-09-30 去掉）。
+   * 名字后面跟项目描述（灰字，太长就省略号）；没填描述就只显示名字。
+   * 原来这里显示的是 mock 前缀 /mock/<标识>，根项目还带个「根」标签，
+   * 用户看不懂也用不上，2026-09-30 改成描述。
    */
-  const hint = option.slug && !option.isRoot ? '/mock/' + option.slug : '';
+  const desc = String(option.description || '').trim();
 
-  return h('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
-    h('span', null, option.name),
-    hint
+  return h('div', { style: 'display: flex; align-items: center; gap: 8px; max-width: 320px;' }, [
+    h('span', { style: 'flex: none;' }, option.name),
+    desc
       ? h('span', {
-        style: 'font-size: 12px; opacity: 0.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;'
-      }, hint)
+        style: 'min-width: 0; font-size: 12px; opacity: 0.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;',
+        title: desc
+      }, desc)
       : null
   ]);
 }
@@ -62,15 +64,14 @@ const options = computed(function () {
       key: project.id,
       label: project.name,
       name: project.name,
-      slug: project.slug,
-      isRoot: Boolean(project.isRoot)
+      description: project.description || ''
     };
   });
 
   items.push({ type: 'divider', key: '__divider' });
-  items.push({ key: '__settings', label: '项目设置', name: '项目设置', slug: '' });
-  items.push({ key: '__export', label: '导出为 Postman 集合', name: '导出为 Postman 集合', slug: '' });
-  items.push({ key: '__create', label: '新建项目', name: '新建项目', slug: '' });
+  items.push({ key: '__settings', label: '项目设置', name: '项目设置' });
+  items.push({ key: '__export', label: '导出为 Postman 集合', name: '导出为 Postman 集合' });
+  items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
 
