@@ -336,6 +336,7 @@ async function runPreview() {
         ref="editorRef"
         :model-value="draft.body"
         :language="editorLanguage"
+        :placeholders="placeholders"
         min-height="240px"
         :readonly="readonly"
         @update:model-value="(v) => { draft.body = v; scheduleSave(); }"

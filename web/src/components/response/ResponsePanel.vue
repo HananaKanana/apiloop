@@ -14,7 +14,6 @@ import BodyViewer from './BodyViewer.vue';
 import HeadersTable from './HeadersTable.vue';
 import SseEventsTable from './SseEventsTable.vue';
 import TimingsBar from './TimingsBar.vue';
-import { useUiStore } from '@/stores/ui';
 import { formatBytes } from '@/utils/bytes';
 
 /**
@@ -28,8 +27,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['save-example', 'save-sse-example']);
-
-const ui = useUiStore();
 
 const ERROR_TEXT = {
   TIMEOUT: '请求超时，对方在限定时间内没有返回。',
@@ -306,19 +303,6 @@ function requestBodyText() {
           这条历史里的响应体超过了 256 KB，落库时做了截断，下面是截断后的内容。
         </n-alert>
 
-        <n-alert
-          v-if="tab.missingVariables && tab.missingVariables.length"
-          type="warning"
-          :show-icon="false"
-          class="notice"
-        >
-          <div class="missing">
-            <span>以下变量未定义：{{ tab.missingVariables.join('、') }}</span>
-            <n-button size="tiny" quaternary type="primary" @click="ui.openEnvManager()">
-              去环境管理
-            </n-button>
-          </div>
-        </n-alert>
 
         <div class="tabs">
           <n-tabs v-model:value="activeTab" type="line" size="small" animated>
@@ -475,12 +459,6 @@ function requestBodyText() {
   font-size: 12px;
 }
 
-.missing {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
 
 .tabs {
   flex: 1;

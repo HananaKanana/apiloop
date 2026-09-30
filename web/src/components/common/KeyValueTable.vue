@@ -1,11 +1,15 @@
 <script setup>
 import { computed } from 'vue';
 import { NButton, NCheckbox, NInput } from 'naive-ui';
+import VarInput from './VarInput.vue';
 
 /**
  * 通用的键值表格：query、请求头、路径参数、表单字段都用它。
  * 每行有启用勾选、key、value、描述和删除按钮；最后永远留一行空行，
  * 在空行里一输入就自动变成真行并再补一行空的。
+ *
+ * 「值」这一列用 VarInput（带变量高亮和补全），「键」这一列保持普通输入框 ——
+ * 键基本都是固定名字，不值得为它挂一个编辑器。
  */
 const props = defineProps({
   modelValue: { type: Array, default: function () { return []; } },
@@ -14,7 +18,9 @@ const props = defineProps({
   /** 是否显示描述列，表单字段那种窄地方可以关掉 */
   showDesc: { type: Boolean, default: true },
   /** 只读角色看的时候整表禁用：只展示已有的行，不再补那一行空行 */
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  /** resolveScope() 的结果；不传就退化成普通输入框（响应头那种用不上的地方） */
+  scope: { type: Map, default: null }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -95,12 +101,12 @@ function removeRow(index) {
       </div>
 
       <div class="cell value">
-        <n-input
-          size="small"
-          :value="row.value"
+        <var-input
+          :model-value="row.value"
           :placeholder="valuePlaceholder"
-          :disabled="disabled"
-          @update:value="(v) => { updateRow(index, { value: v }); }"
+          :readonly="disabled"
+          :scope="scope"
+          @update:model-value="(v) => { updateRow(index, { value: v }); }"
         />
       </div>
 

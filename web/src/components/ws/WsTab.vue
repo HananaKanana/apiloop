@@ -23,11 +23,13 @@ import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
+import VarInput from '@/components/common/VarInput.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import WsMessageLog from './WsMessageLog.vue';
 import WsScenarioDialog from './WsScenarioDialog.vue';
 import { buildWsScenario } from '@/utils/wsScenario';
+import { resolveScope } from '@/utils/variables';
 
 /**
  * WebSocket 标签页（契约第 15、17 节）。两种形态共用这一个组件：
@@ -144,6 +146,16 @@ const channelHint = computed(function () {
   if (state.value.channel === 'retrying') return '事件流断了，正在重连…';
   if (state.value.channel === 'ended') return '会话已被服务端回收';
   return '';
+});
+
+/** 变量作用域（契约第 5 节），地址栏和请求头里的 `{{变量}}` 都用它 */
+const scope = computed(function () {
+  return resolveScope({
+    project: projects.current,
+    folders: tree.folders,
+    folderId: props.tab.folderId,
+    environment: envs.selected
+  });
 });
 
 /** 消息日志里有没有可以用来生成场景的文本消息 */
@@ -438,13 +450,13 @@ watch(
 <template>
   <div class="ws-tab">
     <div class="head">
-      <n-input
+      <var-input
         class="url"
-        size="small"
-        :value="spec.url"
+        :model-value="spec.url"
+        :scope="scope"
         placeholder="wss://echo.example.com/socket，支持 {{变量}}"
-        @update:value="(v) => { spec.url = v; }"
-        @keyup.enter="onConnect"
+        @update:model-value="(v) => { spec.url = v; }"
+        @enter="onConnect"
       />
 
       <n-dropdown
@@ -488,6 +500,7 @@ watch(
           <div class="pane">
             <key-value-table
               v-model="spec.params.headers"
+              :scope="scope"
               key-placeholder="请求头"
               value-placeholder="值"
             />
@@ -501,6 +514,7 @@ watch(
           <div class="pane">
             <key-value-table
               v-model="spec.params.query"
+              :scope="scope"
               key-placeholder="参数名"
               value-placeholder="值"
             />
@@ -509,7 +523,7 @@ watch(
 
         <n-tab-pane name="auth" tab="Auth">
           <div class="pane narrow">
-            <auth-editor v-model="spec.auth" />
+            <auth-editor v-model="spec.auth" :scope="scope" />
           </div>
         </n-tab-pane>
 

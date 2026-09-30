@@ -1,9 +1,14 @@
 <script setup>
 import { computed } from 'vue';
-import { NButton, NInput, NSelect } from 'naive-ui';
+import { NButton, NSelect } from 'naive-ui';
+import VarInput from '@/components/common/VarInput.vue';
 
 /**
  * 地址栏：method 下拉（允许输入自定义方法）+ url 输入框 + 发送 / 取消。
+ *
+ * url 用 VarInput（单行 CodeMirror）：`{{变量}}` 会按「已定义 / 未定义」上色，
+ * 输入 `{{` 弹补全，悬停看值和来源。回车发送由 VarInput 的 enter 事件负责 ——
+ * 补全列表开着时那一下回车归补全，不会误发。
  *
  * 这里只负责显示和收集输入，url 与路径参数 / query 表格之间的同步放在 RequestTab 里 ——
  * 那件事要同时看 url 和 params 两边，放在这里会把组件搞成双向依赖。
@@ -11,7 +16,9 @@ import { NButton, NInput, NSelect } from 'naive-ui';
 const props = defineProps({
   method: { type: String, default: 'GET' },
   url: { type: String, default: '' },
-  sending: { type: Boolean, default: false }
+  sending: { type: Boolean, default: false },
+  /** resolveScope() 的结果，给变量高亮和补全用 */
+  scope: { type: Map, default: null }
 });
 
 const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel']);
@@ -44,13 +51,13 @@ const methodOptions = computed(function () {
       @update:value="(v) => emit('update:method', String(v).toUpperCase())"
     />
 
-    <n-input
+    <var-input
       class="url"
-      size="small"
-      :value="url"
+      :model-value="url"
+      :scope="scope"
       placeholder="https://example.com/api/users/:id，支持 {{变量}}"
-      @update:value="(v) => emit('update:url', v)"
-      @keyup.enter="emit('send')"
+      @update:model-value="(v) => emit('update:url', v)"
+      @enter="emit('send')"
     />
 
     <n-button

@@ -31,6 +31,8 @@ import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
 import { inheritHint } from '@/utils/auth';
 import { clampReplayDelay } from '@/utils/replay';
+import { resolveScope, missingVariables } from '@/utils/variables';
+import { useUiStore } from '@/stores/ui';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -47,6 +49,7 @@ const projects = useProjectStore();
 const envs = useEnvStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
+const ui = useUiStore();
 const message = useMessage();
 
 const activePane = ref('params');
@@ -101,6 +104,27 @@ const authLevels = computed(function () {
 
 const inheritAuthHint = computed(function () {
   return inheritHint(authLevels.value);
+});
+
+/**
+ * 这次请求的变量作用域（契约第 5 节）：项目 < 目录链（从外到内）< 环境。
+ * 地址栏、参数表、鉴权的变量高亮 / 补全 / 悬停提示都读它。
+ */
+const scope = computed(function () {
+  return resolveScope({
+    project: projects.current,
+    folders: tree.folders,
+    folderId: props.tab.folderId,
+    environment: envs.selected
+  });
+});
+
+/**
+ * 发送**之前**就提示未定义的变量（原来那条在响应区，是关于请求的，位置不对）。
+ * 用 findVariables + scope 在前端直接算，不用等发送回来。
+ */
+const undefinedVariables = computed(function () {
+  return missingVariables(props.tab.spec, scope.value);
 });
 
 watch(
@@ -518,6 +542,7 @@ onBeforeUnmount(function () {
         :method="spec.method"
         :url="spec.url"
         :sending="tab.sending"
+        :scope="scope"
         @update:method="(v) => { spec.method = v; }"
         @update:url="onUrlChange"
         @send="onSend"
@@ -533,6 +558,14 @@ onBeforeUnmount(function () {
       </n-space>
     </div>
 
+    <!-- 未定义的变量：发送前就提示，别等请求发出去才发现 -->
+    <div v-if="undefinedVariables.length" class="var-hint">
+      <span>以下变量未定义：{{ undefinedVariables.join('、') }}</span>
+      <n-button size="tiny" quaternary type="primary" @click="ui.openEnvManager()">
+        去环境管理
+      </n-button>
+    </div>
+
     <div class="panes" :class="{ full: activePane === 'mock' }">
       <n-tabs v-model:value="activePane" type="line" size="small" animated>
         <n-tab-pane name="params" tab="Params">
@@ -540,6 +573,7 @@ onBeforeUnmount(function () {
             <p class="label">查询参数</p>
             <key-value-table
               :model-value="spec.params.query"
+              :scope="scope"
               key-placeholder="参数名"
               @update:model-value="onQueryChange"
             />
@@ -547,6 +581,7 @@ onBeforeUnmount(function () {
             <p class="label">路径参数</p>
             <key-value-table
               v-model="spec.params.path"
+              :scope="scope"
               key-placeholder="参数名"
               value-placeholder="值"
             />
@@ -557,6 +592,7 @@ onBeforeUnmount(function () {
           <div class="pane">
             <key-value-table
               v-model="spec.params.headers"
+              :scope="scope"
               key-placeholder="请求头"
               value-placeholder="值"
             />
@@ -565,7 +601,7 @@ onBeforeUnmount(function () {
 
         <n-tab-pane name="body" tab="Body">
           <div class="pane">
-            <body-editor :spec="spec" :project-id="projects.currentId" />
+            <body-editor :spec="spec" :project-id="projects.currentId" :scope="scope" />
           </div>
         </n-tab-pane>
 
@@ -574,16 +610,17 @@ onBeforeUnmount(function () {
             <auth-editor
               :model-value="spec.auth"
               :inherit-hint="inheritAuthHint"
+              :scope="scope"
               @update:model-value="(v) => { spec.auth = v; }"
             />
           </div>
         </n-tab-pane>
 
-          <n-tab-pane name="scripts" tab="Scripts">
-            <div class="pane">
-              <script-editor v-model="spec.scripts" :disabled="!projects.canEdit" />
-            </div>
-          </n-tab-pane>
+        <n-tab-pane name="scripts" tab="Scripts">
+          <div class="pane">
+            <script-editor v-model="spec.scripts" :disabled="!projects.canEdit" />
+          </div>
+        </n-tab-pane>
 
         <n-tab-pane name="settings" tab="设置">
           <div class="pane narrow">
@@ -729,6 +766,22 @@ onBeforeUnmount(function () {
 .head > :first-child {
   flex: 1;
   min-width: 0;
+}
+
+/* 未定义变量：一行紧凑的黄色提示，紧贴地址栏下面 */
+.var-hint {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 8px 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #f0a020;
+  background: rgba(240, 160, 32, 0.12);
 }
 
 .panes {
