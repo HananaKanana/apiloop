@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   NButton,
   NCheckbox,
@@ -114,7 +114,11 @@ const inheritAuthHint = computed(function () {
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
 
-const SPLIT_KEY = 'apiloop.split.';
+/**
+ * 分栏位置只用一个键：`api` / `draft` / `history` 三种标签页都是 HTTP 请求，
+ * 按 `kind` 分三份存的话，用户会觉得「刚拖好的高度怎么又变了」。
+ */
+const SPLIT_KEY = 'apiloop.split.http';
 /** 两块各自的最小高度，拖到头就不让再拖了 */
 const MIN_PANES = 120;
 const MIN_RESPONSE = 120;
@@ -122,7 +126,7 @@ const DEFAULT_PANES = 260;
 
 function readSplitHeight() {
   try {
-    const value = Number(localStorage.getItem(SPLIT_KEY + props.tab.kind));
+    const value = Number(localStorage.getItem(SPLIT_KEY));
     if (value >= MIN_PANES) return value;
   } catch (err) {
     // 读不到就用默认值
@@ -147,6 +151,18 @@ function onSplitMove(event) {
   panesHeight.value = Math.max(MIN_PANES, Math.min(event.clientY - box.top, max));
 }
 
+/**
+ * 把高度夹回可视范围：在高屏上拖到 600px，换到矮屏或把窗口缩小之后，
+ * 响应区会被挤到 120px 以下。挂载时和窗口 resize 时都要收一下。
+ * 这里只改当前值、不写回 localStorage —— 窗口再变大时还能回到原来那个高度。
+ */
+function clampPanesHeight() {
+  if (!rootRef.value) return;
+  const max = rootRef.value.clientHeight - MIN_RESPONSE - 8;
+  if (max < MIN_PANES) return;
+  panesHeight.value = Math.max(MIN_PANES, Math.min(panesHeight.value, max));
+}
+
 function stopSplitDrag() {
   if (!draggingSplit.value) return;
   draggingSplit.value = false;
@@ -154,7 +170,7 @@ function stopSplitDrag() {
   document.body.style.cursor = '';
   // 拖动的位置按标签页类型记下来，下次打开还是这个高度
   try {
-    localStorage.setItem(SPLIT_KEY + props.tab.kind, String(Math.round(panesHeight.value)));
+    localStorage.setItem(SPLIT_KEY, String(Math.round(panesHeight.value)));
   } catch (err) {
     // 存不下就算了，这次会话内还是好用的
   }
@@ -664,12 +680,16 @@ onMounted(function () {
   window.addEventListener('keydown', onKeydown);
   window.addEventListener('mousemove', onSplitMove);
   window.addEventListener('mouseup', stopSplitDrag);
+  window.addEventListener('resize', clampPanesHeight);
+  // 等 DOM 量出来再夹一次（存的高度可能是高屏上拖的）
+  nextTick(clampPanesHeight);
 });
 
 onBeforeUnmount(function () {
   window.removeEventListener('keydown', onKeydown);
   window.removeEventListener('mousemove', onSplitMove);
   window.removeEventListener('mouseup', stopSplitDrag);
+  window.removeEventListener('resize', clampPanesHeight);
 });
 </script>
 
@@ -888,6 +908,14 @@ onBeforeUnmount(function () {
         </n-tab-pane>
       </n-tabs>
     </div>
+
+    <!-- 请求区 / 响应区之间的分隔线，按住上下拖（Mock 页签要整块高度，那时候不要） -->
+    <div
+      v-if="activePane !== 'mock'"
+      class="h-splitter"
+      :class="{ active: draggingSplit }"
+      @mousedown.prevent="startSplitDrag"
+    />
 
     <div v-if="activePane !== 'mock'" class="response">
       <response-panel

@@ -73,10 +73,12 @@ const error = computed(function () {
 
 /**
  * 什么都还没有：没发过、没在发、也没出错。这时面板给一句居中提示，
- * 不然整块是空的，看着像坏了。取消过的请求不算 —— 那种情况下面有专门的说明。
+ * 不然整块是空的，看着像坏了。取消过的请求不算 —— 那种情况下面有专门的说明；
+ * 流式发送时 `liveResponse`（响应头）一到就有东西可看了，也不算空。
  */
 const idle = computed(function () {
-  return !response.value && !error.value && !props.tab.sending && !props.tab.cancelled;
+  return !response.value && !error.value && !props.tab.sending && !props.tab.cancelled &&
+    !liveResponse.value;
 });
 
 const request = computed(function () {
@@ -251,7 +253,6 @@ function requestBodyText() {
           这条历史里的响应体超过了 256 KB，落库时做了截断，下面是截断后的内容。
         </n-alert>
 
-
         <div class="tabs">
           <n-tabs
             v-model:value="activeTab"
@@ -263,71 +264,69 @@ function requestBodyText() {
             <!-- 状态码 / 耗时 / 大小和页签挤在同一行（和 Postman 一样） -->
             <template #suffix>
               <div class="status-line">
-              <template v-if="statusLine">
-              <n-tag :type="statusType" size="small" :bordered="false">
-                {{ statusLine.status }} {{ statusLine.statusText }}
-              </n-tag>
-
-              <!-- 接收中：只报进度，不报耗时/最终大小（都还没定） -->
-              <span v-if="tab.sending" class="metric">
-                接收中… {{ formatBytes(tab.receivedBytes) }}
-              </span>
-              <template v-else-if="result">
-                <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
-                <span class="metric">大小 {{ formatBytes(response.size) }}</span>
-              </template>
-
-              <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
-                经由代理 {{ proxy.url }}
-              </n-tag>
-
-              <n-popover v-if="redirects.length" trigger="click" placement="bottom-start">
-                <template #trigger>
-                  <n-tag size="small" :bordered="false" type="info" class="clickable">
-                    重定向 {{ redirects.length }} 次
+                <template v-if="statusLine">
+                  <n-tag :type="statusType" size="small" :bordered="false">
+                    {{ statusLine.status }} {{ statusLine.statusText }}
                   </n-tag>
+
+                  <!-- 接收中：只报进度，不报耗时/最终大小（都还没定） -->
+                  <span v-if="tab.sending" class="metric">
+                    接收中… {{ formatBytes(tab.receivedBytes) }}
+                  </span>
+                  <template v-else-if="result">
+                    <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
+                    <span class="metric">大小 {{ formatBytes(response.size) }}</span>
+                  </template>
+
+                  <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
+                    经由代理 {{ proxy.url }}
+                  </n-tag>
+
+                  <n-popover v-if="redirects.length" trigger="click" placement="bottom-start">
+                    <template #trigger>
+                      <n-tag size="small" :bordered="false" type="info" class="clickable">
+                        重定向 {{ redirects.length }} 次
+                      </n-tag>
+                    </template>
+                    <div class="redirect-list">
+                      <div v-for="(hop, index) in redirects" :key="index" class="redirect-item">
+                        <span class="redirect-status">{{ hop.status }}</span>
+                        <span class="redirect-url">{{ hop.url }}</span>
+                      </div>
+                    </div>
+                  </n-popover>
                 </template>
-                <div class="redirect-list">
-                  <div v-for="(hop, index) in redirects" :key="index" class="redirect-item">
-                    <span class="redirect-status">{{ hop.status }}</span>
-                    <span class="redirect-url">{{ hop.url }}</span>
-                  </div>
-                </div>
-              </n-popover>
-            </template>
 
-            <template v-else-if="error">
-              <n-tag type="error" size="small" :bordered="false">{{ error.code }}</n-tag>
-            </template>
+                <template v-else-if="error">
+                  <n-tag type="error" size="small" :bordered="false">{{ error.code }}</n-tag>
+                </template>
 
-            <template v-else-if="tab.sending">
-              <span class="metric">正在连接…</span>
-            </template>
+                <template v-else-if="tab.sending">
+                  <span class="metric">正在连接…</span>
+                </template>
 
-            <template v-else>
-              <span class="metric">还没发送</span>
-            </template>
+                <template v-else>
+                  <span class="metric">还没发送</span>
+                </template>
 
-
-            <n-popover v-if="!readonly && !isSse && saveHint" trigger="hover" placement="top-end">
-              <template #trigger>
-                <span>
-                  <n-button size="tiny" disabled>保存为示例</n-button>
-                </span>
-              </template>
-              {{ saveHint }}
-            </n-popover>
-            <n-button
-              v-else-if="!readonly && !isSse"
-              size="tiny"
-              secondary
-              type="primary"
-              :loading="savingExample"
-              @click="emit('save-example')"
-            >
-              保存为示例
-            </n-button>
-        
+                <n-popover v-if="!readonly && !isSse && saveHint" trigger="hover" placement="top-end">
+                  <template #trigger>
+                    <span>
+                      <n-button size="tiny" disabled>保存为示例</n-button>
+                    </span>
+                  </template>
+                  {{ saveHint }}
+                </n-popover>
+                <n-button
+                  v-else-if="!readonly && !isSse"
+                  size="tiny"
+                  secondary
+                  type="primary"
+                  :loading="savingExample"
+                  @click="emit('save-example')"
+                >
+                  保存为示例
+                </n-button>
               </div>
             </template>
             <n-tab-pane name="body" tab="Body" :disabled="!response">
