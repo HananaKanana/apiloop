@@ -32,6 +32,18 @@ export const useWsStore = defineStore('ws', function () {
   function ensure(key) {
     if (!sessions.value[key]) {
       sessions.value[key] = {
+        /**
+         * 这个会话当前挂在哪个标签页 key 下。
+         *
+         * 之所以把 key 也存进 state：下面那些事件流闭包（`startEvents` /
+         * `scheduleRetry`）是长时间活着的，而 key 会变 —— 临时 WebSocket 标签页
+         * 「保存到目录」之后从 `ws:N` 变成 `api:<id>`，`move` 会把 Map 里的条目
+         * 搬过去。闭包里如果记的是创建时那个旧 key，搬完之后 `readers.get(旧 key)`
+         * 永远拿不到东西：事件流一断就**不会自动重连**，重试计时器触发时还会在
+         * 旧 key 下另开一条流（关标签页时关不到它）。
+         * 所以闭包一律读 `state.key`，不读参数。
+         */
+        key: key,
         // status 只跟着上游 socket 走：connecting → open → closed / error
         status: 'idle',
         // channel 是 events 长连接自己的状态：live / retrying / ended。
@@ -91,7 +103,7 @@ export const useWsStore = defineStore('ws', function () {
     push(state, { time: Date.now(), type: 'local', text: text });
   }
 
-  function handleEvent(key, state, event) {
+  function handleEvent(state, event) {
     if (!event || !event.type) return;
     push(state, event);
 
@@ -99,12 +111,12 @@ export const useWsStore = defineStore('ws', function () {
       state.status = 'open';
       state.protocol = event.protocol || '';
       state.note = event.note || '';
-      attempts.delete(key);
+      attempts.delete(state.key);
       return;
     }
     if (event.type === 'close') {
       state.status = 'closed';
-      attempts.delete(key);
+      attempts.delete(state.key);
       return;
     }
     if (event.type === 'error') {
@@ -112,19 +124,19 @@ export const useWsStore = defineStore('ws', function () {
     }
   }
 
-  function startEvents(key, state) {
-    abortReader(key);
+  function startEvents(state) {
+    abortReader(state.key);
 
     const controller = new AbortController();
-    readers.set(key, controller);
+    readers.set(state.key, controller);
 
     function stale() {
-      return readers.get(key) !== controller;
+      return readers.get(state.key) !== controller;
     }
 
     getNdjson(wsApi.eventsPath(state.sessionId, state.lastSeq), {
       signal: controller.signal,
-      onEvent: function (event) { handleEvent(key, state, event); },
+      onEvent: function (event) { handleEvent(state, event); },
       onOpen: function () {
         if (stale()) return;
         // 重连成功。服务端只补发 seq 之后的事件，不会再发一次 open 事件，
@@ -134,20 +146,20 @@ export const useWsStore = defineStore('ws', function () {
     }).then(
       function () {
         if (stale()) return;
-        readers.delete(key);
-        scheduleRetry(key, state, null);
+        readers.delete(state.key);
+        scheduleRetry(state, null);
       },
       function (err) {
         if (stale()) return;
-        readers.delete(key);
+        readers.delete(state.key);
         // 自己断开（关标签页 / 点断开 / 切项目）时不重连
         if (err && err.aborted) return;
-        scheduleRetry(key, state, err);
+        scheduleRetry(state, err);
       }
     );
   }
 
-  function scheduleRetry(key, state, err) {
+  function scheduleRetry(state, err) {
     // 404：会话已经不存在了（服务端回收了，或者被别人删了），不用再试
     if (err && err.status === 404) {
       state.status = 'ended';
@@ -157,17 +169,17 @@ export const useWsStore = defineStore('ws', function () {
     }
     if (state.channel === 'ended' || state.channel === 'idle') return;
 
-    const attempt = attempts.get(key) || 0;
+    const attempt = attempts.get(state.key) || 0;
     const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
-    attempts.set(key, attempt + 1);
+    attempts.set(state.key, attempt + 1);
 
     state.channel = 'retrying';
     if (err && !state.sessionId) state.error = err.message;
 
-    clearTimer(key);
-    timers.set(key, setTimeout(function () {
-      timers.delete(key);
-      startEvents(key, state);
+    clearTimer(state.key);
+    timers.set(state.key, setTimeout(function () {
+      timers.delete(state.key);
+      startEvents(state);
     }, delay));
   }
 
@@ -214,7 +226,7 @@ export const useWsStore = defineStore('ws', function () {
 
     state.sessionId = data.session.id;
     state.url = data.session.url || state.url;
-    startEvents(key, state);
+    startEvents(state);
     return true;
   }
 
@@ -276,6 +288,8 @@ export const useWsStore = defineStore('ws', function () {
     if (state) {
       sessions.value[toKey] = state;
       delete sessions.value[fromKey];
+      // 闭包里读的是 state.key，这里必须一起改，否则事件流闭包还认旧 key
+      state.key = toKey;
     }
 
     [timers, readers, attempts].forEach(function (map) {
