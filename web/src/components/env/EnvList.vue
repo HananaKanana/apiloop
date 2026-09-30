@@ -198,7 +198,7 @@ async function onMenuSelect(env, key) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0cbb52;
+  color: var(--apiloop-primary);
 }
 
 .name {

@@ -314,6 +314,55 @@ export const useTabsStore = defineStore('tabs', function () {
    * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
    * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
    */
+  async function openHistory(historyId) {
+    const key = 'history:' + historyId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const data = await historyApi.getHistory(historyId);
+    const record = data.entry || {};
+    const spec = Object.assign({}, record.request || emptySpec());
+    const environmentId = spec.environmentId || '';
+    delete spec.environmentId;
+    // 早期写进历史的 spec 里没有 scripts（P8 才加），补一个空的，别让编辑器拿到 undefined
+    if (!Array.isArray(spec.scripts)) spec.scripts = [];
+
+    const result = record.result || null;
+    const truncated = Boolean(
+      (result && result.historyTruncated) ||
+        (result && result.response && result.response.historyTruncated)
+    );
+
+    const tab = Object.assign({
+      key: key,
+      kind: 'history',
+      apiId: record.apiId || null,
+      folderId: null,
+      title: spec.url || '历史记录',
+      spec: spec,
+      savedSnapshot: null,
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: result,
+      historyTruncated: truncated,
+      environmentId: environmentId,
+      sendError: '',
+      missingVariables: (result && result.missingVariables) || [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 关标签页时把还在跑的请求 abort 掉，别让它在后台一直连着 */
+
   /**
    * 打开环境标签页（Task 7）。环境本身就是「名字 + 变量」这么点东西，
    * 原来那个管理弹窗又窄又空，改成和接口、目录并列的标签页。
@@ -363,54 +412,6 @@ export const useTabsStore = defineStore('tabs', function () {
     removed.forEach(function (tab) { close(tab.key); });
   }
 
-  async function openHistory(historyId) {
-    const key = 'history:' + historyId;
-    const existing = tabs.value.find(function (tab) { return tab.key === key; });
-    if (existing) {
-      activeKey.value = key;
-      return existing;
-    }
-
-    const data = await historyApi.getHistory(historyId);
-    const record = data.entry || {};
-    const spec = Object.assign({}, record.request || emptySpec());
-    const environmentId = spec.environmentId || '';
-    delete spec.environmentId;
-    // 早期写进历史的 spec 里没有 scripts（P8 才加），补一个空的，别让编辑器拿到 undefined
-    if (!Array.isArray(spec.scripts)) spec.scripts = [];
-
-    const result = record.result || null;
-    const truncated = Boolean(
-      (result && result.historyTruncated) ||
-        (result && result.response && result.response.historyTruncated)
-    );
-
-    const tab = Object.assign({
-      key: key,
-      kind: 'history',
-      apiId: record.apiId || null,
-      folderId: null,
-      title: spec.url || '历史记录',
-      spec: spec,
-      savedSnapshot: null,
-      options: emptyOptions(),
-      api: null,
-      dirty: false,
-      result: result,
-      historyTruncated: truncated,
-      environmentId: environmentId,
-      sendError: '',
-      missingVariables: (result && result.missingVariables) || [],
-      sending: false,
-      controller: null
-    }, emptyLive());
-
-    tabs.value.push(tab);
-    activeKey.value = key;
-    return tab;
-  }
-
-  /** 关标签页时把还在跑的请求 abort 掉，别让它在后台一直连着 */
   function abortTab(tab) {
     if (tab && tab.controller) tab.controller.abort();
   }
