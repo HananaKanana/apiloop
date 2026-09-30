@@ -163,7 +163,10 @@ async function patchMock(patch) {
 
   const next = Object.assign({}, mock.value, patch);
   try {
-    const data = await apisApi.updateApi(props.tab.apiId, { api: { mock: next } });
+    // updateApi 自己会包一层 `{ api: ... }`，这里只传字段。多包一层的话
+    // 服务端读不到 `input.mock`，会**静默忽略**（返回 200 和原样的 api），
+    // 界面上还弹「已保存」—— 启用 mock / 改路径 / 设为 mock 全都失效。
+    const data = await apisApi.updateApi(props.tab.apiId, { mock: next });
     props.tab.api = data.api;
     message.success('已保存');
   } catch (err) {
