@@ -1,0 +1,38 @@
+# 只把运行时需要的东西送进构建上下文：bin / lib / sample / package*.json
+node_modules
+.git
+.gitignore
+.npmignore
+.DS_Store
+.idea
+.vscode
+.claude
+.workbuddy*
+
+# 前端源码不进镜像：lib/web 里是已提交的构建产物，运行只需要它
+web
+
+docs
+test
+
+# 本地运行的产物与数据
+.router.js
+*.db
+*.db-wal
+*.db-shm
+routes.json
+server-mock-*.tgz
+apiloop-*.tgz
+npm-debug.log
+
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Docker 部署的数据与本地配置
+data
+workspace
+.env
+.env.*
+!.env.example
+deploy.sh

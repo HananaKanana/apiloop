@@ -1,0 +1,35 @@
+# apiloop 的 Docker 部署。
+#
+# 用法（推荐直接用 ./deploy.sh，下面是手动命令）：
+#   mkdir -p data                              先建好数据目录（否则 Docker 会以 root 身份建，容器写不进去）
+#   docker compose -p apiloop up -d --build    构建并后台启动
+#   docker compose -p apiloop logs -f          查看日志
+#   docker compose -p apiloop down             停止（数据保存在 ./data，不会丢失）
+# -p apiloop 用于固定项目名：目录名是中文等非英文字符时，不加会报 “project name must not be empty”
+#
+# 端口、管理员密码、npm 镜像源等可在同目录的 .env 中配置，参考 .env.example
+services:
+  apiloop:
+    build:
+      context: .
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    image: apiloop:latest
+    container_name: apiloop
+    # 容器以 uid 1000 运行（镜像里的 node 用户）。宿主机上 ./data 的属主不是 1000 时，
+    # 改成宿主机用户的 uid:gid（执行 `id -u`、`id -g` 查看），否则写不进数据库
+    # user: "1000:1000"
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      TZ: Asia/Shanghai
+      # 首次启动时创建的管理员 admin 的密码。只在库里还没有任何用户时生效，
+      # 已有账号不会被修改；改密码请用 ./deploy.sh user reset-password admin
+      # 不设置则随机生成，打印在日志里（./deploy.sh logs 中搜「初始密码」）
+      APILOOP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      # 数据库 data.db 与上传文件 files/
+      - ./data:/app/data
+      # 可选：挂载一个老的 server-mock 项目目录，沿用它的 router.js / routes.json / 静态文件
+      # - ./workspace:/app/workspace
