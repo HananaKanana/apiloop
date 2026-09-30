@@ -299,3 +299,126 @@ test('未知管理台接口返回 JSON 404', async function () {
     assert.strictEqual(res.status, 404);
     assert.strictEqual(res.body.ok, false);
 });
+
+/* ------------------------------------------------------------------ 分组管理 */
+
+test('GET /routes 会带上分组列表', async function () {
+    var res = await ctx.api('GET', '/routes');
+    assert.strictEqual(res.body.ok, true);
+    assert.ok(Array.isArray(res.body.groups), 'routes 响应应包含 groups');
+    res.body.groups.forEach(function (group) {
+        assert.strictEqual(typeof group.name, 'string');
+        assert.strictEqual(typeof group.count, 'number');
+    });
+});
+
+test('分组的 HTTP 接口：新建 / 列表 / 重命名 / 删除', async function () {
+    // 新建（中文分组名要能正确编码解析）
+    var created = await ctx.api('POST', '/groups', { name: '订单管理' });
+    assert.strictEqual(created.status, 200);
+    assert.strictEqual(created.body.group.name, '订单管理');
+    assert.strictEqual(created.body.group.count, 0, '空分组也要能建');
+    assert.ok(Array.isArray(created.body.routes), '分组写接口应回带最新 routes，省掉二次请求');
+
+    // 空分组应该出现在列表里
+    var list = await ctx.api('GET', '/groups');
+    assert.ok(list.body.groups.map(function (g) { return g.name; }).indexOf('订单管理') > -1);
+
+    // 重名报错
+    var dup = await ctx.api('POST', '/groups', { name: '订单管理' });
+    assert.strictEqual(dup.status, 400);
+    assert.ok(dup.body.error.indexOf('已存在') > -1);
+
+    var empty = await ctx.api('POST', '/groups', { name: '   ' });
+    assert.strictEqual(empty.status, 400);
+
+    // 往这个分组里放两个接口
+    await ctx.createRoute({ name: 'G1', method: 'GET', path: '/api/g1', group: '订单管理', response: '{}' });
+    await ctx.createRoute({ name: 'G2', method: 'GET', path: '/api/g2', group: '订单管理', response: '{}' });
+
+    var withRoutes = await ctx.api('GET', '/groups');
+    var found = withRoutes.body.groups.filter(function (g) { return g.name === '订单管理'; })[0];
+    assert.strictEqual(found.count, 2);
+
+    // 重命名，接口上的分组要跟着改（响应里直接就是新的，不用再 GET 一次）
+    var renamed = await ctx.api('PUT', '/groups/' + encodeURIComponent('订单管理'), { name: '交易管理' });
+    assert.strictEqual(renamed.status, 200);
+    assert.strictEqual(renamed.body.moved, 2);
+    var renamedInResponse = renamed.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
+    assert.strictEqual(renamedInResponse.length, 2);
+    renamedInResponse.forEach(function (route) {
+        assert.strictEqual(route.group, '交易管理');
+    });
+
+    var afterRename = await ctx.api('GET', '/routes');
+    var renamedRoutes = afterRename.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
+    assert.strictEqual(renamedRoutes.length, 2);
+    renamedRoutes.forEach(function (route) {
+        assert.strictEqual(route.group, '交易管理');
+    });
+
+    // 重命名到已存在的分组要报错
+    await ctx.api('POST', '/groups', { name: '另一个组' });
+    var conflict = await ctx.api('PUT', '/groups/' + encodeURIComponent('交易管理'), { name: '另一个组' });
+    assert.strictEqual(conflict.status, 400);
+
+    // 删除分组（默认 move）：接口保留并落到未分组
+    var removed = await ctx.api('DELETE', '/groups/' + encodeURIComponent('交易管理'));
+    assert.strictEqual(removed.status, 200);
+    assert.strictEqual(removed.body.removed.mode, 'move');
+    assert.strictEqual(removed.body.removed.affected, 2);
+    var afterRemove = await ctx.api('GET', '/routes');
+    var kept = afterRemove.body.routes.filter(function (r) { return r.path === '/api/g1' || r.path === '/api/g2'; });
+    assert.strictEqual(kept.length, 2, 'move 模式不应删接口');
+    kept.forEach(function (route) { assert.strictEqual(route.group, ''); });
+
+    // 删除分组（delete）：连接口一起删
+    await ctx.createRoute({ name: 'G3', method: 'GET', path: '/api/g3', group: '另一个组', response: '{}' });
+    var hard = await ctx.api('DELETE', '/groups/' + encodeURIComponent('另一个组') + '?routes=delete');
+    assert.strictEqual(hard.body.removed.mode, 'delete');
+    assert.strictEqual(hard.body.removed.affected, 1);
+    var finalRoutes = await ctx.api('GET', '/routes');
+    assert.strictEqual(finalRoutes.body.routes.filter(function (r) { return r.path === '/api/g3'; }).length, 0);
+    assert.strictEqual((await fetch(ctx.base + '/api/g3')).status, 404, '被删的接口应立刻失效');
+
+    // 删除不存在的分组
+    var missing = await ctx.api('DELETE', '/groups/' + encodeURIComponent('查无此组'));
+    assert.strictEqual(missing.status, 400);
+    assert.ok(missing.body.error.indexOf('不存在') > -1);
+});
+
+test('分组排序接口', async function () {
+    await ctx.api('POST', '/groups', { name: '排序甲' });
+    await ctx.api('POST', '/groups', { name: '排序乙' });
+    await ctx.api('POST', '/groups', { name: '排序丙' });
+
+    var before = await ctx.api('GET', '/groups');
+    var names = before.body.groups.map(function (g) { return g.name; });
+    assert.ok(names.indexOf('排序甲') < names.indexOf('排序乙'));
+
+    var reordered = await ctx.api('POST', '/groups/reorder', {
+        names: ['排序丙', '排序乙', '排序甲']
+    });
+    assert.strictEqual(reordered.status, 200);
+    var after = reordered.body.groups.map(function (g) { return g.name; });
+    assert.ok(after.indexOf('排序丙') < after.indexOf('排序乙'));
+    assert.ok(after.indexOf('排序乙') < after.indexOf('排序甲'));
+
+    // 顺序要真的落盘
+    var doc = JSON.parse(fs.readFileSync(ctx.store.filePath, 'utf-8'));
+    assert.ok(doc.groups.indexOf('排序丙') < doc.groups.indexOf('排序甲'));
+
+    // 非法输入
+    var bad = await ctx.api('POST', '/groups/reorder', { names: ['查无此组'] });
+    assert.strictEqual(bad.status, 400);
+    assert.ok(bad.body.error.indexOf('不存在') > -1);
+    var notArray = await ctx.api('POST', '/groups/reorder', { names: '排序甲' });
+    assert.strictEqual(notArray.status, 400);
+});
+
+test('导出内容包含分组', async function () {
+    var res = await ctx.api('GET', '/export');
+    var doc = JSON.parse(res.body.json);
+    assert.ok(Array.isArray(doc.groups));
+    assert.ok(Array.isArray(doc.routes));
+});

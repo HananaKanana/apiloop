@@ -83,6 +83,7 @@ test('init 生成 router.js / index.html / routes.json', function () {
     var doc = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     assert.strictEqual(doc.version, 1);
     assert.ok(doc.routes.length >= 3);
+    assert.ok(Array.isArray(doc.groups) && doc.groups.indexOf('用户') > -1, 'init 应声明示例分组');
     assert.strictEqual(fs.existsSync(path.join(dir, 'npm-debug.log')), false, '不应再拷贝 npm-debug.log');
 
     // 再跑一次不应覆盖已有配置
@@ -122,6 +123,12 @@ test('web：启动管理台，API 与 mock 路由都可用', async function () {
         var body = await users.json();
         assert.strictEqual(body.data.list.length, 3);
         assert.strictEqual(body.data.page, '2', 'query 回显应生效');
+
+        // 分组接口可用，且示例分组里正好是那 3 个接口
+        var groups = await (await fetch(base + '/__mock/api/groups')).json();
+        var sample = groups.groups.filter(function (g) { return g.name === '用户'; })[0];
+        assert.ok(sample, '应能读到 init 生成的示例分组');
+        assert.strictEqual(sample.count, 3);
 
         // 路径参数
         var detail = await fetch(base + '/api/users/99');

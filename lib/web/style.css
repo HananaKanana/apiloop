@@ -840,6 +840,94 @@ textarea.input { resize: vertical; }
 }
 .modal-hint { margin-right: auto; font-size: 12px; color: var(--muted); }
 
+/* ---------- 分组管理 ---------- */
+.sidebar-foot {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.btn-block { width: 100%; display: block; }
+
+.group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-menu-btn {
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 6px 3px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.group-menu-btn:hover { background: #eef1f5; color: var(--text); border-color: var(--border); }
+
+/* 分组拖动排序 */
+.group-drag {
+  flex: 0 0 auto;
+  cursor: grab;
+  color: #bcc5d1;
+  font-size: 12px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.group-drag:hover { color: var(--text); background: #eef1f5; }
+.group-drag:active { cursor: grabbing; }
+.group-title.is-dragging { opacity: .4; }
+.group-title.drop-before { box-shadow: inset 0 2px 0 var(--primary); }
+.group-title.drop-after { box-shadow: inset 0 -2px 0 var(--primary); }
+
+.group-empty {
+  padding: 4px 10px 8px;
+  font-size: 11.5px;
+  color: #9aa4b2;
+  font-style: italic;
+}
+
+/* 挂在 body 上的浮层菜单（不会被侧栏的 overflow 裁掉） */
+.menu-floating {
+  position: fixed;
+  z-index: 300;
+  min-width: 170px;
+}
+.menu-item.danger { color: var(--danger); }
+.menu-item.danger:hover { background: #fef2f2; }
+.menu-item:disabled { opacity: .45; cursor: not-allowed; }
+.menu-item:disabled:hover { background: transparent; }
+
+/* ---------- 通用对话框 ---------- */
+.modal.modal-dialog { width: min(460px, 100%); }
+.dialog-desc {
+  font-size: 12.5px;
+  color: #374151;
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+.modal-body .input + .muted { margin-top: 6px; }
+.modal-body .alert { margin-top: 10px; }
+.modal-foot.is-stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.modal-foot.is-stack .btn { width: 100%; }
+.btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger-solid:hover { background: #b91c1c; border-color: #b91c1c; }
+
 /* ---------- 窄屏兜底 ---------- */
 @media (max-width: 1200px) {
   /* 窗口变窄时 4 列栅格降为 2 列，跨两列的字段正好占满一行 */
