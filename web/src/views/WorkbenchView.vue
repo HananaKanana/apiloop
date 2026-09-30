@@ -5,6 +5,7 @@ import { NButton, NEmpty, useMessage } from 'naive-ui';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
+import ApiTree from '@/components/tree/ApiTree.vue';
 import { useProjectStore } from '@/stores/project';
 
 const MIN_WIDTH = 180;
@@ -57,6 +58,15 @@ function onProjectChange(id) {
   // 切了项目：环境由 EnvSwitcher 的 watcher 重新拉，目录树由 ApiTree 的 watcher 重新拉
 }
 
+// 打开接口 / 新建接口交给 Task 4 的标签页接管
+function onOpenApi(api) {
+  void api;
+}
+
+function onNewApi(folderId) {
+  void folderId;
+}
+
 onMounted(async function () {
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', stopDrag);
@@ -96,9 +106,7 @@ onBeforeUnmount(function () {
 
     <div class="body">
       <aside v-show="!collapsed" class="left" :style="{ width: leftWidth + 'px' }">
-        <div class="pane-placeholder">
-          <n-empty description="目录树" size="small" />
-        </div>
+        <api-tree @open="onOpenApi" @new-api="onNewApi" />
       </aside>
 
       <div
