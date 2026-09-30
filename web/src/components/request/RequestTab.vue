@@ -9,17 +9,19 @@ import {
   NModal,
   NSelect,
   NSpace,
+  NSwitch,
   NTabPane,
   NTabs,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
-import { useTabsStore, specFromApi } from '@/stores/tabs';
+import { useTabsStore, specFromApi, emptyOptions } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
+import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
 import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
@@ -50,6 +52,8 @@ const savingExample = ref(false);
 const showSaveDialog = ref(false);
 const saveForm = ref({ name: '', folderId: null });
 
+const showCookies = ref(false);
+
 /* 「保存为示例」弹窗：可选先做智能模板化 */
 const showSaveExample = ref(false);
 const saveExampleName = ref('');
@@ -60,6 +64,20 @@ const templatizeBody = ref('');
 const spec = computed(function () {
   return props.tab.spec;
 });
+
+/**
+ * `/send` 的 options（契约第 12 节）。是标签页自己的界面状态，不落库。
+ * 默认两个都开；老标签页上没有这个字段时兜一个默认值。
+ */
+const requestOptions = computed(function () {
+  return props.tab.options || emptyOptions();
+});
+
+function setOption(key, value) {
+  const next = Object.assign({}, requestOptions.value);
+  next[key] = value;
+  props.tab.options = next;
+}
 
 watch(
   function () { return props.tab.spec; },
@@ -394,8 +412,10 @@ onBeforeUnmount(function () {
         @cancel="onCancel"
       />
 
-      <n-space v-if="projects.canEdit" align="center" :size="6">
-        <n-button size="small" :loading="saving" @click="save">
+      <n-space align="center" :size="6">
+        <!-- Cookie 是「每个用户 × 每个项目」自己的数据，viewer 也能管，不跟只读角色一起收 -->
+        <n-button size="small" quaternary @click="showCookies = true">Cookie</n-button>
+        <n-button v-if="projects.canEdit" size="small" :loading="saving" @click="save">
           {{ tab.apiId ? '保存' : '另存为' }}
         </n-button>
       </n-space>
@@ -452,6 +472,41 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
+        <n-tab-pane name="settings" tab="设置">
+          <div class="pane narrow">
+            <p class="label">这次请求的发送选项</p>
+            <div class="option-row">
+              <n-switch
+                size="small"
+                :value="requestOptions.cookies"
+                @update:value="(v) => setOption('cookies', v)"
+              />
+              <div class="option-text">
+                <span class="option-title">自动管理 Cookie</span>
+                <span class="option-desc">
+                  开启时每一跳都会自动带上 Cookie 库里匹配的 cookie，响应里的 Set-Cookie 也会写回；
+                  请求头里手写了 Cookie 的话，以手写的为准（但响应仍然写回）。
+                </span>
+              </div>
+            </div>
+
+            <div class="option-row">
+              <n-switch
+                size="small"
+                :value="requestOptions.proxy"
+                @update:value="(v) => setOption('proxy', v)"
+              />
+              <div class="option-text">
+                <span class="option-title">使用系统代理</span>
+                <span class="option-desc">
+                  按系统设置里的代理配置决定是否走代理（连不上的域名由「不走代理的地址列表」排除）。
+                  关掉就是这次直连。
+                </span>
+              </div>
+            </div>
+          </div>
+        </n-tab-pane>
+
         <n-tab-pane name="mock" tab="Mock">
           <div class="pane">
             <mock-panel :tab="tab" />
@@ -497,6 +552,8 @@ onBeforeUnmount(function () {
     </n-modal>
 
     <templatize-dialog v-model:show="showTemplatize" :body="templatizeBody" @confirm="onTemplatizeConfirm" />
+
+    <cookie-manager-modal v-model:show="showCookies" />
 
     <n-modal
       v-model:show="showSaveDialog"
@@ -574,6 +631,30 @@ onBeforeUnmount(function () {
 
 .pane .label + * {
   margin-bottom: 14px;
+}
+
+.option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.option-title {
+  font-size: 13px;
+}
+
+.option-desc {
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.6;
 }
 
 .response {
