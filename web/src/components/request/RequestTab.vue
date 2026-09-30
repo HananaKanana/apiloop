@@ -30,6 +30,7 @@ import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
 import { inheritHint } from '@/utils/auth';
+import { clampReplayDelay } from '@/utils/replay';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -395,6 +396,9 @@ function sseExampleHeaders() {
  * `delay` 是**和上一条之间的间隔**，第一条相对于响应头到达的时刻（契约第 17 节），
  * 所以要从 `tab.head.time` 起算。事件视图最多留 2000 条，丢过的话要提醒用户
  * 存下来的不是全部。
+ *
+ * 间隔超过 60 秒的按 60 秒截断 —— 心跳间隔本来就可能是好几分钟，
+ * 不截的话服务端会以「delay 越界」直接 400，整个示例都存不下去。
  */
 async function saveSseExample() {
   const tab = props.tab;
@@ -402,11 +406,14 @@ async function saveSseExample() {
   if (!tab.apiId || !events.length) return;
 
   let previous = (tab.head && tab.head.time) || events[0].time;
-  const list = events.map(function (item) {
-    const delay = Math.max(0, Math.round(item.time - previous));
-    previous = item.time;
+  let cappedDelays = 0;
 
-    const entry = { delay: delay, data: item.data };
+  const list = events.map(function (item) {
+    const clamped = clampReplayDelay(item.time - previous);
+    previous = item.time;
+    if (clamped.capped) cappedDelays += 1;
+
+    const entry = { delay: clamped.delay, data: item.data };
     // 解析器把没有 event 字段的都当成 message，存回去时就不写它了
     if (item.event && item.event !== 'message') entry.event = item.event;
     if (item.id) entry.id = item.id;
@@ -432,11 +439,12 @@ async function saveSseExample() {
     tab.focusExampleId = data.example.id;
     activePane.value = 'mock';
 
-    if (tab.sseDropped) {
-      message.warning('已保存，但事件超过上限，只保存了最近 2000 条');
-    } else {
-      message.success('已存为 SSE 示例');
-    }
+    const notes = [];
+    if (tab.sseDropped) notes.push('事件超过上限，只保存了最近 2000 条');
+    if (cappedDelays) notes.push('有 ' + cappedDelays + ' 处间隔超过 60 秒，按 60 秒保存');
+
+    if (notes.length) message.warning('已存为 SSE 示例；' + notes.join('；'));
+    else message.success('已存为 SSE 示例');
   } catch (err) {
     message.error(err.message);
   } finally {
