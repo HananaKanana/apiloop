@@ -235,6 +235,55 @@ web/                  Vue 源码；sample/ test/ docs/
 - 接口不属于本项目时目录链直接为空（`folderChain` 里判 `api.projectId !== project.id`）——
   少了这一句就会顺着别人的目录树往上找。
 
+## Postman 脚本（契约第 16 节，P8 / `12322fa` + `94c5841`）
+
+- **`lib/scripts/` 三个文件**：`sandbox.js` 是**唯一**碰 quickjs-emscripten 的地方（wasm 加载、
+  context 生命周期、CPU/内存/挂钟限制），`prelude.js` 是**在沙箱里执行**的 pm 实现，
+  `runner.js` 按「项目 → 目录链（从外到内）→ 接口」把脚本串起来跑。**沙箱是懒加载的** ——
+  没有任何脚本的请求连 quickjs 的 JS 都不 require（自测里断言过 `require.cache`）。
+- **QuickJS asyncify 的四个坑**（都实测过）：
+  - 必须用 `ctx.evalCodeAsync`；用 `evalCode` 会抛「Function unexpectedly returned a Promise」；
+  - 宿主函数的入参是 **QuickJSHandle** 不是原始值 —— 所以定死「宿主和沙箱之间只传 JSON 字符串」；
+  - QuickJS 只带 ECMAScript 内置对象，**没有 `URL` / `console` / `setTimeout` / `TextEncoder`**，
+    prelude 里得自己实现最小 URL 拆分和 console；
+  - `evalCodeAsync` 有时**直接抛**而不是返回 error（无限递归就是），两头都要接。
+  - 另外：`module.newContext()`，最后只 `ctx.dispose()` 一次（自己先后释放 context 和 runtime 会报错）。
+- **CPU 计时按契约做**：进入 `pm.sendRequest` 暂停计时、返回后接着计（`pauseClock`/`resumeClock`）。
+  按墙上时间一刀切的话，前面一次慢请求会把后面的脚本误判成超时。
+- **变量按层传给沙箱**（project / folders / environment / transient），因为 `pm.environment`
+  与 `pm.globals` 要往不同的层写；脚本跑完再按同一优先级拼成一张表去替换变量。
+  **Cookie jar 必须在跑脚本之前建好** —— 脚本里的 `pm.sendRequest` 用的是同一个 jar。
+- **写回变量**：只有 editor 及以上才写；读最新的行、只动涉及到的 key（描述、启用状态、顺序保持原样），
+  新增的追加到末尾；整个写回在一个事务里。viewer 给一条「只读角色」警告。
+- 校验用 `dto.toScriptsStrict`（listen 只能 prerequest/test、每段 ≤64KB，否则 400）；
+  **读路径仍用宽容的 `toScripts`** —— 库里已有的坏数据不该让接口 500。
+- 历史打码：`redact.redactScriptsResult` 在 `GET /history/:id` 的「不是发起人」分支上调用，
+  console 整体清空、`variables.set` 的值换成 `***`（key 保留）。
+- prelude 用 `function () {…}.toString()` 导出源码，不写成大字符串字面量 —— 这样它本身是被
+  宿主解析器检查过的真 JS，不用到处转义。
+
+## SSE 与 WebSocket 的 mock 回放（契约第 17 节，P9 / `1b082ee` + `7a1f1bb`）
+
+- **`lib/mock-sse.js`**（校验 + 回放）与 **`lib/mock-ws.js`**（upgrade 事件上的 mock 服务端）
+  各自独立；mock 运行时只负责在命中 sse 示例时调 sse 的 replay。
+- **校验只在写入路径**（`assertExampleBody`，在 `lib/api/tree.js`）；读路径不校验 ——
+  库里已有的坏数据由运行时兜底（实测返回 500 + 中文原因，进程不受影响）。
+  `RESPONSE_TYPES` / `METHODS` 都在 `lib/routes-store.js`，`lib/api/tree.js` 引用它别写死列表。
+- **SSE 回放的 `Content-Type` 要用 `res.setHeader` 直接写**：Express 的 `res.set` 会补上
+  `; charset=utf-8`，而契约写的就是 `text/event-stream`。
+  **mock 调用日志在发出响应头时记**（不是等 finish）—— `repeat: true` 的示例永远不会 finish。
+- **WS 接口不注册 HTTP 路由**：`buildRouter` 里显式 `return` 跳过（让它掉进 try/catch 会打出
+  一句「mock 路径无法注册」的假警告）。`method` 为 WS 的接口：`/send` 返回 400、
+  Postman 导出跳过并回 warnings。
+- **WS 的路径匹配复用 Express 自己**：把候选路由注册进一个一次性 Router，造最小的 req/res
+  喂给它 —— `:param` 之类的规则就和 HTTP 完全一致，不用自己写正则。
+  项目解析复用 `mock-host` 导出的 `resolve(url)`（含「slug 不存在就交给根项目」）。
+- `ws` 依赖（锁 8.22.0）**只作 mock 服务端**；WebSocket 调试会话仍然用 Node 自带的客户端。
+- 上限：每个项目 100 条连接（超了 1013）、步骤总数 1000（`onOpen` 条数 + 各条规则 `reply` 条数，
+  **规则本身不计** —— 契约 2026-09-30 明确的）。
+- 全局约束：**回放用的计时器在客户端断开、服务关闭时都要清理**；
+  `command.js` 挂 `server.on('upgrade', ...)` 与 `server.on('close', closeAll)`。
+
 ## 发布与工程约定
 - `files` 是 `["bin","lib","sample","README.md","docs/api.md"]` —— **`docs/api.md` 是唯一的单文件条目**
   （README 的链接因此不是死链），其余设计文档 / 计划 / 测试不进包。
@@ -246,6 +295,9 @@ web/                  Vue 源码；sample/ test/ docs/
   B 部分改 `web/**` + `lib/web/**`），全量暂存会把别人没提交的改动裹进自己的提交（`33f9223` 这么干过一次）。
   提交后养成核对 `git show --name-only HEAD` 的习惯。
 - `.workbuddy/`（记忆文件）**留在版本控制里**，用户已确认可以提交。
+- **只 commit，不要 push**（2026-09-30 用户规定）：`git push` 统一由用户在审阅通过后执行。
+  P8 / P9 计划的开头都写着这条。**别用「每做完一项任务就推上去」那条老习惯去覆盖它** ——
+  这个项目现在是「做完 → 提交 → 用户审 → 用户推」。
 - **用户自己改前端源码时可能只提交 `web/`，把产物留给前端会话的下一次构建**（`9208daf`
   的提交信息里就写明了）。所以看到某个提交里源码和 `lib/web` 不同步，先看后面有没有
   紧跟着的构建提交，别急着补一个 —— 补出来的产物会和别人正在构建的互相覆盖。
@@ -295,3 +347,31 @@ web/                  Vue 源码；sample/ test/ docs/
 - 目录树开了 `expand-on-click`（点整行展开）。naive-ui 的 `_handleClick` 里
   **选中和展开是同一处一起做的**，所以「点目录顺手把导入落点记下来」不受影响；
   它只绑 `onClick`，**右键不会连带折叠**；空目录 `isLeaf` 为真，点了不切换也不报错。
+
+## 前端：脚本编辑、SSE / WS 示例与 WS 接口（P8 B / P9 B）
+
+- **脚本编辑器**：`components/scripts/ScriptEditor.vue`，接口 / 目录 / 项目三处共用，
+  数据形状就是 `[{ listen, exec }]`。接口标签页把它挂在 `tab.spec.scripts` 上
+  （契约第 16 节：接口的脚本取自 `request.scripts`），所以**没保存的脚本改动也参与这次发送**；
+  目录 / 项目各自 v-model 到自己的可编辑对象上。原来的只读 `ScriptsView.vue` 已删。
+  空的一段不留在数据里（清空编辑器 = 删掉这一段）。
+- 响应面板的「测试结果 / 控制台」两个页签**有内容才出现**（空页签是噪音）；
+  通过是常态保持中性，只有失败和 `console.error` 上色。`scripts.variables.persisted`
+  为 true 时要重新拉环境 + 项目变量（`tabs.js` 的 `refreshVariablesIfPersisted`）。
+- **SSE 示例**：`tab.head` 上记了 `time`（收到响应头的时刻），「保存为 SSE 示例」按它
+  算第一条的 delay。SSE 响应**不出现**普通的「保存为示例」按钮，两种按钮互斥。
+  存完通过 `tab.focusExampleId` 让 Mock 页签选中新示例（MockPanel 的 watcher 带
+  `immediate`，因为那个页签是按需渲染的）。
+- **WS 接口**：`method: 'WS'`，在目录树里用自己的颜色（`ApiTree` 的 `METHOD_COLORS.WS`）。
+  `openApi` 拿到 WS 就交给 `pushWsApiTab`（key 仍是 `api:<id>`）；`markSaved` 有 WS 分支，
+  在接口标签页里把方法改成 WS 保存后标签页就地变成 WebSocket 的样子。
+  WsTab 两种形态共用一个组件：临时（apiId 为空，可「保存到目录」）和绑定接口
+  （可保存、有 Mock 页签、可「保存为 mock」）。**临时标签页不标 dirty**（没有基线，
+  标了永远是脏的）。WS 接口的 Mock 页签不显示期望、延迟和 CORS。
+- **`utils/wsScenario.js`** 从消息日志生成回放场景（纯函数）：第一次发出消息之前收到的
+  进 `onOpen`，之后每条发出的消息一条规则。`fallback` 取 `none`（录到的是「发什么回什么」，
+  echo 会把客户端自己发的打回去，不是录下来的行为）。
+- **`lib/api/tree.js` 的 `exampleFields` 里有一份写死的 responseType 白名单
+  `['json','text','html']`，不在里面的会被**静默改成 `json`**。** 前端发 `sse` / `ws`
+  之前必须确认它已经扩过（P9 A1 的活），否则存下去变成 json 且没有任何报错。
+  `lib/routes-store.js` 的 `RESPONSE_TYPES` 是另一份，两处都要改。
