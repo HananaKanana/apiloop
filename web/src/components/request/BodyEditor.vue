@@ -452,8 +452,10 @@ async function onFilePicked(event) {
 }
 
 .row.head {
+  /* 和 KeyValueTable / VarTable / 响应头表格一个样式：12px 灰字 + 略深的底色。
+     别在这里再叠一层 opacity —— 加上格子里那层 0.6 会淡到看不清。 */
+  background: rgba(128, 128, 128, 0.08);
   font-size: 12px;
-  opacity: 0.65;
 }
 
 .cell {

@@ -81,8 +81,4 @@ defineProps({
 .value {
   opacity: 0.85;
 }
-
-.row.head .value {
-  opacity: 0.6;
-}
 </style>
