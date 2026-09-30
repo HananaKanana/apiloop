@@ -417,6 +417,7 @@ export const useTabsStore = defineStore('tabs', function () {
   function markSaved(tab, api) {
     // WS 接口存下来之后要换成 WebSocket 的样子：spec 形状和普通接口不一样
     if (api.method === 'WS') {
+      const previousKey = tab.key;
       const wsSpec = wsSpecFromApi(api);
       tab.kind = 'ws';
       tab.apiId = api.id;
@@ -428,6 +429,9 @@ export const useTabsStore = defineStore('tabs', function () {
       tab.savedSnapshot = snapshot(wsSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
+      // 临时标签页是 `ws:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 会话状态（日志、连接、重连计时器）要跟着搬，否则刚录的东西全丢
+      useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
       return;
     }

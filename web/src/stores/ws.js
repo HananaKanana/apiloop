@@ -261,6 +261,30 @@ export const useWsStore = defineStore('ws', function () {
     state.dropped = 0;
   }
 
+  /**
+   * 标签页 key 变了的时候，把会话状态整体搬到新 key 下。
+   *
+   * 临时 WebSocket 标签页「保存到目录」之后，key 会从 `ws:N` 变成 `api:<id>`，
+   * 而会话状态是按 key 存的 —— 不搬的话，刚录下来的消息日志、还连着的会话、
+   * 重连计时器全都留在旧 key 上：界面上日志变空（「保存为 mock」跟着不可用），
+   * 旧会话还会一直挂在服务端。
+   */
+  function move(fromKey, toKey) {
+    if (!fromKey || !toKey || fromKey === toKey) return;
+
+    const state = sessions.value[fromKey];
+    if (state) {
+      sessions.value[toKey] = state;
+      delete sessions.value[fromKey];
+    }
+
+    [timers, readers, attempts].forEach(function (map) {
+      if (!map.has(fromKey)) return;
+      map.set(toKey, map.get(fromKey));
+      map.delete(fromKey);
+    });
+  }
+
   /** 标签页被关掉 / 切项目时调用：不保留任何东西 */
   function closeFor(key) {
     const state = stateOf(key);
@@ -287,6 +311,7 @@ export const useWsStore = defineStore('ws', function () {
     send: send,
     disconnect: disconnect,
     clearLog: clearLog,
+    move: move,
     closeFor: closeFor,
     closeAll: closeAll
   };
