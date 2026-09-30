@@ -299,6 +299,83 @@ Cookie、代理、打码的行为和原来的 `/send` 完全一样 —— 两条
 - **流式发送取消时，已经收到的响应体不会写进历史**：历史里有一条 `ABORTED` 记录，但
   `result.response` 是空的。响应体是在响应收完的时候才组装起来的，中途取消就没有这一段。
 
+## SSE 与 WebSocket 的 mock 回放
+
+普通的 mock 只能回一段静态响应，SSE 和 WebSocket 是**按节奏推**的 —— 所以它们的示例
+存的是「怎么推」而不是「推什么」。
+
+### SSE 示例
+
+示例的响应类型选 **SSE**，body 是一段 JSON：
+
+```json
+{
+  "events": [
+    { "delay": 0,    "event": "start", "data": "{\"n\":1}" },
+    { "delay": 500,  "data": "{\"n\":2}" },
+    { "delay": 1000, "id": "7", "data": "多行也没问题\n第二行" }
+  ],
+  "repeat": false
+}
+```
+
+- `delay` 是**和上一条之间的间隔**（毫秒，0~60000），第一条相对于响应头；
+- `event` / `id` 可选，会变成同名的 SSE 字段；`data` 必填且必须是字符串，多行会拆成多行 `data:`；
+- `repeat: true` 时最后一条发完从头再来，一直到客户端断开；
+- **每条的 `data` 在发送的那一刻才渲染**，所以里面写 `{{@cname}}` 这类占位符，
+  每次请求拿到的随机值都不一样；
+- 命中之后响应头里的 `Content-Type` / `Cache-Control` / `X-Accel-Buffering` 会被强制覆盖成
+  SSE 该有的值；示例上配的其他响应头照发。
+
+### WebSocket 示例
+
+接口的 `method` 选 **WS**，它和普通接口一样存进目录树、可以配 mock 路径，但**不注册 HTTP 路由**
+（普通 HTTP 请求打过去是 404），而是由 mock 服务端在 `upgrade` 事件上接走。
+
+示例的响应类型选 **WebSocket**，body 是一段 JSON：
+
+```json
+{
+  "onOpen": [
+    { "delay": 0, "send": "欢迎 {{@cname}}" }
+  ],
+  "rules": [
+    { "match": { "type": "equals", "value": "ping" },
+      "reply": [{ "delay": 0, "send": "pong" }] }
+  ],
+  "fallback": "none"
+}
+```
+
+- `onOpen`：连接建立后按 `delay` 依次推送（第一条相对于 `open` 事件）；
+- `rules`：每收到一条消息，**按顺序匹配，第一条命中的生效**，然后按 `delay` 推它的 `reply`
+  （第一条 reply 相对于收到的这条消息）。`match.type` 可以是
+  `equals`（全等）、`contains`（包含）、`regex`（正则，保存时会校验能不能编译）、`any`（全都匹配）；
+- 一条都没匹配上时按 `fallback`：`none` 什么都不回，`echo` 把收到的原样发回去；
+- 所有 `send` 都在**发送的那一刻**渲染模板；
+- **二进制消息只按 `any` 规则和 `echo` 处理**。
+
+**限制**：
+
+- 每个项目最多同时保持 **100** 条 mock 连接，超了直接拒绝（客户端看到连不上）；
+- 步骤总数（`onOpen` 的条数 + 各条规则 `reply` 的条数，**规则本身不计**）不超过 **1000**；
+- mock 不走期望匹配，只用 `mock.exampleId` 指向的那条示例；
+- `/__admin`、`/__apiloop` 开头的 upgrade 请求直接断开。
+
+### 怎么录下来
+
+- 在 **SSE 事件视图**里点「保存为 SSE 示例」：按每个事件的到达时间算出 `delay`，
+  第一条从 `head` 到达开始算；
+- 在绑定了 WS 接口的 **WebSocket 标签页**里点「保存为 mock」：第一次发送之前收到的消息进
+  `onOpen`，之后每条发出去的消息生成一条 `equals` 规则（`reply` 是它下次发送之前收到的消息），
+  二进制消息会被跳过并提示跳过了几条。
+
+### 限制
+
+- WebSocket 接口**不记录历史，也不执行脚本**（[脚本](#脚本)那一节说的都是普通 HTTP 接口）。
+- mock 的 WebSocket 不走期望匹配，一个接口同时只有一套场景（就是它当前选中的那条示例）。
+- SSE 回放的计时器在客户端断开时立刻清理；`repeat: true` 的示例也不会在断开之后继续跑。
+
 ## 脚本
 
 接口、目录、项目三层都可以挂**前置脚本**（`prerequest`）和**测试脚本**（`test`），
@@ -731,6 +808,8 @@ lib/routes-store.js   单个项目的门面：把库里的一条记录编译成 
 lib/mock-host.js      按项目挂载 mock：根路径 + /mock/<slug>
 lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新，并做 mock 期望的匹配
 lib/mock-log.js       Mock 调用日志：按项目存的内存环形缓冲
+lib/mock-sse.js       SSE 示例的校验与回放
+lib/mock-ws.js        WebSocket 接口的 mock：挂在 upgrade 事件上按 mockPath 回放
 lib/executor.js       请求执行器：由服务端代发真实 HTTP 请求
 lib/ws-sessions.js    WebSocket 调试会话：连接上游、事件缓冲、生命周期回收
 lib/api/ndjson.js     NDJSON 流式响应：/send/stream 与 /ws/:id/events 共用
