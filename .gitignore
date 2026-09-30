@@ -8,3 +8,6 @@ routes.db
 routes.db-journal
 routes.db-wal
 routes.db-shm
+
+# 前端临时构建检查的产物（正式产物在 lib/web，是要入库的）
+web/dist-check
