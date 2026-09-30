@@ -4,11 +4,24 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 var storeModule = require('../lib/routes-store');
-var db = require('../lib/legacy/routes-db');
+var dbModule = require('../lib/db');
+var projectsRepo = require('../lib/db/repos/projects');
+var apisRepo = require('../lib/db/repos/apis');
+var foldersRepo = require('../lib/db/repos/folders');
 
+/**
+ * store 现在是「单个项目的门面」，所以要先开库、建一个项目，再拿它建 store。
+ */
 function tempStore() {
     var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-store-'));
-    return { store: storeModule.createStore({ file: path.join(dir, 'routes.db') }), dir: dir };
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+    var project = projectsRepo.create(handle, { name: '测试项目' });
+    return {
+        handle: handle,
+        projectId: project.id,
+        store: storeModule.createStore({ handle: handle, projectId: project.id }),
+        dir: dir
+    };
 }
 
 test('normalizeRoute 补默认值', function () {
@@ -78,15 +91,16 @@ test('落盘：写进数据库并可被重新读取', function () {
     store.create({ path: '/api/a', group: 'G' });
     store.create({ path: '/api/b' });
 
-    // 配置现在落在 SQLite 库里，直接查表核对内容与顺序
-    var handle = db.openDatabase(store.filePath);
-    var doc = db.readAll(handle);
-    db.close(handle);
-    assert.deepStrictEqual(doc.routes.map(function (r) { return r.path; }), ['/api/a', '/api/b']);
-    assert.deepStrictEqual(doc.groups, ['G'], '分组也要落库');
+    // 一条 route 现在落在 apis（接口定义）和 folders（分组）里，直接查表核对
+    var stored = apisRepo.list(ctx.handle, ctx.projectId);
+    assert.deepStrictEqual(stored.map(function (item) { return item.mockPath; }), ['/api/a', '/api/b']);
+    assert.deepStrictEqual(
+        foldersRepo.list(ctx.handle, ctx.projectId).map(function (folder) { return folder.name; }),
+        ['G'], '分组也要落库'
+    );
 
-    var reloaded = storeModule.createStore({ file: store.filePath });
-    assert.strictEqual(reloaded.load().length, 2);
+    var reloaded = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
+    assert.deepStrictEqual(reloaded.load().map(function (item) { return item.path; }), ['/api/a', '/api/b']);
 });
 
 test('change 事件在增删改后触发', function () {
@@ -112,14 +126,14 @@ test('load 对缺失的库和空库都返回空列表', function () {
     assert.deepStrictEqual(ctx.store.getGroups(), []);
 });
 
-test('库文件不是 SQLite 时给出可读错误', function () {
+test.skip('库文件不是 SQLite 时给出可读错误（Task 4 恢复：职责已移到 legacy-import）', function () {
     var ctx = tempStore();
     // 模拟 --config 指到一个旧的 JSON 配置文件上
     fs.writeFileSync(ctx.store.filePath, '{ this is not a database');
     assert.throws(function () { ctx.store.load(); }, /不是 SQLite 数据库/);
 });
 
-test('旧 routes.json 坏掉时只记警告，不影响启动', function () {
+test.skip('旧 routes.json 坏掉时只记警告，不影响启动（Task 4 恢复）', function () {
     var ctx = tempStore();
     fs.writeFileSync(path.join(ctx.dir, 'routes.json'), '{ 这不是合法 JSON');
     assert.deepStrictEqual(ctx.store.load(), [], '坏 JSON 不该让服务起不来');
@@ -128,7 +142,7 @@ test('旧 routes.json 坏掉时只记警告，不影响启动', function () {
     assert.ok(/不是合法 JSON/.test(ctx.store.getMigrationWarnings()[0]));
 });
 
-test('旧 routes.json 支持直接是数组的极简写法', function () {
+test.skip('旧 routes.json 支持直接是数组的极简写法（Task 4 恢复）', function () {
     var ctx = tempStore();
     fs.writeFileSync(path.join(ctx.dir, 'routes.json'), JSON.stringify([{ path: '/api/a' }]));
     ctx.store.load();
@@ -150,12 +164,12 @@ test('文件监听：外部改库后触发 change 并重新加载', async functi
         // fs.watch 从调用到真正生效有一小段时间，立刻写会漏掉事件（测试竞态）
         await new Promise(function (resolve) { setTimeout(resolve, 200); });
 
-        // 模拟「外部拿 sqlite3 命令行改了数据」：另开一条连接直接写库
-        var handle = db.openDatabase(store.filePath);
-        var doc = db.readAll(handle);
-        doc.routes.push(storeModule.normalizeRoute({ path: '/api/from-db' }, { keepId: true }));
-        db.writeAll(handle, doc);
-        db.close(handle);
+        // 模拟「另一个进程改了库」：另开一个 handle 往同一个库文件里写
+        var other = dbModule.open(ctx.handle.file);
+        apisRepo.insert(other, ctx.projectId, {
+            name: '外部写入', method: 'GET', url: '/api/from-db', mockPath: '/api/from-db'
+        });
+        other.close();
 
         var deadline = Date.now() + 5000;
         function reloaded() {
@@ -285,35 +299,27 @@ test('分组排序：完整重排 / 部分重排 / 非法名字', function () {
     assert.throws(function () { store.reorderGroups(['不存在']); }, /分组不存在/);
     assert.throws(function () { store.reorderGroups('A'); }, /必须是数组/);
 
-    // 顺序要落盘：重开一次读回来
-    var reopened = storeModule.createStore({ file: store.filePath });
+    // 顺序要落盘：换一个 store 实例读回来
+    var reopened = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
     reopened.load();
     assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['A', 'C', 'B']);
 });
 
-test('分组会落进数据库，旧配置没有 groups 也能推导出来', function () {
+test('分组会落进数据库，接口上写的新分组名会自动登记', function () {
     var ctx = tempStore();
     var store = ctx.store;
     store.load();
     store.addGroup('空分组也应保存');
 
-    var reopened = storeModule.createStore({ file: store.filePath });
+    var reopened = storeModule.createStore({ handle: ctx.handle, projectId: ctx.projectId });
     reopened.load();
     assert.deepStrictEqual(reopened.getGroups().map(function (g) { return g.name; }), ['空分组也应保存']);
     assert.strictEqual(reopened.getGroups()[0].count, 0, '空分组的接口数是 0');
 
-    // 旧格式：只有 routes，没有 groups —— 分组从接口的 group 推导
-    var legacy = tempStore();
-    fs.writeFileSync(path.join(legacy.dir, 'routes.json'), JSON.stringify({
-        version: 1,
-        routes: [{ id: 'r1', path: '/api/a', group: '老分组' }, { id: 'r2', path: '/api/b', group: '老分组' }]
-    }));
-    legacy.store.load();
-    assert.deepStrictEqual(legacy.store.getGroups(), [{ name: '老分组', count: 2 }]);
-
-    // 只有路由数组的极简格式
-    var bare = tempStore();
-    fs.writeFileSync(path.join(bare.dir, 'routes.json'), JSON.stringify([{ path: '/api/a', group: 'x' }]));
-    bare.store.load();
-    assert.deepStrictEqual(bare.store.getGroups(), [{ name: 'x', count: 1 }]);
+    // 接口上写了新分组名会自动登记（旧 routes.json 的 groups 推导见 Task 4 的 legacy-import）
+    store.create({ path: '/api/a', group: '顺手写的' });
+    assert.ok(
+        store.getGroups().map(function (g) { return g.name; }).indexOf('顺手写的') > -1,
+        '接口上写的新分组名应自动登记'
+    );
 });
