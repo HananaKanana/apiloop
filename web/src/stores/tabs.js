@@ -1,10 +1,15 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as apisApi from '@/api/apis';
-import * as sendApi from '@/api/send';
+import * as streamApi from '@/api/stream';
 import * as historyApi from '@/api/history';
+import { createSseParser } from '@/utils/sse';
+import { byteLength } from '@/utils/bytes';
 
 let draftSeq = 0;
+
+/** 事件视图里最多保留多少条，超出就丢最旧的（契约第 14 节的调试视图） */
+const MAX_SSE_EVENTS = 2000;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -27,6 +32,25 @@ export function emptySpec() {
  */
 export function emptyOptions() {
   return { cookies: true, proxy: true };
+}
+
+/**
+ * 流式发送过程中的临时状态（契约第 14 节）。只活在这一次发送里，不落库、不进历史：
+ * - `head`：最后一跳的响应头，到了就立刻显示状态码和响应头；
+ * - `receivedBytes`：已经收到多少字节，非 SSE 的响应用它显示「接收中… N KB」，
+ *   不把 chunk 一段段拼进 DOM；
+ * - `sseEvents`：content-type 是 text/event-stream 时才有，非 SSE 的响应保持 null
+ *   （事件视图靠它决定显不显示）；
+ * - `cancelled`：用户点了「取消」，用来给一句提示（服务端照常记一条历史）。
+ */
+export function emptyLive() {
+  return {
+    head: null,
+    receivedBytes: 0,
+    sseEvents: null,
+    sseDropped: 0,
+    cancelled: false
+  };
 }
 
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
@@ -85,7 +109,7 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const data = await apisApi.getApi(apiId);
     const spec = specFromApi(data.api);
-    const tab = {
+    const tab = Object.assign({
       key: key,
       kind: 'api',
       apiId: apiId,
@@ -101,7 +125,7 @@ export const useTabsStore = defineStore('tabs', function () {
       missingVariables: [],
       sending: false,
       controller: null
-    };
+    }, emptyLive());
 
     tabs.value.push(tab);
     activeKey.value = key;
@@ -111,7 +135,7 @@ export const useTabsStore = defineStore('tabs', function () {
   function openDraft(folderId) {
     draftSeq += 1;
     const key = 'draft:' + draftSeq;
-    const tab = {
+    const tab = Object.assign({
       key: key,
       kind: 'draft',
       apiId: null,
@@ -127,7 +151,7 @@ export const useTabsStore = defineStore('tabs', function () {
       missingVariables: [],
       sending: false,
       controller: null
-    };
+    }, emptyLive());
 
     tabs.value.push(tab);
     activeKey.value = key;
@@ -162,7 +186,7 @@ export const useTabsStore = defineStore('tabs', function () {
         (result && result.response && result.response.historyTruncated)
     );
 
-    const tab = {
+    const tab = Object.assign({
       key: key,
       kind: 'history',
       apiId: record.apiId || null,
@@ -180,11 +204,16 @@ export const useTabsStore = defineStore('tabs', function () {
       missingVariables: (result && result.missingVariables) || [],
       sending: false,
       controller: null
-    };
+    }, emptyLive());
 
     tabs.value.push(tab);
     activeKey.value = key;
     return tab;
+  }
+
+  /** 关标签页时把还在跑的请求 abort 掉，别让它在后台一直连着 */
+  function abortTab(tab) {
+    if (tab && tab.controller) tab.controller.abort();
   }
 
   function close(key) {
@@ -192,6 +221,7 @@ export const useTabsStore = defineStore('tabs', function () {
     if (index === -1) return;
 
     const wasActive = activeKey.value === key;
+    abortTab(tabs.value[index]);
     tabs.value.splice(index, 1);
 
     if (!wasActive) return;
@@ -200,6 +230,7 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function closeAll() {
+    tabs.value.forEach(abortTab);
     tabs.value = [];
     activeKey.value = '';
   }
@@ -231,41 +262,114 @@ export const useTabsStore = defineStore('tabs', function () {
     if (active.value) touch(active.value);
   }
 
+  function headerValue(headers, name) {
+    const target = String(name).toLowerCase();
+    let found = '';
+    (headers || []).forEach(function (pair) {
+      if (String(pair[0]).toLowerCase() === target) found = String(pair[1]);
+    });
+    return found;
+  }
+
+  function pushSseEvent(tab, item) {
+    const list = tab.sseEvents || (tab.sseEvents = []);
+    list.push({
+      time: Date.now(),
+      event: item.event,
+      data: item.data,
+      id: item.id,
+      size: byteLength(item.data)
+    });
+
+    const overflow = list.length - MAX_SSE_EVENTS;
+    if (overflow > 0) {
+      list.splice(0, overflow);
+      tab.sseDropped += overflow;
+    }
+  }
+
+  /**
+   * 发送。一律走流式接口（契约第 14 节），好处是 SSE 能实时看到、任何请求都能取消：
+   * - `head` 到了就先显示状态码和响应头；
+   * - `text/event-stream` 的响应边收边按 SSE 解析成事件（事件视图）；
+   * - 其他响应只累计字节数，不把 chunk 一段段拼进 DOM；
+   * - `end` 到了才把 result 交给响应面板。Cookie 写回和历史都由服务端在 `end` 之前做完。
+   */
   async function sendRequest(projectId, environmentId) {
     const tab = active.value;
     if (!tab || tab.sending) return;
 
-    tab.sending = true;
-    tab.sendError = '';
-    tab.result = null;
-    tab.missingVariables = [];
-    tab.controller = new AbortController();
+    Object.assign(tab, emptyLive(), {
+      sending: true,
+      sendError: '',
+      result: null,
+      historyId: null,
+      missingVariables: [],
+      controller: new AbortController()
+    });
+
+    // 只在确认是 SSE 之后才建解析器
+    const sse = { parser: null };
+
+    function onEvent(event) {
+      if (!event || !event.type) return;
+
+      if (event.type === 'head') {
+        tab.head = { response: event.response || null, redirects: event.redirects || [] };
+        const type = headerValue(event.response && event.response.headers, 'content-type');
+        if (type.toLowerCase().indexOf('text/event-stream') !== -1) {
+          tab.sseEvents = [];
+          sse.parser = createSseParser(function (item) { pushSseEvent(tab, item); });
+        }
+        return;
+      }
+
+      if (event.type === 'chunk') {
+        if (typeof event.text === 'string') {
+          tab.receivedBytes += byteLength(event.text);
+          if (sse.parser) sse.parser.push(event.text);
+        } else if (typeof event.base64 === 'string') {
+          // base64 每 4 个字符对应 3 个字节
+          tab.receivedBytes += Math.floor(event.base64.length * 3 / 4);
+        }
+        return;
+      }
+
+      if (event.type === 'end') {
+        if (sse.parser) sse.parser.end();
+        tab.result = event.result || null;
+        tab.historyId = event.historyId || null;
+        tab.missingVariables = (event.result && event.result.missingVariables) || [];
+      }
+    }
 
     try {
-      const data = await sendApi.send(
-        projectId,
+      await streamApi.postNdjson(
+        '/projects/' + encodeURIComponent(projectId) + '/send/stream',
         {
           request: clone(tab.spec),
           apiId: tab.apiId || undefined,
           environmentId: environmentId || undefined,
           options: clone(tab.options || emptyOptions())
         },
-        tab.controller.signal
+        { signal: tab.controller.signal, onEvent: onEvent }
       );
-      tab.result = data.result;
-      tab.historyId = data.historyId;
-      tab.missingVariables = (data.result && data.result.missingVariables) || [];
     } catch (err) {
-      tab.sendError = err.aborted ? '' : err.message;
+      if (err.aborted) {
+        // 用户主动取消：服务端照常记一条 ABORTED 历史，界面上给一句提示就够了
+        if (sse.parser) sse.parser.end();
+        tab.cancelled = true;
+      } else {
+        tab.sendError = err.message;
+      }
     } finally {
       tab.sending = false;
       tab.controller = null;
     }
   }
 
-  function cancelSend() {
-    const tab = active.value;
-    if (tab && tab.controller) tab.controller.abort();
+  function cancelSend(tab) {
+    abortTab(tab || active.value);
   }
 
   return {

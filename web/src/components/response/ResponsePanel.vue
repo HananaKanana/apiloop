@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   NAlert,
   NButton,
@@ -12,8 +12,10 @@ import {
 } from 'naive-ui';
 import BodyViewer from './BodyViewer.vue';
 import HeadersTable from './HeadersTable.vue';
+import SseEventsTable from './SseEventsTable.vue';
 import TimingsBar from './TimingsBar.vue';
 import { useUiStore } from '@/stores/ui';
+import { formatBytes } from '@/utils/bytes';
 
 /**
  * 响应面板。数据全部来自标签页上最近一次发送的结果。
@@ -44,6 +46,18 @@ const ERROR_TEXT = {
 
 const activeTab = ref('body');
 
+/**
+ * 收到的事件流是 SSE 时自动切到「事件」视图；下一次请求开始时事件列表被清空，
+ * 这时要切回 Body —— 否则会停在一个已经不存在的页签上。
+ */
+watch(
+  function () { return props.tab.sseEvents; },
+  function (list) {
+    if (list) activeTab.value = 'events';
+    else if (activeTab.value === 'events') activeTab.value = 'body';
+  }
+);
+
 const result = computed(function () {
   return props.tab.result;
 });
@@ -60,7 +74,33 @@ const request = computed(function () {
   return result.value ? result.value.request : null;
 });
 
+/**
+ * 流式发送时，`head` 事件一到就有响应头了 —— 状态码、响应头都能立刻显示，
+ * 不用等整个响应体下完。取消之后 result 始终是空的，这时候继续显示 head，
+ * 让用户至少能看到对方返回的状态码。
+ */
+const live = computed(function () {
+  if (result.value) return null;
+  return props.tab.head || null;
+});
+
+const liveResponse = computed(function () {
+  return live.value ? live.value.response : null;
+});
+
+/** 状态条上那一行响应信息：接收中看 head，结束后看 result */
+const statusLine = computed(function () {
+  return liveResponse.value || response.value;
+});
+
+/** 响应头表格的数据源：接收中用 head，结束后用 result */
+const displayHeaders = computed(function () {
+  if (liveResponse.value) return liveResponse.value.headers;
+  return response.value ? response.value.headers : null;
+});
+
 const redirects = computed(function () {
+  if (live.value) return live.value.redirects || [];
   return (result.value && result.value.redirects) || [];
 });
 
@@ -69,20 +109,13 @@ const proxy = computed(function () {
   return (result.value && result.value.proxy) || null;
 });
 
-function formatSize(bytes) {
-  if (!bytes && bytes !== 0) return '—';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1024 / 1024).toFixed(2) + ' MB';
-}
-
 function formatMs(value) {
   if (value === null || value === undefined) return '—';
   return Math.round(value) + ' ms';
 }
 
 const statusType = computed(function () {
-  const status = response.value ? response.value.status : 0;
+  const status = statusLine.value ? statusLine.value.status : 0;
   if (status >= 200 && status < 300) return 'success';
   if (status >= 400 && status < 500) return 'warning';
   if (status >= 500) return 'error';
@@ -118,12 +151,19 @@ function requestBodyText() {
     <n-spin :show="tab.sending">
       <div class="inner">
         <div class="status-bar">
-          <template v-if="response">
+          <template v-if="statusLine">
             <n-tag :type="statusType" size="small" :bordered="false">
-              {{ response.status }} {{ response.statusText }}
+              {{ statusLine.status }} {{ statusLine.statusText }}
             </n-tag>
-            <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
-            <span class="metric">大小 {{ formatSize(response.size) }}</span>
+
+            <!-- 接收中：只报进度，不报耗时/最终大小（都还没定） -->
+            <span v-if="tab.sending" class="metric">
+              接收中… {{ formatBytes(tab.receivedBytes) }}
+            </span>
+            <template v-else-if="result">
+              <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
+              <span class="metric">大小 {{ formatBytes(response.size) }}</span>
+            </template>
 
             <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
               经由代理 {{ proxy.url }}
@@ -146,6 +186,10 @@ function requestBodyText() {
 
           <template v-else-if="error">
             <n-tag type="error" size="small" :bordered="false">{{ error.code }}</n-tag>
+          </template>
+
+          <template v-else-if="tab.sending">
+            <span class="metric">正在连接…</span>
           </template>
 
           <template v-else>
@@ -182,6 +226,10 @@ function requestBodyText() {
           {{ tab.sendError }}
         </n-alert>
 
+        <n-alert v-if="tab.cancelled && !tab.sending" type="info" :show-icon="false" class="notice">
+          这次请求已经取消。服务端会照常记一条历史（状态是「已取消」），里面是断开前收到的部分。
+        </n-alert>
+
         <n-alert v-if="tab.historyTruncated" type="info" :show-icon="false" class="notice">
           这条历史里的响应体超过了 256 KB，落库时做了截断，下面是截断后的内容。
         </n-alert>
@@ -206,8 +254,13 @@ function requestBodyText() {
               <body-viewer v-if="response" :response="response" />
             </n-tab-pane>
 
-            <n-tab-pane name="headers" tab="Headers" :disabled="!response">
-              <headers-table v-if="response" :headers="response.headers" />
+            <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
+            <n-tab-pane v-if="tab.sseEvents" name="events" tab="事件">
+              <sse-events-table :events="tab.sseEvents" :dropped="tab.sseDropped || 0" />
+            </n-tab-pane>
+
+            <n-tab-pane name="headers" tab="Headers" :disabled="!displayHeaders">
+              <headers-table v-if="displayHeaders" :headers="displayHeaders" />
             </n-tab-pane>
 
             <n-tab-pane name="timings" tab="耗时" :disabled="!result">
@@ -230,7 +283,7 @@ function requestBodyText() {
           </n-tabs>
 
           <n-empty
-            v-if="!response && !error"
+            v-if="!response && !error && !tab.sending && !liveResponse"
             class="placeholder"
             size="small"
             description="点「发送」看结果"
