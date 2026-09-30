@@ -9,6 +9,7 @@ import ApiTree from '@/components/tree/ApiTree.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
+import AboutDialog from '@/components/layout/AboutDialog.vue';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
@@ -29,6 +30,7 @@ const dialog = useDialog();
 const leftWidth = ref(Number(localStorage.getItem('apiloop.treeWidth')) || 280);
 const collapsed = ref(false);
 const dragging = ref(false);
+const showAbout = ref(false);
 
 function clamp(value) {
   return Math.min(Math.max(value, MIN_WIDTH), MAX_WIDTH);
@@ -136,7 +138,7 @@ onBeforeUnmount(function () {
 
 <template>
   <div class="shell">
-    <top-bar>
+    <top-bar @about="showAbout = true">
       <template #project>
         <project-switcher @change="onProjectChange" />
       </template>
@@ -190,6 +192,7 @@ onBeforeUnmount(function () {
 
     <history-panel />
     <import-dialog />
+    <about-dialog v-model:show="showAbout" />
   </div>
 </template>
 
