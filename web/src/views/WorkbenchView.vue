@@ -10,6 +10,7 @@ import RequestTab from '@/components/request/RequestTab.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
+import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
@@ -152,6 +153,7 @@ onBeforeUnmount(function () {
         </n-tag>
         <n-button quaternary size="small" @click="ui.openImport()">导入</n-button>
         <n-button quaternary size="small" @click="ui.openHistory()">历史</n-button>
+        <n-button quaternary size="small" @click="ui.openMockLog()">Mock 日志</n-button>
         <n-button quaternary size="small" @click="collapsed = !collapsed">
           {{ collapsed ? '显示目录' : '隐藏目录' }}
         </n-button>
@@ -195,6 +197,7 @@ onBeforeUnmount(function () {
     </div>
 
     <history-panel />
+    <mock-log-drawer />
     <import-dialog />
     <about-dialog v-model:show="showAbout" />
   </div>
