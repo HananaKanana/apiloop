@@ -70,6 +70,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | 方法与路径 | 说明 |
 | --- | --- |
 | `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求 |
+| `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」 |
 | `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
 | `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果） |
 | `DELETE /projects/:pid/history` | 清空该项目的历史 |
@@ -83,6 +84,56 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `POST /import/postman` | 导入 collection / environment / globals；整个导入是一个事务 |
 | `GET /projects/:pid/export/postman` | 导出成 Postman Collection |
 | `GET /environments/:id/export/postman` | 导出成 Postman Environment |
+
+## HAR 导入（契约第 13 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /import/har/preview` | 解析并统计，不写库；`{ text, options?: { keepCredentials } }` |
+| `POST /import/har` | 导入；`{ text, projectId?, mode?: 'new'\|'into', options? }` |
+
+> 这两条路径的**请求体上限是 50MB**（HAR 经常几十 MB），管理台其他接口仍是 4MB。
+> 权限与 Postman 的 collection 导入一致：`new` 谁都能用（导完是 owner），`into` 要 editor，
+> 且「项目不存在」与「不是成员」返回**同一个 400**。**凭据默认不保留**，规则见
+> [README 的 HAR 导入一节](../README.md#har-导入)。
+
+## 流式发送与 WebSocket（契约第 14、15 节）
+
+| 方法与路径 | 权限 | 说明 |
+| --- | --- | --- |
+| `POST /projects/:pid/send/stream` | viewer | 请求体与 `/send` **完全相同**，响应是 NDJSON 事件流 |
+| `POST /projects/:pid/ws` | viewer | 建 WebSocket 会话，`{ spec: { url, params, auth }, environmentId?, options? }`，返回 `{ session: { id, url } }` |
+| `GET /ws/:id/events?after=<seq>` | 只有创建者 | NDJSON 长连接：先补发 `seq > after` 的缓冲事件，再持续推新事件 |
+| `POST /ws/:id/send` | 只有创建者 | `{ text }` 或 `{ base64 }`；连接没打开或已关闭时返回 **409** |
+| `DELETE /ws/:id` | 只有创建者 | 用 1000 关闭上游并立即销毁会话 |
+
+**`/send/stream` 的响应头**：`Content-Type: application/x-ndjson; charset=utf-8`、
+`Cache-Control: no-cache`、`X-Accel-Buffering: no`。开始流式输出**之前**出的错按普通 JSON 返回，
+状态码和文案与 `/send` 一致。
+
+```js
+{ type: 'head', response: { status, statusText, httpVersion, headers }, redirects }  // 最多一次
+{ type: 'chunk', text }            // 文本响应：是一段按 UTF-8 解码后的文本
+{ type: 'chunk', base64 }          // 二进制响应
+{ type: 'end', result, historyId } // 恰好一次，而且是最后一条
+```
+
+> `timeoutMs` 只到 `head` 为止，之后由客户端取消（断开连接即中止上游，历史照样记录）。
+> 重定向的中间几跳不发 `chunk`。
+
+**WebSocket 的事件**（同一个 `events` 连接上的 NDJSON，`seq` 在会话内从 1 递增）：
+
+```js
+{ seq, time, type: 'open', protocol, note? }                        // note 例如「系统代理不作用于 WebSocket，本次为直连」
+{ seq, time, type: 'message', direction: 'in'|'out', text?, base64?, size, truncated }
+{ seq, time, type: 'close', code, reason }
+{ seq, time, type: 'error', message }
+```
+
+> 每个会话最多缓冲最近 500 个事件，单条消息超过 64KB 的部分截断（`size` 仍是原始大小）。
+> 上游断开满 60 秒、或者没有任何 `events` 连接满 60 秒，会话就被回收。
+> **`/ws/:id/*` 三个路由不走项目权限 guard**：先按「会话 + 创建者」定位，再确认创建者仍是项目成员，
+> 任何一步不满足都返回同一个 404。
 
 ## Mock 期望与智能模板化（契约第 8、9 节）
 
