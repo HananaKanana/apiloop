@@ -48,10 +48,25 @@ const fileInput = ref(null);
 
 /* ---------------- Postman ---------------- */
 
+/**
+ * 从文件读进来的内容**放在普通变量里，不进 ref**。
+ *
+ * 原因：它同时绑在带 `autosize` 的 textarea 上时，浏览器要把整段文本塞进 DOM，
+ * naive-ui 还会复制一份到隐藏元素去量高度 —— 几十 MB 的 HAR 会让界面卡死。
+ * 所以选了文件就只显示「文件名（大小）」+ 清除，文本框只留给粘贴用。
+ */
+let postmanFileText = null;
+
 const postmanText = ref('');
+const postmanFileInfo = ref('');
 const postmanPreview = ref(null);
 const postmanMode = ref('new');
 const postmanBusy = ref(false);
+
+/** 发送时取「文件内容」或「粘贴的内容」，两者只有一个会有值 */
+function postmanPayload() {
+  return postmanFileText === null ? postmanText.value : postmanFileText;
+}
 
 async function pickPostmanFile() {
   if (fileInput.value) {
@@ -64,22 +79,30 @@ async function onPostmanFile(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   try {
-    postmanText.value = await readFileAsText(file);
+    postmanFileText = await readFileAsText(file);
+    postmanFileInfo.value = file.name;
+    postmanText.value = '';
     postmanPreview.value = null;
   } catch (err) {
     message.error(err.message);
   }
 }
 
+function clearPostmanFile() {
+  postmanFileText = null;
+  postmanFileInfo.value = '';
+  postmanPreview.value = null;
+}
+
 async function parsePostman() {
-  if (!postmanText.value.trim()) {
+  if (!postmanPayload().trim()) {
     message.warning('请粘贴 JSON，或者选择一个文件');
     return;
   }
 
   postmanBusy.value = true;
   try {
-    postmanPreview.value = await importExportApi.previewPostman(postmanText.value);
+    postmanPreview.value = await importExportApi.previewPostman(postmanPayload());
     postmanMode.value = 'new';
   } catch (err) {
     postmanPreview.value = null;
@@ -92,7 +115,7 @@ async function parsePostman() {
 async function runPostmanImport() {
   postmanBusy.value = true;
   try {
-    const data = await importExportApi.importPostman(postmanText.value, {
+    const data = await importExportApi.importPostman(postmanPayload(), {
       mode: postmanMode.value,
       projectId: postmanMode.value === 'into' ? projects.currentId : undefined
     });
@@ -107,8 +130,8 @@ async function runPostmanImport() {
 
     message.success('导入完成');
     visible.value = false;
+    clearPostmanFile();
     postmanText.value = '';
-    postmanPreview.value = null;
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -181,13 +204,25 @@ async function importParsed(routes) {
 /** 服务端给 /import/har 放宽到 50MB；比这更大的就不发了，省得白传一趟 */
 const HAR_MAX_BYTES = 50 * 1024 * 1024;
 
+/**
+ * 从文件读进来的 HAR 文本**放在普通变量里，不进 ref**（理由见上面 Postman 那段）：
+ * 几十 MB 的文本一旦绑到带 autosize 的 textarea 上，界面就会卡死。
+ * 选中文件之后文本框整个隐藏，只显示「文件名（大小）」和清除按钮。
+ */
+let harFileText = null;
+
 const harText = ref('');
+const harFileInfo = ref('');
 const harPreview = ref(null);
 const harMode = ref('new');
 const harBusy = ref(false);
 const harKeepCredentials = ref(false);
-const harFileInfo = ref('');
 const harFileInput = ref(null);
+
+/** 发送时取「文件内容」或「粘贴的内容」，两者只有一个会有值 */
+function harPayload() {
+  return harFileText === null ? harText.value : harFileText;
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -215,23 +250,30 @@ async function onHarFile(event) {
   try {
     // FileReader 直接读成文本。**不要先 parse 成对象再序列化一遍** ——
     // 几十 MB 的对象走一遍 JSON.stringify 会明显卡住界面，而那份对象没有任何用处。
-    harText.value = await readFileAsText(file);
+    harFileText = await readFileAsText(file);
     harFileInfo.value = file.name + '（' + formatBytes(file.size) + '）';
+    harText.value = '';
     harPreview.value = null;
   } catch (err) {
     message.error(err.message);
   }
 }
 
+function clearHarFile() {
+  harFileText = null;
+  harFileInfo.value = '';
+  harPreview.value = null;
+}
+
 async function parseHar() {
-  if (!harText.value.trim()) {
+  if (!harPayload().trim()) {
     message.warning('请粘贴 HAR 内容，或者选择一个文件');
     return;
   }
 
   harBusy.value = true;
   try {
-    harPreview.value = await importExportApi.previewHar(harText.value, {
+    harPreview.value = await importExportApi.previewHar(harPayload(), {
       keepCredentials: harKeepCredentials.value
     });
     harMode.value = 'new';
@@ -244,15 +286,16 @@ async function parseHar() {
 }
 
 function resetHar() {
+  harFileText = null;
   harText.value = '';
-  harPreview.value = null;
   harFileInfo.value = '';
+  harPreview.value = null;
 }
 
 async function runHarImport() {
   harBusy.value = true;
   try {
-    const data = await importExportApi.importHar(harText.value, {
+    const data = await importExportApi.importHar(harPayload(), {
       mode: harMode.value,
       projectId: harMode.value === 'into' ? projects.currentId : undefined,
       options: { keepCredentials: harKeepCredentials.value }
@@ -298,10 +341,18 @@ function routeLabel(route) {
         <div class="pane">
           <n-space align="center" :size="8">
             <n-button size="small" @click="pickPostmanFile">选择文件…</n-button>
-            <span class="hint">或者直接把 JSON 粘在下面</span>
+            <template v-if="postmanFileInfo">
+              <span class="hint">{{ postmanFileInfo }}</span>
+              <n-button size="small" quaternary @click="clearPostmanFile">清除</n-button>
+            </template>
+            <span v-else class="hint">或者直接把 JSON 粘在下面</span>
           </n-space>
 
+          <!-- 选了文件就不再渲染文本框：整段文件内容塞进带 autosize 的 textarea 时，
+               浏览器要把它放进 DOM，naive-ui 还会复制一份到隐藏元素去量高度 ——
+               几十 MB 的文件足以让界面卡死。 -->
           <n-input
+            v-if="!postmanFileInfo"
             v-model:value="postmanText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
@@ -450,11 +501,17 @@ function routeLabel(route) {
         <div class="pane">
           <n-space align="center" :size="8">
             <n-button size="small" @click="pickHarFile">选择文件…</n-button>
-            <span v-if="harFileInfo" class="hint">{{ harFileInfo }}</span>
+            <template v-if="harFileInfo">
+              <span class="hint">{{ harFileInfo }}</span>
+              <n-button size="small" quaternary @click="clearHarFile">清除</n-button>
+            </template>
             <span v-else class="hint">或者直接把 JSON 粘在下面（50MB 以内）</span>
           </n-space>
 
+          <!-- 选了文件就不再渲染文本框，理由同 Postman 页签：HAR 常有几十 MB，
+               绑到带 autosize 的 textarea 上会把界面卡死。 -->
           <n-input
+            v-if="!harFileInfo"
             v-model:value="harText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
