@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { NButton, NDropdown, NIcon, NInput, NTag, useDialog, useMessage } from 'naive-ui';
-import { ChevronDown } from '@vicons/tabler';
+import { Dots } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
@@ -58,7 +58,21 @@ function resetDraft() {
   draftVariables.value = saved ? JSON.parse(JSON.stringify(saved.variables || [])) : [];
 }
 
-watch(env, resetDraft, { immediate: true });
+/**
+ * 只在**内容真的变了**的时候重灌草稿。
+ * 不能直接 `watch(env)`：`envs.create()` / `envs.remove()` 内部都会 `load()`，
+ * 把 `environments` 整个换成新对象 —— 那样每开着一个环境标签页都会被重置，
+ * 没保存的修改被悄悄清掉、未保存圆点也跟着没了。
+ * 自己保存成功时服务端返回的内容变了，这个 watch 照常会触发。
+ */
+watch(
+  function () {
+    const saved = env.value;
+    return saved ? JSON.stringify({ name: saved.name, variables: saved.variables || [] }) : '';
+  },
+  resetDraft,
+  { immediate: true }
+);
 
 // 标签页标题跟着名字走（改名时标签上立刻能看出来）
 watch(draftName, function (value) {
@@ -177,10 +191,13 @@ function removeEnv() {
 }
 
 const menuOptions = computed(function () {
-  if (!canEdit.value) return [];
+  const exportItem = { label: '导出为 Postman 环境', key: 'export' };
+  // viewer 只读，但导出是看数据、不改数据 —— 原来那个弹窗里 viewer 也是能导出的
+  if (!canEdit.value) return [exportItem];
+
   return [
     { label: '复制环境', key: 'duplicate' },
-    { label: '导出为 Postman 环境', key: 'export' },
+    exportItem,
     { type: 'divider', key: 'd1' },
     { label: '删除环境', key: 'delete', props: { style: 'color: #eb2013' } }
   ];
@@ -205,7 +222,7 @@ function onMenuSelect(key) {
         @update:value="(v) => { draftName = v; }"
       />
 
-      <n-tag v-if="isCurrent" size="small" :bordered="false" type="success">当前</n-tag>
+      <n-tag v-if="isCurrent" size="small" :bordered="false">当前</n-tag>
       <n-button v-else-if="canEdit" size="small" quaternary @click="setCurrent">设为当前</n-button>
 
       <span class="spacer" />
@@ -220,10 +237,10 @@ function onMenuSelect(key) {
         保存
       </n-button>
 
-      <n-dropdown v-if="canEdit" trigger="click" :options="menuOptions" @select="onMenuSelect">
+      <n-dropdown trigger="click" :options="menuOptions" @select="onMenuSelect">
         <n-button size="small" quaternary title="更多">
           <template #icon>
-            <n-icon :component="ChevronDown" />
+            <n-icon :component="Dots" />
           </template>
         </n-button>
       </n-dropdown>
