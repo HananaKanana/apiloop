@@ -58,9 +58,9 @@ const rows = computed(function () {
   });
 });
 
+/** 选完不收起：面板下半截马上换成新环境的变量，用户要看一眼确认（点外面再关） */
 function select(id) {
   envs.select(id);
-  show.value = false;
 }
 
 function editCurrent() {
