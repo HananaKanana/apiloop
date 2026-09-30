@@ -11,10 +11,10 @@ web/
   vite.config.js    root 是 web/，产物落到 ../lib/web，资源目录 __apiloop
   src/
     api/            fetch 封装与按契约分组的接口调用
-    stores/         Pinia：session、project、env、tree、tabs、ui
-    components/     layout / tree / request / response / mock / history / importExport / common
+    stores/         Pinia：session、project、env、tree、tabs、ws、ui
+    components/     layout / tree / request / response / mock / history / importExport / ws / common
     views/          LoginView、WorkbenchView、UsersView、ProjectSettingsView
-    utils/          树组装、下载、提示弹窗
+    utils/          树组装、下载、提示弹窗、SSE 解析
 ```
 
 ## 开发
@@ -69,7 +69,11 @@ rm -rf web/dist-check
 - **亮暗色跟随系统**（Naive UI 的 `useOsTheme`），所以自定义样式里不要写死背景色，
   用 `var(--n-border-color, ...)` 这类变量或者半透明色。
 - 当前项目存在 `localStorage.apiloop.project`，每个项目选中的环境存在
-  `apiloop.env.<项目 id>`；这些是界面状态，服务端不存。
+  `apiloop.env.<项目 id>`，WebSocket 标签页最近用过的地址存在
+  `apiloop.ws.<项目 id>`；这些是界面状态，服务端不存。
+- **发送请求一律走 `POST /send/stream`**（`api/stream.js` 读 NDJSON），
+  `POST /send` 服务端保留但管理台不用了 —— 只有流式那条路才能一边下一边显示、
+  并且随时可以取消。WebSocket 的 `events` 长连接用的是同一个读取函数。
 
 ## 接口契约
 

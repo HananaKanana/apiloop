@@ -5,8 +5,10 @@ import * as streamApi from '@/api/stream';
 import * as historyApi from '@/api/history';
 import { createSseParser } from '@/utils/sse';
 import { byteLength } from '@/utils/bytes';
+import { useWsStore } from '@/stores/ws';
 
 let draftSeq = 0;
+let wsSeq = 0;
 
 /** 事件视图里最多保留多少条，超出就丢最旧的（契约第 14 节的调试视图） */
 const MAX_SSE_EVENTS = 2000;
@@ -51,6 +53,14 @@ export function emptyLive() {
     sseDropped: 0,
     cancelled: false
   };
+}
+
+/**
+ * WebSocket 调试标签页的请求内容（契约第 15 节）。没有路径参数和请求体：
+ * 地址、请求头、query、鉴权就是全部。
+ */
+export function emptyWsSpec() {
+  return { url: '', params: { headers: [], query: [] }, auth: null };
 }
 
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
@@ -158,6 +168,36 @@ export const useTabsStore = defineStore('tabs', function () {
     return tab;
   }
 
+  /**
+   * 新建一个 WebSocket 调试标签页。它**不进目录树**，所以没有 apiId，
+   * 也不参与 dirty / 保存那一套。
+   */
+  function openWs() {
+    wsSeq += 1;
+    const key = 'ws:' + wsSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'ws',
+      apiId: null,
+      folderId: null,
+      title: 'WebSocket',
+      spec: emptyWsSpec(),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
   function activate(key) {
     activeKey.value = key;
   }
@@ -216,12 +256,21 @@ export const useTabsStore = defineStore('tabs', function () {
     if (tab && tab.controller) tab.controller.abort();
   }
 
+  /**
+   * WebSocket 标签页要连带把服务端的会话销毁掉（DELETE /ws/:id）。
+   * 切换项目时 ProjectSwitcher 会 closeAll，所以这条路径也一起覆盖了。
+   */
+  function dropTab(tab) {
+    abortTab(tab);
+    if (tab && tab.kind === 'ws') useWsStore().closeFor(tab.key);
+  }
+
   function close(key) {
     const index = tabs.value.findIndex(function (tab) { return tab.key === key; });
     if (index === -1) return;
 
     const wasActive = activeKey.value === key;
-    abortTab(tabs.value[index]);
+    dropTab(tabs.value[index]);
     tabs.value.splice(index, 1);
 
     if (!wasActive) return;
@@ -230,7 +279,7 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function closeAll() {
-    tabs.value.forEach(abortTab);
+    tabs.value.forEach(dropTab);
     tabs.value = [];
     activeKey.value = '';
   }
@@ -379,6 +428,7 @@ export const useTabsStore = defineStore('tabs', function () {
     hasDirty: hasDirty,
     openApi: openApi,
     openDraft: openDraft,
+    openWs: openWs,
     openHistory: openHistory,
     activate: activate,
     close: close,
