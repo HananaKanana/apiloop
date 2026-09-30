@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { NCheckbox, NIcon, NInput, NSelect } from 'naive-ui';
 import { Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME, BARE_SELECT_THEME } from '@/utils/bareInput';
@@ -23,6 +23,68 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+
+/* ---------------- 变量名那一列的宽度，可以拖 ---------------- */
+
+/**
+ * 表头「变量名」右边缘可以左右拖，宽度记进 localStorage（所有变量表共用一份）。
+ * 没拖过就是 28%。
+ */
+const KEY_WIDTH_KEY = 'apiloop.varTable.keyWidth';
+const MIN_KEY = 80;
+/** 其余几列的固定宽度（勾选 32 + 类型 92 + 删除 40），再给「值」至少留 120 */
+const FIXED_COLS = 32 + 92 + 40;
+const MIN_VALUE = 120;
+
+function readKeyWidth() {
+  try {
+    const value = Number(localStorage.getItem(KEY_WIDTH_KEY));
+    if (value >= MIN_KEY) return value;
+  } catch (err) {
+    // 读不到就用默认的百分比
+  }
+  return 0;
+}
+
+const tableRef = ref(null);
+const keyWidth = ref(readKeyWidth());
+let resizeStart = null;
+
+const tableStyle = computed(function () {
+  return { '--var-key': keyWidth.value ? keyWidth.value + 'px' : '28%' };
+});
+
+function startResize(event) {
+  const cell = event.target.parentElement;
+  resizeStart = { x: event.clientX, width: cell.getBoundingClientRect().width };
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'col-resize';
+  window.addEventListener('mousemove', onResize);
+  window.addEventListener('mouseup', stopResize);
+}
+
+function onResize(event) {
+  if (!resizeStart || !tableRef.value) return;
+  const max = tableRef.value.clientWidth - FIXED_COLS - MIN_VALUE;
+  const next = resizeStart.width + event.clientX - resizeStart.x;
+  keyWidth.value = Math.round(Math.max(MIN_KEY, Math.min(next, max)));
+}
+
+function stopResize() {
+  if (!resizeStart) return;
+  resizeStart = null;
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  window.removeEventListener('mousemove', onResize);
+  window.removeEventListener('mouseup', stopResize);
+  try {
+    localStorage.setItem(KEY_WIDTH_KEY, String(keyWidth.value));
+  } catch (err) {
+    // 存不下就算了，这次还是好用的
+  }
+}
+
+onBeforeUnmount(stopResize);
 
 /** 「类型」那一列：和 Postman 的 default / secret 对应 */
 const TYPE_OPTIONS = [
@@ -92,10 +154,14 @@ function removeRow(index) {
 </script>
 
 <template>
-  <div class="var-table">
+  <div ref="tableRef" class="var-table" :style="tableStyle">
     <div class="row head">
       <div class="cell check" />
-      <div class="cell key">变量名</div>
+      <div class="cell key">
+        变量名
+        <!-- 拖这条竖线调「变量名」这一列的宽度 -->
+        <span class="col-resizer" title="拖动调整列宽" @mousedown.prevent="startResize" />
+      </div>
       <div class="cell type">类型</div>
       <div class="cell value">值</div>
       <div class="cell action" />
@@ -128,6 +194,17 @@ function removeRow(index) {
         />
       </div>
 
+      <div class="cell type">
+        <n-select
+          size="small"
+          :value="item.row.secret ? 'secret' : 'default'"
+          :options="TYPE_OPTIONS"
+          :disabled="disabled"
+          :theme-overrides="BARE_SELECT_THEME"
+          @update:value="(v) => { updateRow(item.index, { secret: v === 'secret' }); }"
+        />
+      </div>
+
       <div class="cell value">
         <n-input
           size="small"
@@ -138,17 +215,6 @@ function removeRow(index) {
           :theme-overrides="BARE_INPUT_THEME"
           placeholder="值"
           @update:value="(v) => { updateRow(item.index, { value: v }); }"
-        />
-      </div>
-
-      <div class="cell type">
-        <n-select
-          size="small"
-          :value="item.row.secret ? 'secret' : 'default'"
-          :options="TYPE_OPTIONS"
-          :disabled="disabled"
-          :theme-overrides="BARE_SELECT_THEME"
-          @update:value="(v) => { updateRow(item.index, { secret: v === 'secret' }); }"
         />
       </div>
 
@@ -172,7 +238,8 @@ function removeRow(index) {
  * 格子里的输入框没有边框和底色。列宽写在一个变量里，改列只改一处。
  */
 .var-table {
-  --var-cols: 32px minmax(0, 28%) 92px minmax(0, 1fr) 40px;
+  /* 列顺序：勾选 | 变量名 | 类型 | 值 | 删除。表头和每一行都必须按这个顺序排格子 */
+  --var-cols: 32px minmax(0, var(--var-key, 28%)) 92px minmax(0, 1fr) 40px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
   border-radius: 4px;
   overflow: hidden;
@@ -232,6 +299,25 @@ function removeRow(index) {
 .row.off .cell.key,
 .row.off .cell.value {
   opacity: 0.5;
+}
+
+.row.head .cell.key {
+  position: relative;
+}
+
+/* 表头「变量名」右边缘那条拖动线：平时看不见，鼠标上去才显色 */
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  z-index: 1;
+  cursor: col-resize;
+}
+
+.col-resizer:hover {
+  background: var(--apiloop-primary);
 }
 
 .delete-button {
