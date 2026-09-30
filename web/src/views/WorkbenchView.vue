@@ -1,12 +1,15 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { NButton, NEmpty, useMessage } from 'naive-ui';
+import { NButton, NEmpty, useDialog, useMessage } from 'naive-ui';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import ApiTree from '@/components/tree/ApiTree.vue';
+import RequestTab from '@/components/request/RequestTab.vue';
 import { useProjectStore } from '@/stores/project';
+import { useTreeStore } from '@/stores/tree';
+import { useTabsStore } from '@/stores/tabs';
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 640;
@@ -14,7 +17,10 @@ const COLLAPSE_BREAKPOINT = 1024;
 
 const router = useRouter();
 const projects = useProjectStore();
+const tree = useTreeStore();
+const tabs = useTabsStore();
 const message = useMessage();
+const dialog = useDialog();
 
 const leftWidth = ref(Number(localStorage.getItem('apiloop.treeWidth')) || 280);
 const collapsed = ref(false);
@@ -48,6 +54,13 @@ function onResize() {
   if (window.innerWidth < COLLAPSE_BREAKPOINT) collapsed.value = true;
 }
 
+/** 有没保存的标签页时，刷新页面要先问一句 */
+function onBeforeUnload(event) {
+  if (!tabs.hasDirty) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 function onProjectChange(id) {
   if (id === '__settings') {
     if (projects.currentId) {
@@ -58,19 +71,47 @@ function onProjectChange(id) {
   // 切了项目：环境由 EnvSwitcher 的 watcher 重新拉，目录树由 ApiTree 的 watcher 重新拉
 }
 
-// 打开接口 / 新建接口交给 Task 4 的标签页接管
-function onOpenApi(api) {
-  void api;
+async function onOpenApi(api) {
+  try {
+    await tabs.openApi(api.id);
+  } catch (err) {
+    message.error(err.message);
+  }
 }
 
 function onNewApi(folderId) {
-  void folderId;
+  tabs.openDraft(folderId);
 }
+
+function closeTab(tab) {
+  if (!tab.dirty) {
+    tabs.close(tab.key);
+    return;
+  }
+
+  dialog.warning({
+    title: '关闭标签页',
+    content: '「' + tab.title + '」有没保存的修改，关掉就没了。确定关闭吗？',
+    positiveText: '关闭',
+    negativeText: '取消',
+    onPositiveClick: function () { tabs.close(tab.key); }
+  });
+}
+
+// 接口被删掉之后，把对应的标签页收掉，别留着一个点开就报错的页
+watch(
+  function () { return tree.apis; },
+  function (list) {
+    if (!list) return;
+    tabs.syncWithApis(list.map(function (api) { return api.id; }));
+  }
+);
 
 onMounted(async function () {
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', stopDrag);
   window.addEventListener('resize', onResize);
+  window.addEventListener('beforeunload', onBeforeUnload);
   onResize();
 
   try {
@@ -84,6 +125,7 @@ onBeforeUnmount(function () {
   window.removeEventListener('mousemove', onMove);
   window.removeEventListener('mouseup', stopDrag);
   window.removeEventListener('resize', onResize);
+  window.removeEventListener('beforeunload', onBeforeUnload);
   stopDrag();
 });
 </script>
@@ -117,8 +159,25 @@ onBeforeUnmount(function () {
       />
 
       <main class="right">
-        <div class="pane-placeholder">
-          <n-empty description="请求编辑器" size="small" />
+        <div v-if="tabs.tabs.length" class="tab-bar">
+          <div
+            v-for="tab in tabs.tabs"
+            :key="tab.key"
+            class="tab-item"
+            :class="{ active: tab.key === tabs.activeKey }"
+            @click="tabs.activate(tab.key)"
+          >
+            <span v-if="tab.dirty" class="dot" title="有没保存的修改" />
+            <span class="tab-title">{{ tab.title }}</span>
+            <span class="tab-close" title="关闭" @click.stop="closeTab(tab)">×</span>
+          </div>
+        </div>
+
+        <div class="tab-body">
+          <request-tab v-if="tabs.active" :key="tabs.activeKey" :tab="tabs.active" />
+          <div v-else class="placeholder">
+            <n-empty description="从左边选一个接口，或者点目录树右上角的 ＋ 新建请求" />
+          </div>
         </div>
       </main>
     </div>
@@ -171,7 +230,71 @@ onBeforeUnmount(function () {
   overflow: hidden;
 }
 
-.pane-placeholder {
+.tab-bar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.tab-item {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
+  max-width: 220px;
+  font-size: 12px;
+  cursor: pointer;
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+  white-space: nowrap;
+}
+
+.tab-item:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.tab-item.active {
+  background: var(--n-color, #fff);
+  box-shadow: inset 0 -2px 0 var(--n-primary-color, #2080f0);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f0a020;
+}
+
+.tab-close {
+  flex: none;
+  opacity: 0.45;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tab-close:hover {
+  opacity: 1;
+}
+
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.placeholder {
   flex: 1;
   display: flex;
   align-items: center;

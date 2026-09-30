@@ -1,14 +1,20 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, watch } from 'vue';
 import { NButton, NDropdown } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
+import { useUiStore } from '@/stores/ui';
 import EnvManagerModal from './EnvManagerModal.vue';
 
 const projects = useProjectStore();
 const envs = useEnvStore();
+const ui = useUiStore();
 
-const showManager = ref(false);
+// 响应面板里「变量未定义 → 去环境管理」也走这个开关
+const showManager = computed({
+  get: function () { return ui.envManagerVisible; },
+  set: function (value) { ui.envManagerVisible = value; }
+});
 
 // 项目一换，这个项目的环境就重新拉一遍（每个项目各自记着自己上次选的那个）
 watch(
