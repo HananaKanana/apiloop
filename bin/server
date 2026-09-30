@@ -9,13 +9,14 @@ var chalk = require('chalk');
 var yargs = require('yargs/yargs');
 var hideBin = require('yargs/helpers').hideBin;
 
-var VALID_COMMANDS = ['start', 'init', 'open', 'web'];
+var VALID_COMMANDS = ['start', 'init', 'open', 'web', 'user'];
 
 var COMMANDS = {
     open: 'Start a web server and open html file in your browser, if any',
     start: 'Start a web server',
     web: 'Start a web server with the visual mock console at /index.html',
-    init: 'Create the sample files: router.js and the sample routes database'
+    init: 'Create the sample router.js and seed the sample project',
+    user: 'Manage users: add / list / reset-password'
 };
 
 /**
@@ -28,23 +29,39 @@ var EXAMPLES = {
         ['--public=public', 'set the static file path, the default is the current folder'],
         ['--views=views', 'set the template path, the default is the current folder'],
         ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs'],
-        ['--config=routes.json', 'set the mock routes config file, default routes.json']
+        ['--db=~/.apiloop/data.db', 'set the database file, default ~/.apiloop/data.db'],
+        ['--host=0.0.0.0', 'set the listen address, default 127.0.0.1'],
+        ['--project=my-project', 'use this project as the root project, by slug'],
+        ['--config=routes.json', 'import this legacy config file on first run']
     ],
     web: [
         ['--port=3000', 'set server port, default 8080'],
         ['--public=public', 'set the static file path, the default is the current folder'],
         ['--views=views', 'set the template path, the default is the current folder'],
         ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs'],
-        ['--config=mock/routes.json', 'set the mock routes config file, default routes.json']
+        ['--db=~/.apiloop/data.db', 'set the database file, default ~/.apiloop/data.db'],
+        ['--host=0.0.0.0', 'set the listen address, default 127.0.0.1'],
+        ['--project=my-project', 'use this project as the root project, by slug'],
+        ['--config=routes.json', 'import this legacy config file on first run']
     ],
     open: [
         ['--port=3000', 'set server port, default 8080'],
         ['--public=public', 'set the static file path, the default is the current folder'],
         ['--views=views', 'set the template path, the default is the current folder'],
         ['--tpl=ejs', 'set the template type, support ejs, pug'],
-        ['--config=routes.json', 'set the mock routes config file, default routes.json']
+        ['--db=~/.apiloop/data.db', 'set the database file, default ~/.apiloop/data.db'],
+        ['--host=0.0.0.0', 'set the listen address, default 127.0.0.1'],
+        ['--project=my-project', 'use this project as the root project, by slug'],
+        ['--config=routes.json', 'import this legacy config file on first run']
     ],
-    init: []
+    init: [],
+    user: [
+        ['add <username>', 'create a user and print a one-time password'],
+        ['add <username> --admin', 'create an admin'],
+        ['add <username> --password hello123', 'create a user with a given password'],
+        ['list', 'list users'],
+        ['reset-password <username>', 'reset a user password']
+    ]
 };
 
 /**
