@@ -87,6 +87,17 @@ web/                  Vue 源码；sample/ test/ docs/
 - **测试**：`npm test` → `node --test --test-timeout=30000 test/*.test.js`，**基线 71 全绿**。
   测试不能碰真实的 `~/.apiloop`：启动 CLI 的用例都要传 `--db <临时目录>` + `APILOOP_ADMIN_PASSWORD`。
   **本项目约定「不写新测试」**：审阅用的一次性探测脚本放 `/tmp`，跑完删掉，不进仓库。
+  **覆盖很薄**：`/send`、`/send/stream`、`/ws/*` 一条用例都没有，全靠一次性脚本。所以
+  「npm test 全绿」**不能**用来证明某条接口行为没变 —— 用下面的「干净副本 + 双跑对比」。
+- **干净副本 + 双跑对比**（改动声称「行为不变」时用它，不必 stash）：
+  `git archive HEAD | tar -x -C /tmp/before`，同一份探测脚本分别指向副本和当前工作区，
+  归一化后 `diff`。两处注意：副本里没有 `node_modules`，子进程要带
+  `NODE_PATH=<工作区>/node_modules`；归一化要剔掉 `timings`、`Date` 响应头、以及**错误信息里的
+  临时端口号**（不做替换会 diff 出一行假差异）。
+- **量内存要在被测进程内部读** `process.memoryUsage().rss`：沙箱里 `/bin/ps` 是
+  `operation not permitted`，`execSync` 会抛；而它抛在定时器回调里会让驱动进程直接死掉，
+  **子进程变成孤儿占着 stdout 管道**，外层 `| tail` 于是永远等下去 —— 表现成「跑了很久没结果」，
+  极难定位。所以：被测进程自己上报 RSS，并且子进程里加一条「`process.ppid` 变了就自己退出」。
 - **登录**：`/__admin/api/*` 全部要求登录，只有 `/auth/login` 公开。密码 scrypt 加盐哈希，会话只存 token 的
   sha256，cookie `apiloop_sid` = `HttpOnly; SameSite=Lax`。连续 5 次登录失败锁该用户名 60 秒。禁用用户会
   立刻踢掉他的会话。
@@ -202,6 +213,12 @@ web/                  Vue 源码；sample/ test/ docs/
   才组装 `response`，abort 时 `response` 是 null。按审阅重点第 1 条（`/send` 的历史保持原样）
   没有改；README 的已知限制里写明了。要改得在 `readResponse` 里维护已收到的 chunks，并在
   `abortWith` 里组装部分 response。
+- **流式转发必须有背压**（M1，`9d0c11a`）：`onHead(head, controls)` 的第二个参数是
+  `{ pause(), resume() }`，作用在 `readResponse` 里**解压之后**的 `source` 上（所以建 source
+  的代码在调 onHead 之前）。`/send/stream` 在 `res.write` 返回 false 时 pause、
+  `res.once('drain')` 再 resume。**只 pause 一次**（`waitingForDrain` 标记）—— 暂停期间还有
+  在途 chunk，重复 pause/resume 会让 drain 的配对错位。没有背压时实测 300MB 场景 RSS
+  涨 328.5MB，有了之后只涨 2.6MB。**只要往流式接口里加「全部转发」的东西，就要同时想背压。**
 
 ## 变量与鉴权继承（契约第 5 节第 1、2 步）
 
