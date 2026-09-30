@@ -123,6 +123,20 @@ watch(
     createView();
   }
 );
+
+/** 在光标处插入一段文本（「插入 Mock 字段」用），插完把焦点还给编辑器 */
+function insertAtCursor(text) {
+  if (!view || props.readonly) return;
+
+  const range = view.state.selection.main;
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert: text },
+    selection: { anchor: range.from + text.length }
+  });
+  view.focus();
+}
+
+defineExpose({ insertAtCursor: insertAtCursor });
 </script>
 
 <template>

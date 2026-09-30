@@ -22,6 +22,7 @@ import UrlBar from './UrlBar.vue';
 import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
 import ScriptsView from './ScriptsView.vue';
+import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 
 /**
@@ -329,7 +330,7 @@ onBeforeUnmount(function () {
       </n-space>
     </div>
 
-    <div class="panes">
+    <div class="panes" :class="{ full: activePane === 'mock' }">
       <n-tabs v-model:value="activePane" type="line" size="small" animated>
         <n-tab-pane name="params" tab="Params">
           <div class="pane">
@@ -379,10 +380,16 @@ onBeforeUnmount(function () {
             <scripts-view :scripts="(tab.api && tab.api.scripts) || []" />
           </div>
         </n-tab-pane>
+
+        <n-tab-pane name="mock" tab="Mock">
+          <div class="pane">
+            <mock-panel :tab="tab" />
+          </div>
+        </n-tab-pane>
       </n-tabs>
     </div>
 
-    <div class="response">
+    <div v-if="activePane !== 'mock'" class="response">
       <response-panel
         :tab="tab"
         :saving-example="savingExample"
@@ -442,6 +449,12 @@ onBeforeUnmount(function () {
   max-height: 46%;
   overflow: auto;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+/* Mock 页签内容多，给它整块高度，响应面板先收起来 */
+.panes.full {
+  flex: 1;
+  max-height: none;
 }
 
 .pane {
