@@ -362,6 +362,13 @@ function onKeydown(event) {
   if (!(event.metaKey || event.ctrlKey)) return;
   if (String(event.key).toLowerCase() !== 's') return;
   event.preventDefault();
+
+  // 只读角色连快捷键也要挡住，并说清楚为什么
+  if (!projects.canEdit) {
+    message.warning('当前角色是只读，不能保存修改');
+    return;
+  }
+
   save();
 }
 
@@ -387,7 +394,7 @@ onBeforeUnmount(function () {
         @cancel="onCancel"
       />
 
-      <n-space align="center" :size="6">
+      <n-space v-if="projects.canEdit" align="center" :size="6">
         <n-button size="small" :loading="saving" @click="save">
           {{ tab.apiId ? '保存' : '另存为' }}
         </n-button>
@@ -457,6 +464,7 @@ onBeforeUnmount(function () {
       <response-panel
         :tab="tab"
         :saving-example="savingExample"
+        :readonly="!projects.canEdit"
         @save-example="openSaveExample"
       />
     </div>

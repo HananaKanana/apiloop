@@ -12,7 +12,9 @@ const props = defineProps({
   keyPlaceholder: { type: String, default: '名称' },
   valuePlaceholder: { type: String, default: '值' },
   /** 是否显示描述列，表单字段那种窄地方可以关掉 */
-  showDesc: { type: Boolean, default: true }
+  showDesc: { type: Boolean, default: true },
+  /** 只读角色看的时候整表禁用：只展示已有的行，不再补那一行空行 */
+  disabled: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -30,6 +32,8 @@ function normalize(rows) {
 
 const rows = computed(function () {
   const list = normalize(props.modelValue);
+  if (props.disabled) return list;
+
   const last = list[list.length - 1];
   if (!last || last.key !== '' || last.value !== '') {
     list.push({ key: '', value: '', enabled: true, desc: '', __draft: true });
@@ -75,6 +79,7 @@ function removeRow(index) {
       <div class="cell check">
         <n-checkbox
           :checked="row.enabled"
+          :disabled="disabled"
           @update:checked="(v) => { updateRow(index, { enabled: v }); }"
         />
       </div>
@@ -84,6 +89,7 @@ function removeRow(index) {
           size="small"
           :value="row.key"
           :placeholder="keyPlaceholder"
+          :disabled="disabled"
           @update:value="(v) => { updateRow(index, { key: v }); }"
         />
       </div>
@@ -93,6 +99,7 @@ function removeRow(index) {
           size="small"
           :value="row.value"
           :placeholder="valuePlaceholder"
+          :disabled="disabled"
           @update:value="(v) => { updateRow(index, { value: v }); }"
         />
       </div>
@@ -102,13 +109,14 @@ function removeRow(index) {
           size="small"
           :value="row.desc"
           placeholder="描述"
+          :disabled="disabled"
           @update:value="(v) => { updateRow(index, { desc: v }); }"
         />
       </div>
 
       <div class="cell action">
         <n-button
-          v-if="row.key || row.value"
+          v-if="!disabled && (row.key || row.value)"
           size="tiny"
           quaternary
           type="error"

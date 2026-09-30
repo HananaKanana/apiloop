@@ -10,7 +10,9 @@ import { NButton, NCheckbox, NInput, NTooltip } from 'naive-ui';
  * 最后永远留一行空行，在空行里一输入就自动变成真行并再补一行空的。
  */
 const props = defineProps({
-  modelValue: { type: Array, default: function () { return []; } }
+  modelValue: { type: Array, default: function () { return []; } },
+  /** 只读角色看的时候整表禁用：只展示已有的行，不再补那一行空行 */
+  disabled: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -28,6 +30,8 @@ function normalize(rows) {
 
 const rows = computed(function () {
   const list = normalize(props.modelValue);
+  if (props.disabled) return list;
+
   const last = list[list.length - 1];
   if (!last || last.key !== '' || last.value !== '') {
     list.push({ key: '', value: '', enabled: true, secret: false, __draft: true });
@@ -73,6 +77,7 @@ function removeRow(index) {
       <div class="cell check">
         <n-checkbox
           :checked="row.enabled"
+          :disabled="disabled"
           @update:checked="(v) => { updateRow(index, { enabled: v }); }"
         />
       </div>
@@ -81,6 +86,7 @@ function removeRow(index) {
         <n-input
           size="small"
           :value="row.key"
+          :disabled="disabled"
           placeholder="变量名"
           @update:value="(v) => { updateRow(index, { key: v }); }"
         />
@@ -92,6 +98,7 @@ function removeRow(index) {
           :value="row.value"
           :type="row.secret ? 'password' : 'text'"
           :show-password-on="row.secret ? 'click' : undefined"
+          :disabled="disabled"
           placeholder="值"
           @update:value="(v) => { updateRow(index, { value: v }); }"
         />
@@ -102,6 +109,7 @@ function removeRow(index) {
           <template #trigger>
             <n-checkbox
               :checked="row.secret"
+              :disabled="disabled"
               @update:checked="(v) => { updateRow(index, { secret: v }); }"
             />
           </template>
@@ -111,7 +119,7 @@ function removeRow(index) {
 
       <div class="cell action">
         <n-button
-          v-if="row.key || row.value"
+          v-if="!disabled && (row.key || row.value)"
           size="tiny"
           quaternary
           type="error"

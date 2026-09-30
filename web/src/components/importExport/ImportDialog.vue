@@ -27,6 +27,16 @@ const tree = useTreeStore();
 const ui = useUiStore();
 const message = useMessage();
 
+/** 往当前项目里写数据要 editor 及以上；只读角色只剩「新建项目」这一条路 */
+const canEdit = computed(function () {
+  return projects.canEdit;
+});
+
+const canImportPostman = computed(function () {
+  const kind = postmanPreview.value && postmanPreview.value.kind;
+  return canEdit.value || kind === 'collection';
+});
+
 const visible = computed({
   get: function () { return ui.importVisible; },
   set: function (value) { ui.importVisible = value; }
@@ -219,7 +229,10 @@ function routeLabel(route) {
               {{ warning }}
             </n-alert>
 
-            <n-radio-group v-if="postmanPreview.kind === 'collection'" v-model:value="postmanMode">
+            <n-radio-group
+              v-if="postmanPreview.kind === 'collection' && canEdit"
+              v-model:value="postmanMode"
+            >
               <n-space vertical size="small">
                 <n-radio-button value="new">新建项目（名字取集合名）</n-radio-button>
                 <n-radio-button value="into">
@@ -227,12 +240,22 @@ function routeLabel(route) {
                 </n-radio-button>
               </n-space>
             </n-radio-group>
+            <p v-else-if="postmanPreview.kind === 'collection'" class="hint">
+              当前角色是只读，只能导入成新项目（导入后你就是它的 owner）。
+            </p>
             <p v-else class="hint">环境与 Globals 会导入到当前项目。</p>
 
-            <n-space justify="end">
-              <n-button size="small" type="primary" :loading="postmanBusy" @click="runPostmanImport">
+            <n-space justify="end" align="center">
+              <n-button
+                v-if="canImportPostman"
+                size="small"
+                type="primary"
+                :loading="postmanBusy"
+                @click="runPostmanImport"
+              >
                 导入
               </n-button>
+              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
             </n-space>
           </template>
         </div>
@@ -263,8 +286,16 @@ function routeLabel(route) {
                 {{ routeLabel(route) }}
               </div>
             </div>
-            <n-space justify="end">
-              <n-button size="small" type="primary" @click="importParsed(curlRoutes)">导入</n-button>
+            <n-space justify="end" align="center">
+              <n-button
+                v-if="canEdit"
+                size="small"
+                type="primary"
+                @click="importParsed(curlRoutes)"
+              >
+                导入
+              </n-button>
+              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
             </n-space>
           </template>
         </div>
@@ -295,8 +326,16 @@ function routeLabel(route) {
                 {{ routeLabel(route) }}
               </div>
             </div>
-            <n-space justify="end">
-              <n-button size="small" type="primary" @click="importParsed(openapiRoutes)">导入</n-button>
+            <n-space justify="end" align="center">
+              <n-button
+                v-if="canEdit"
+                size="small"
+                type="primary"
+                @click="importParsed(openapiRoutes)"
+              >
+                导入
+              </n-button>
+              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
             </n-space>
           </template>
         </div>

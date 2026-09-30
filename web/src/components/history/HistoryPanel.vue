@@ -127,7 +127,15 @@ watch(
     <n-drawer-content closable>
       <template #header>历史</template>
       <template #header-extra>
-        <n-button size="tiny" quaternary type="error" @click="clearAll">清空历史</n-button>
+        <n-button
+          v-if="projects.canEdit"
+          size="tiny"
+          quaternary
+          type="error"
+          @click="clearAll"
+        >
+          清空历史
+        </n-button>
       </template>
 
       <div class="history-body">

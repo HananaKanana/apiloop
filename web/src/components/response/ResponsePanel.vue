@@ -20,7 +20,9 @@ import { useUiStore } from '@/stores/ui';
  */
 const props = defineProps({
   tab: { type: Object, required: true },
-  savingExample: { type: Boolean, default: false }
+  savingExample: { type: Boolean, default: false },
+  /** 只读角色：不给「保存为示例」这个写入口 */
+  readonly: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['save-example']);
@@ -93,6 +95,7 @@ const canSaveExample = computed(function () {
 });
 
 const saveHint = computed(function () {
+  if (props.readonly) return '';
   if (!props.tab.apiId) return '临时标签页要先保存成接口，才能存示例';
   if (!response.value) return '先发一次请求';
   if (!canSaveExample.value) return '二进制响应不能存成示例';
@@ -141,7 +144,7 @@ function requestBodyText() {
 
           <span class="spacer" />
 
-          <n-popover v-if="saveHint" trigger="hover" placement="top-end">
+          <n-popover v-if="!readonly && saveHint" trigger="hover" placement="top-end">
             <template #trigger>
               <span>
                 <n-button size="tiny" disabled>保存为示例</n-button>
@@ -150,7 +153,7 @@ function requestBodyText() {
             {{ saveHint }}
           </n-popover>
           <n-button
-            v-else
+            v-else-if="!readonly"
             size="tiny"
             secondary
             type="primary"
