@@ -50,6 +50,9 @@ const expectationErrors = ref({});
 const dragIndex = ref(-1);
 const overIndex = ref(-1);
 
+/** 示例编辑器实例，用来问它「有没有没保存的修改」 */
+const exampleEditorRef = ref(null);
+
 const api = computed(function () {
   return props.tab.api;
 });
@@ -152,7 +155,42 @@ const SOURCE_LABELS = {
   imported: { text: '导入', type: 'info' }
 };
 
-function selectExample(id) {
+/**
+ * 切走之前问一句：示例编辑器里有没有没保存的内容。
+ * 只有智能模板化会留下这种状态（普通改动 600ms 后自动保存），
+ * 但丢掉的是整段响应体，值得拦一下。
+ *
+ * @returns {Promise<boolean>} true 表示可以切走
+ */
+function confirmLeaveExampleEditor() {
+  const editor = exampleEditorRef.value;
+  if (!editor || !editor.isDirty()) return Promise.resolve(true);
+
+  return new Promise(function (resolve) {
+    let settled = false;
+    function done(value) {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    }
+
+    dialog.warning({
+      title: '有未保存的修改',
+      content: '示例编辑器里还有没保存的内容，切走就没了。',
+      positiveText: '放弃修改',
+      negativeText: '取消',
+      onPositiveClick: function () { done(true); },
+      onNegativeClick: function () { done(false); },
+      onClose: function () { done(false); },
+      onMaskClick: function () { done(false); }
+    });
+  });
+}
+
+async function selectExample(id) {
+  if (id === selectedId.value) return;
+  if (!(await confirmLeaveExampleEditor())) return;
+
   selectedId.value = id;
   selectedExpectationId.value = '';
 }
@@ -168,7 +206,7 @@ async function createExample() {
       source: 'manual'
     });
     props.tab.api = data.api;
-    selectExample(data.example.id);
+    await selectExample(data.example.id);
     message.success('已新建示例');
   } catch (err) {
     message.error(err.message);
@@ -255,7 +293,10 @@ function clearExpectationError(id) {
   expectationErrors.value = next;
 }
 
-function selectExpectation(id) {
+async function selectExpectation(id) {
+  if (id === selectedExpectationId.value) return;
+  if (!(await confirmLeaveExampleEditor())) return;
+
   selectedExpectationId.value = id;
   selectedId.value = '';
 }
@@ -573,6 +614,7 @@ async function onDrop() {
           />
           <example-editor
             v-else-if="selectedExample"
+            ref="exampleEditorRef"
             :key="selectedExample.id"
             :example="selectedExample"
             :placeholders="(session.meta && session.meta.placeholders) || []"
