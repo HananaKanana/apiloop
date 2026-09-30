@@ -78,7 +78,8 @@ watch(
     if (!pid) return;
     try {
       await tree.load(pid);
-      expandedKeys.value = collectFolderKeys(tree.nodes);
+      // 进来（和切项目）时目录全部收起，想看哪个点哪个；要全展开用工具栏那个按钮
+      expandedKeys.value = [];
     } catch (err) {
       message.error(err.message);
     }
