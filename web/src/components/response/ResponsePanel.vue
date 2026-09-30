@@ -27,7 +27,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['save-example']);
+const emit = defineEmits(['save-example', 'save-sse-example']);
 
 const ui = useUiStore();
 
@@ -175,6 +175,21 @@ const canSaveExample = computed(function () {
   return Boolean(response.value && response.value.bodyEncoding === 'utf8');
 });
 
+/**
+ * SSE 响应要存成 `sse` 类型的示例（存的是事件场景，不是响应文本），
+ * 走的是事件视图里那个按钮，所以这里两个条件要互斥。
+ */
+const isSse = computed(function () {
+  return Boolean(props.tab.sseEvents);
+});
+
+/** editor 及以上 + 绑定了接口 + 响应已经结束 + 至少收到一条事件 */
+const canSaveSseExample = computed(function () {
+  if (props.readonly || isSse.value === false) return false;
+  if (!props.tab.apiId || props.tab.sending) return false;
+  return (props.tab.sseEvents || []).length > 0;
+});
+
 const saveHint = computed(function () {
   if (props.readonly) return '';
   if (!props.tab.apiId) return '临时标签页要先保存成接口，才能存示例';
@@ -240,7 +255,7 @@ function requestBodyText() {
 
           <span class="spacer" />
 
-          <n-popover v-if="!readonly && saveHint" trigger="hover" placement="top-end">
+          <n-popover v-if="!readonly && !isSse && saveHint" trigger="hover" placement="top-end">
             <template #trigger>
               <span>
                 <n-button size="tiny" disabled>保存为示例</n-button>
@@ -249,7 +264,7 @@ function requestBodyText() {
             {{ saveHint }}
           </n-popover>
           <n-button
-            v-else-if="!readonly"
+            v-else-if="!readonly && !isSse"
             size="tiny"
             secondary
             type="primary"
@@ -313,7 +328,12 @@ function requestBodyText() {
 
             <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
             <n-tab-pane v-if="tab.sseEvents" name="events" tab="事件">
-              <sse-events-table :events="tab.sseEvents" :dropped="tab.sseDropped || 0" />
+              <sse-events-table
+                :events="tab.sseEvents"
+                :dropped="tab.sseDropped || 0"
+                :can-save="canSaveSseExample"
+                @save-example="emit('save-sse-example')"
+              />
             </n-tab-pane>
 
             <!-- 有测试才有「测试结果」，有输出才有「控制台」—— 空页签是噪音 -->
