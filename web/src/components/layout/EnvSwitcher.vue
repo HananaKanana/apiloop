@@ -5,7 +5,6 @@ import { Check, ChevronDown } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useUiStore } from '@/stores/ui';
-import { useTabsStore } from '@/stores/tabs';
 
 /**
  * 标签行最右边的环境按钮。点开是一个面板：上半截切换环境，下半截是当前环境的变量
@@ -15,7 +14,6 @@ import { useTabsStore } from '@/stores/tabs';
 const projects = useProjectStore();
 const envs = useEnvStore();
 const ui = useUiStore();
-const tabs = useTabsStore();
 
 const show = ref(false);
 
@@ -30,16 +28,6 @@ watch(
     }
   },
   { immediate: true }
-);
-
-// 环境被删掉之后，把它的标签页收掉。放在这里是因为切换器一直挂着（标签行常驻），
-// 而侧栏的「环境」页只有停在那页时才在。
-watch(
-  function () { return envs.environments; },
-  function (list) {
-    tabs.syncWithEnvs((list || []).map(function (item) { return item.id; }));
-  },
-  { deep: true }
 );
 
 /** 当前环境的变量，secret 遮住 */
@@ -65,7 +53,8 @@ function select(id) {
 
 function editCurrent() {
   if (!envs.selected) return;
-  tabs.openEnv(envs.selected.id);
+  envs.edit(envs.selected.id);
+  ui.setSidebarTab('env');
   show.value = false;
 }
 

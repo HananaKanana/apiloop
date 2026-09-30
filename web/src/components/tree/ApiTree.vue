@@ -116,11 +116,15 @@ function folderIcon(expanded) {
   return h('svg', Object.assign({ class: 'folder-icon' }, SVG_ATTRS), paths);
 }
 
-/** 展开 / 收起的小三角，n-tree 自己不会给自定义图标加旋转，所以这里按状态画两个方向 */
-function renderSwitcherIcon(info) {
-  const path = info.expanded ? 'M3.5 6 8 10.5 12.5 6' : 'M6 3.5 10.5 8 6 12.5';
+/**
+ * 展开 / 收起的小箭头：**永远画朝右的**。
+ * n-tree 展开时会给外层加 `.n-tree-node-switcher--expanded { transform: rotate(90deg) }`，
+ * 自定义图标也一样会被转 —— 朝右转 90° 正好朝下。之前按状态自己画了一个朝下的，
+ * 再被转 90° 就成了朝左（用户 2026-09-30 反馈「展开怎么向左」）。
+ */
+function renderSwitcherIcon() {
   return h('svg', Object.assign({ class: 'switcher-icon' }, SVG_ATTRS, { width: '14', height: '14' }), [
-    h('path', { d: path, 'stroke-linecap': 'round' })
+    h('path', { d: 'M6 3.5 10.5 8 6 12.5', 'stroke-linecap': 'round' })
   ]);
 }
 
