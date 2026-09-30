@@ -9,14 +9,18 @@ import {
   NSpace,
   NTag,
   NButton,
+  useDialog,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
+import { useTabsStore } from '@/stores/tabs';
 
 const emit = defineEmits(['change']);
 
 const projects = useProjectStore();
+const tabs = useTabsStore();
 const message = useMessage();
+const dialog = useDialog();
 
 const showCreate = ref(false);
 const creating = ref(false);
@@ -82,6 +86,23 @@ function onSelect(key) {
   if (key === '__settings') return emit('change', '__settings');
   if (key === projects.currentId) return;
 
+  // 切项目会把标签页全清掉，有没保存的修改就先问一句
+  if (tabs.hasDirty) {
+    dialog.warning({
+      title: '切换项目',
+      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
+      positiveText: '切换',
+      negativeText: '取消',
+      onPositiveClick: function () {
+        tabs.closeAll();
+        projects.setCurrent(key);
+        emit('change', key);
+      }
+    });
+    return;
+  }
+
+  tabs.closeAll();
   projects.setCurrent(key);
   emit('change', key);
 }

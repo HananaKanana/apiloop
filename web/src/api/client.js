@@ -72,6 +72,9 @@ export function request(method, path, body, options) {
     init.body = JSON.stringify(body);
   }
 
+  // 发送请求的「取消」靠它：abort 之后 fetch 会 reject，调用方自己识别
+  if (opts.signal) init.signal = opts.signal;
+
   return fetch(API_PREFIX + path, init).then(
     async function (res) {
       if (res.status === 401) {
@@ -92,6 +95,11 @@ export function request(method, path, body, options) {
       return data || {};
     },
     function (err) {
+      if (err && err.name === 'AbortError') {
+        const aborted = new Error('请求已取消');
+        aborted.aborted = true;
+        throw aborted;
+      }
       throw new Error('网络请求失败：' + (err && err.message ? err.message : '未知错误'));
     }
   );
