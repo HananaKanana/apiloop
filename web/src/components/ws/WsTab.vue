@@ -30,6 +30,7 @@ import WsMessageLog from './WsMessageLog.vue';
 import WsScenarioDialog from './WsScenarioDialog.vue';
 import { buildWsScenario } from '@/utils/wsScenario';
 import { resolveScope } from '@/utils/variables';
+import { HEADER_NAMES } from '@/utils/suggestions';
 
 /**
  * WebSocket 标签页（契约第 15、17 节）。两种形态共用这一个组件：
@@ -501,6 +502,8 @@ watch(
             <key-value-table
               v-model="spec.params.headers"
               :scope="scope"
+              kind="ws-headers"
+              :key-suggestions="HEADER_NAMES"
               key-placeholder="请求头"
               value-placeholder="值"
             />
@@ -515,6 +518,7 @@ watch(
             <key-value-table
               v-model="spec.params.query"
               :scope="scope"
+              kind="ws-query"
               key-placeholder="参数名"
               value-placeholder="值"
             />

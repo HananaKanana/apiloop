@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NCheckbox, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
+import { NButton, NCheckbox, NIcon, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
+import { File, Trash } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import VarInput from '@/components/common/VarInput.vue';
 import * as sendApi from '@/api/send';
@@ -86,6 +87,13 @@ function setMode(next) {
       graphql: current.graphql || { query: '', variables: '' }
     };
   }
+}
+
+/** 从绝对路径里取文件名，标签上只显示这个 */
+function fileName(src) {
+  const text = String(src || '');
+  const at = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'));
+  return at === -1 ? text : text.slice(at + 1);
 }
 
 /* ---------------- 表单行 ---------------- */
@@ -186,7 +194,7 @@ async function onFilePicked(event) {
       </template>
 
       <template v-else-if="mode === 'urlencoded' || mode === 'formdata'">
-        <div class="form-table">
+        <div class="form-table" :class="{ 'with-kind': mode === 'formdata' }">
           <div class="row head">
             <div class="cell check" />
             <div class="cell key">名称</div>
@@ -195,7 +203,7 @@ async function onFilePicked(event) {
             <div class="cell action" />
           </div>
 
-          <div v-for="(row, index) in formRows()" :key="index" class="row">
+          <div v-for="(row, index) in formRows()" :key="index" class="row" :class="{ off: row.enabled === false }">
             <div class="cell check">
               <!-- 末尾的空行只是占位，不给复选框（勾着的空行像一条已启用的空参数） -->
               <n-checkbox
@@ -224,12 +232,24 @@ async function onFilePicked(event) {
             </div>
             <div class="cell value">
               <template v-if="mode === 'formdata' && row.kind === 'file'">
-                <n-space align="center" :size="6" :wrap="false">
-                  <n-button size="small" :loading="uploading" @click="pickFile({ kind: 'form', index: index })">
-                    选择文件
-                  </n-button>
-                  <span class="file-path">{{ row.src || '尚未选择' }}</span>
-                </n-space>
+                <!-- 选过文件之后显示「文件图标 + 文件名」的小标签，点它可以重选 -->
+                <button
+                  v-if="row.src"
+                  class="file-tag"
+                  :title="row.src"
+                  @click="pickFile({ kind: 'form', index: index })"
+                >
+                  <n-icon size="13" :component="File" />
+                  <span class="file-name">{{ fileName(row.src) }}</span>
+                </button>
+                <button
+                  v-else
+                  class="file-pick"
+                  :disabled="uploading"
+                  @click="pickFile({ kind: 'form', index: index })"
+                >
+                  {{ uploading ? '上传中…' : '选择文件' }}
+                </button>
               </template>
               <var-input
                 v-else
@@ -240,15 +260,14 @@ async function onFilePicked(event) {
               />
             </div>
             <div class="cell action">
-              <n-button
+              <button
                 v-if="row.key || row.value"
-                size="tiny"
-                quaternary
-                type="error"
+                class="delete-button"
+                title="删除这一行"
                 @click="removeFormRow(index)"
               >
-                删除
-              </n-button>
+                <n-icon size="15" :component="Trash" />
+              </button>
             </div>
           </div>
         </div>
@@ -313,17 +332,131 @@ async function onFilePicked(event) {
 }
 
 .form-table {
+  /* 和请求区的键值表格同一套细线网格；formdata 多一列「文本 / 文件」 */
+  --form-cols: 32px minmax(0, 26%) minmax(0, 1fr) 40px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
+.form-table.with-kind {
+  --form-cols: 32px minmax(0, 26%) 78px minmax(0, 1fr) 40px;
+}
+
 .row {
+  display: grid;
+  grid-template-columns: var(--form-cols);
+  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.row:hover {
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.row .cell {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+  min-height: 32px;
+  padding: 0 8px;
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.row .cell:last-child {
+  border-right: none;
+}
+
+.row.head .cell {
+  opacity: 0.6;
+}
+
+.row .cell:focus-within {
+  background: rgba(255, 108, 55, 0.08);
+}
+
+.row.head .cell:focus-within {
+  background: transparent;
+}
+
+.row .cell.check,
+.row .cell.action {
+  justify-content: center;
+  padding: 0;
+}
+
+.row.off .cell.key,
+.row.off .cell.value {
+  opacity: 0.5;
+}
+
+/* 格子里的输入框去掉边框、底色和内外边距 */
+.row .cell :deep(.n-input) {
+  --n-border: none;
+  --n-border-hover: none;
+  --n-border-focus: none;
+  --n-box-shadow-focus: none;
+  --n-color: transparent;
+  --n-color-hover: transparent;
+  --n-color-focus: transparent;
+  --n-padding-left: 0;
+  --n-padding-right: 0;
+  --n-padding-vertical: 0;
+}
+
+.file-tag,
+.file-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.32));
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.file-tag:hover,
+.file-pick:hover {
+  border-color: var(--apiloop-primary);
+}
+
+.file-pick:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-button {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.row:hover .delete-button {
+  opacity: 0.6;
+}
+
+.delete-button:hover {
+  background: rgba(235, 32, 19, 0.12);
+  color: #eb2013;
+  opacity: 1;
 }
 
 .row:last-child {
@@ -365,13 +498,6 @@ async function onFilePicked(event) {
   flex: 1;
 }
 
-.file-path {
-  font-size: 12px;
-  opacity: 0.65;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .gql {
   display: flex;

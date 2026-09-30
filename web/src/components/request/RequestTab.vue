@@ -35,6 +35,7 @@ import { folderChain } from '@/utils/tree';
 import { inheritHint } from '@/utils/auth';
 import { clampReplayDelay } from '@/utils/replay';
 import { resolveScope, missingVariables } from '@/utils/variables';
+import { HEADER_NAMES } from '@/utils/suggestions';
 import { useUiStore } from '@/stores/ui';
 
 /**
@@ -107,6 +108,15 @@ const authLevels = computed(function () {
 
 const inheritAuthHint = computed(function () {
   return inheritHint(authLevels.value);
+});
+
+/**
+ * 地址里有没有 `:name` 这类路径变量。有才显示「路径参数」那一块 ——
+ * 和 lib/url-utils.js 的 PATH_PARAM 同一套写法（`:` 前面是 `/` 或开头，
+ * 免得把 http://host:8080 的端口号当成参数）。
+ */
+const hasPathParams = computed(function () {
+  return /(^|\/):[\w-]+/.test(String(props.tab.spec.url || ''));
 });
 
 /**
@@ -682,17 +692,22 @@ onBeforeUnmount(function () {
             <key-value-table
               :model-value="spec.params.query"
               :scope="scope"
+              kind="query"
               key-placeholder="参数名"
               @update:model-value="onQueryChange"
             />
 
-            <p class="label">路径参数</p>
-            <key-value-table
-              v-model="spec.params.path"
-              :scope="scope"
-              key-placeholder="参数名"
-              value-placeholder="值"
-            />
+            <!-- 地址里没有 :name 这种路径变量时，整块都不显示（和 Postman 一样） -->
+            <template v-if="hasPathParams">
+              <p class="label">路径参数</p>
+              <key-value-table
+                v-model="spec.params.path"
+                :scope="scope"
+                kind="path"
+                key-placeholder="参数名"
+                value-placeholder="值"
+              />
+            </template>
           </div>
         </n-tab-pane>
 
@@ -706,6 +721,8 @@ onBeforeUnmount(function () {
             <key-value-table
               v-model="spec.params.headers"
               :scope="scope"
+              kind="headers"
+              :key-suggestions="HEADER_NAMES"
               key-placeholder="请求头"
               value-placeholder="值"
             />
@@ -1013,10 +1030,12 @@ onBeforeUnmount(function () {
   max-width: 460px;
 }
 
+/* 分组标题：和 Postman 一样 13px、半粗体 */
 .label {
   margin: 0 0 6px;
-  font-size: 12px;
-  opacity: 0.65;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .pane .label + * {
