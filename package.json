@@ -10,7 +10,8 @@
     "bin",
     "lib",
     "sample",
-    "README.md"
+    "README.md",
+    "docs/api.md"
   ],
   "bin": {
     "apiloop": "./bin/server",
