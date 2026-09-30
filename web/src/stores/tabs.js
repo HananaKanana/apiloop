@@ -314,6 +314,55 @@ export const useTabsStore = defineStore('tabs', function () {
    * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
    * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
    */
+  /**
+   * 打开环境标签页（Task 7）。环境本身就是「名字 + 变量」这么点东西，
+   * 原来那个管理弹窗又窄又空，改成和接口、目录并列的标签页。
+   * 同一个环境只会开一个。
+   */
+  function openEnv(envId) {
+    const key = 'env:' + envId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const envs = useEnvStore();
+    const env = envs.environments.find(function (item) { return item.id === envId; });
+    const tab = Object.assign({
+      key: key,
+      kind: 'env',
+      envId: envId,
+      apiId: null,
+      folderId: null,
+      title: env ? env.name : '环境',
+      // 环境没有 spec，放个空对象，免得别处统一按 tab.spec 取的时候炸
+      spec: {},
+      savedSnapshot: null,
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 环境被删掉之后，把对应的标签页收掉 */
+  function syncWithEnvs(envIds) {
+    const known = new Set(envIds);
+    const removed = tabs.value.filter(function (tab) {
+      return tab.kind === 'env' && !known.has(tab.envId);
+    });
+    removed.forEach(function (tab) { close(tab.key); });
+  }
+
   async function openHistory(historyId) {
     const key = 'history:' + historyId;
     const existing = tabs.value.find(function (tab) { return tab.key === key; });
@@ -603,12 +652,14 @@ export const useTabsStore = defineStore('tabs', function () {
     openDraft: openDraft,
     openWs: openWs,
     openFolder: openFolder,
+    openEnv: openEnv,
     openHistory: openHistory,
     activate: activate,
     close: close,
     closeAll: closeAll,
     syncWithApis: syncWithApis,
     syncWithFolders: syncWithFolders,
+    syncWithEnvs: syncWithEnvs,
     markSaved: markSaved,
     markFolderSaved: markFolderSaved,
     touch: touch,
