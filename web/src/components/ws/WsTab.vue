@@ -110,6 +110,9 @@ const channelHint = computed(function () {
 
 const RECENT_KEY = 'apiloop.ws.';
 
+/** localStorage 不是响应式的，存完手动戳一下，让「最近」那个下拉跟着刷新 */
+const recentVersion = ref(0);
+
 function loadRecent(pid) {
   try {
     const raw = localStorage.getItem(RECENT_KEY + pid);
@@ -129,14 +132,17 @@ function saveRecent(pid, url) {
     const list = loadRecent(pid).filter(function (item) { return item !== url; });
     list.unshift(url);
     localStorage.setItem(RECENT_KEY + pid, JSON.stringify(list.slice(0, 10)));
+    recentVersion.value += 1;
   } catch (err) {
     // 存不下就算了，不影响用
   }
 }
 
 const recentOptions = computed(function () {
-  const list = loadRecent(projects.currentId);
-  return list.map(function (url) { return { label: url, key: url }; });
+  recentVersion.value;
+  return loadRecent(projects.currentId).map(function (url) {
+    return { label: url, key: url };
+  });
 });
 
 function onPickRecent(url) {
