@@ -1,8 +1,9 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   NAlert,
   NButton,
+  NCheckbox,
   NInput,
   NModal,
   NRadioButton,
@@ -175,6 +176,111 @@ async function importParsed(routes) {
   }
 }
 
+/* ---------------- HAR ---------------- */
+
+/** 服务端给 /import/har 放宽到 50MB；比这更大的就不发了，省得白传一趟 */
+const HAR_MAX_BYTES = 50 * 1024 * 1024;
+
+const harText = ref('');
+const harPreview = ref(null);
+const harMode = ref('new');
+const harBusy = ref(false);
+const harKeepCredentials = ref(false);
+const harFileInfo = ref('');
+const harFileInput = ref(null);
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function pickHarFile() {
+  if (harFileInput.value) {
+    harFileInput.value.value = '';
+    harFileInput.value.click();
+  }
+}
+
+async function onHarFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (file.size > HAR_MAX_BYTES) {
+    harFileInfo.value = '';
+    message.error('这个 HAR 有 ' + formatBytes(file.size) + '，超过了 50MB 的上限');
+    return;
+  }
+
+  try {
+    // FileReader 直接读成文本。**不要先 parse 成对象再序列化一遍** ——
+    // 几十 MB 的对象走一遍 JSON.stringify 会明显卡住界面，而那份对象没有任何用处。
+    harText.value = await readFileAsText(file);
+    harFileInfo.value = file.name + '（' + formatBytes(file.size) + '）';
+    harPreview.value = null;
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+async function parseHar() {
+  if (!harText.value.trim()) {
+    message.warning('请粘贴 HAR 内容，或者选择一个文件');
+    return;
+  }
+
+  harBusy.value = true;
+  try {
+    harPreview.value = await importExportApi.previewHar(harText.value, {
+      keepCredentials: harKeepCredentials.value
+    });
+    harMode.value = 'new';
+  } catch (err) {
+    harPreview.value = null;
+    message.error(err.message);
+  } finally {
+    harBusy.value = false;
+  }
+}
+
+function resetHar() {
+  harText.value = '';
+  harPreview.value = null;
+  harFileInfo.value = '';
+}
+
+async function runHarImport() {
+  harBusy.value = true;
+  try {
+    const data = await importExportApi.importHar(harText.value, {
+      mode: harMode.value,
+      projectId: harMode.value === 'into' ? projects.currentId : undefined,
+      options: { keepCredentials: harKeepCredentials.value }
+    });
+
+    if (harMode.value === 'new' && data.project) {
+      await projects.load();
+      projects.setCurrent(data.project.id);
+      await tree.load(data.project.id);
+    } else {
+      await tree.refresh();
+    }
+
+    message.success('导入完成');
+    visible.value = false;
+    resetHar();
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    harBusy.value = false;
+  }
+}
+
+// 「保留凭据」一改，stats.credentialsStripped 就不一样了，已经预览过的要重新预览一次
+watch(harKeepCredentials, function () {
+  if (harPreview.value) parseHar();
+});
+
 function routeLabel(route) {
   return (route.method || 'GET') + ' ' + (route.path || route.url || route.name || '');
 }
@@ -340,9 +446,83 @@ function routeLabel(route) {
           </template>
         </div>
       </n-tab-pane>
+      <n-tab-pane name="har" tab="HAR">
+        <div class="pane">
+          <n-space align="center" :size="8">
+            <n-button size="small" @click="pickHarFile">选择文件…</n-button>
+            <span v-if="harFileInfo" class="hint">{{ harFileInfo }}</span>
+            <span v-else class="hint">或者直接把 JSON 粘在下面（50MB 以内）</span>
+          </n-space>
+
+          <n-input
+            v-model:value="harText"
+            type="textarea"
+            :autosize="{ minRows: 6, maxRows: 12 }"
+            placeholder="浏览器开发者工具 Network 面板 → 右键 Save all as HAR with content"
+            @update:value="harPreview = null"
+          />
+
+          <n-space align="center" :size="8">
+            <n-checkbox v-model:checked="harKeepCredentials">保留凭据</n-checkbox>
+            <span v-if="harKeepCredentials" class="danger">
+              Cookie、Authorization 会原样写进项目，项目里的所有成员都能看到
+            </span>
+          </n-space>
+
+          <n-space align="center" :size="8">
+            <n-button size="small" secondary :loading="harBusy" @click="parseHar">解析预览</n-button>
+          </n-space>
+
+          <template v-if="harPreview">
+            <n-alert type="info" :show-icon="false" class="notice">
+              <div>类型：HAR</div>
+              <div>名称：{{ harPreview.name }}</div>
+              <div v-if="harPreview.stats">
+                主机 {{ harPreview.stats.hosts }} 个、接口 {{ harPreview.stats.apis }} 个、
+                示例 {{ harPreview.stats.examples }} 个
+              </div>
+            </n-alert>
+
+            <n-alert
+              v-for="(warning, index) in harPreview.warnings || []"
+              :key="index"
+              type="warning"
+              :show-icon="false"
+              class="notice"
+            >
+              {{ warning }}
+            </n-alert>
+
+            <n-radio-group v-if="canEdit" v-model:value="harMode">
+              <n-space vertical size="small">
+                <n-radio-button value="new">新建项目（名字取 HAR 里的页面标题）</n-radio-button>
+                <n-radio-button value="into">
+                  导入到当前项目{{ projects.current ? '「' + projects.current.name + '」' : '' }}
+                </n-radio-button>
+              </n-space>
+            </n-radio-group>
+            <p v-else class="hint">
+              当前角色是只读，只能导入成新项目（导入后你就是它的 owner）。
+            </p>
+
+            <n-space justify="end">
+              <n-button size="small" type="primary" :loading="harBusy" @click="runHarImport">
+                导入
+              </n-button>
+            </n-space>
+          </template>
+        </div>
+      </n-tab-pane>
     </n-tabs>
 
     <input ref="fileInput" type="file" accept=".json,application/json" class="hidden-input" @change="onPostmanFile" />
+    <input
+      ref="harFileInput"
+      type="file"
+      accept=".har,application/json"
+      class="hidden-input"
+      @change="onHarFile"
+    />
   </n-modal>
 </template>
 
@@ -357,6 +537,12 @@ function routeLabel(route) {
 .hint {
   font-size: 12px;
   opacity: 0.6;
+}
+
+/* 「保留凭据」的后果要用警告色写出来，别让人顺手就勾了 */
+.danger {
+  font-size: 12px;
+  color: #d03050;
 }
 
 .notice {
