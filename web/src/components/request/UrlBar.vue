@@ -47,6 +47,17 @@ const methodOptions = computed(function () {
 function renderMethodOption(option) {
   return h('span', { class: 'method-text', style: { color: methodColor(option.value) } }, option.label);
 }
+
+/**
+ * 方法下拉：在去边框的基础上，把菜单的最大高度放到 10 行。
+ * naive-ui 默认只给 7.6 行，8 个方法（再加一个自定义方法就是 9 个）会出滚动条，
+ * 第一项 GET 被切掉一半。
+ */
+const METHOD_SELECT_THEME = {
+  peers: Object.assign({}, BARE_SELECT_THEME.peers, {
+    InternalSelectMenu: { height: 'calc(var(--n-option-height) * 10)' }
+  })
+};
 </script>
 
 <template>
@@ -60,7 +71,9 @@ function renderMethodOption(option) {
         filterable
         :options="methodOptions"
         :render-label="renderMethodOption"
-        :theme-overrides="BARE_SELECT_THEME"
+        :theme-overrides="METHOD_SELECT_THEME"
+        :consistent-menu-width="false"
+        :menu-props="{ style: { minWidth: '140px' } }"
         :value="String(method || 'GET').toUpperCase()"
         @update:value="(v) => emit('update:method', String(v).toUpperCase())"
       />
