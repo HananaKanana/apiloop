@@ -174,8 +174,14 @@ function clearAll() {
 }
 
 /**
- * 解析过期时间。留空 = 会话 cookie；否则接受 `2026-09-30 18:00`（本地时区）
- * 或 `2026-09-30 18:00:00`，也接受直接给毫秒时间戳。
+ * 解析过期时间。留空 = 会话 cookie；否则接受
+ * `2026-09-30 18:00`（本地时区，秒可省）、`2026-09-30 18:00:00`，
+ * 或者纯数字时间戳：**10 位按秒、13 位按毫秒**。
+ *
+ * 10 位那一档必须按秒算：`date +%s` 给的就是 10 位，按毫秒解释会落到 1970 年，
+ * 存进去等于这条 cookie 立刻就过期了，而且界面上完全看不出来（N3）。
+ * 11–12 位两种解释都不成立（按秒是公元 2286 年以后，按毫秒是 1970–2001），
+ * 一律当成看不懂 —— 与其猜一个错的，不如让用户改。
  *
  * 刻意不用日期选择器组件：naive-ui 的 `n-date-picker` 一个就值 36KB gzip，
  * 而这里绝大多数时候是留空的。解析不了就提示，不把 NaN 发给服务端。
@@ -184,7 +190,11 @@ function parseExpires(text) {
   const value = String(text === undefined || text === null ? '' : text).trim();
   if (!value) return { ok: true, value: null };
 
-  if (/^\d{10,}$/.test(value)) return { ok: true, value: Number(value) };
+  if (/^\d+$/.test(value)) {
+    if (value.length <= 10) return { ok: true, value: Number(value) * 1000 };
+    if (value.length >= 13) return { ok: true, value: Number(value) };
+    return { ok: false, value: null };
+  }
 
   const ms = Date.parse(value.replace(' ', 'T'));
   if (Number.isNaN(ms)) return { ok: false, value: null };
@@ -211,7 +221,7 @@ async function submitAdd() {
 
   const expires = parseExpires(addForm.value.expires);
   if (!expires.ok) {
-    message.warning('过期时间看不懂，请用 2026-09-30 18:00 这种写法，或者留空');
+    message.warning('过期时间看不懂：用 2026-09-30 18:00，或者 10 位秒 / 13 位毫秒时间戳；留空表示会话 cookie');
     return;
   }
 
@@ -340,7 +350,7 @@ async function submitAdd() {
         <n-form-item label="过期时间">
           <n-input
             v-model:value="addForm.expires"
-            placeholder="2026-09-30 18:00；留空表示会话 cookie"
+            placeholder="2026-09-30 18:00，或 10 位秒 / 13 位毫秒时间戳；留空表示会话 cookie"
           />
         </n-form-item>
         <n-space align="center" :size="16">
