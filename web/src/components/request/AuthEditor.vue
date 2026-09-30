@@ -10,7 +10,14 @@ import { NAlert, NFormItem, NInput, NSelect, NSpace } from 'naive-ui';
  */
 const props = defineProps({
   modelValue: { type: Object, default: null },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  /**
+   * 选了「继承父级」时下方显示的提示。调用方用 `utils/auth.js` 的 `inheritHint()`
+   * 算出来（「继承自 目录「人员信息」：Bearer Token」这类），比只说一句
+   * 「沿用上一级」有用得多 —— 用户不知道那个「上一级」到底配没配。
+   * 传空串就用原来的通用文案。
+   */
+  inheritHint: { type: String, default: '' }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -142,7 +149,7 @@ function patch(fields) {
       </template>
 
       <p v-else-if="currentType === 'inherit'" class="hint">
-        沿用上一级的鉴权设置。
+        {{ inheritHint || '沿用上一级的鉴权设置。' }}
       </p>
       <p v-else class="hint">这个请求不携带鉴权信息。</p>
     </template>

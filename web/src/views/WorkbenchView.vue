@@ -8,6 +8,7 @@ import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import ApiTree from '@/components/tree/ApiTree.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
+import FolderTab from '@/components/folder/FolderTab.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
@@ -96,6 +97,11 @@ function onNewWs() {
   tabs.openWs();
 }
 
+/** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
+function onOpenFolder(folderId) {
+  tabs.openFolder(folderId);
+}
+
 function closeTab(tab) {
   if (!tab.dirty) {
     tabs.close(tab.key);
@@ -117,6 +123,15 @@ watch(
   function (list) {
     if (!list) return;
     tabs.syncWithApis(list.map(function (api) { return api.id; }));
+  }
+);
+
+// 目录同理
+watch(
+  function () { return tree.folders; },
+  function (list) {
+    if (!list) return;
+    tabs.syncWithFolders(list.map(function (folder) { return folder.id; }));
   }
 );
 
@@ -168,7 +183,12 @@ onBeforeUnmount(function () {
 
     <div class="body">
       <aside v-show="!collapsed" class="left" :style="{ width: leftWidth + 'px' }">
-        <api-tree @open="onOpenApi" @new-api="onNewApi" @new-ws="onNewWs" />
+        <api-tree
+          @open="onOpenApi"
+          @new-api="onNewApi"
+          @new-ws="onNewWs"
+          @open-folder="onOpenFolder"
+        />
       </aside>
 
       <div
@@ -194,8 +214,13 @@ onBeforeUnmount(function () {
         </div>
 
         <div class="tab-body">
+          <folder-tab
+            v-if="tabs.active && tabs.active.kind === 'folder'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
           <ws-tab
-            v-if="tabs.active && tabs.active.kind === 'ws'"
+            v-else-if="tabs.active && tabs.active.kind === 'ws'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

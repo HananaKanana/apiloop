@@ -28,6 +28,8 @@ import AuthEditor from './AuthEditor.vue';
 import ScriptsView from './ScriptsView.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
+import { folderChain } from '@/utils/tree';
+import { inheritHint } from '@/utils/auth';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -78,6 +80,27 @@ function setOption(key, value) {
   next[key] = value;
   props.tab.options = next;
 }
+
+/**
+ * 鉴权选了「继承父级」时，实际会用哪一级（契约第 5 节第 2 步）：
+ * 接口所在的目录 → 各级父目录 → 项目，第一个真正配置过的生效。
+ * 用目录树里已有的 folders 和项目自己的 auth 算，和服务端同一套规则。
+ */
+const authLevels = computed(function () {
+  const levels = folderChain(tree.folders, props.tab.folderId).map(function (folder) {
+    return { auth: folder.auth, label: '目录「' + folder.name + '」' };
+  });
+
+  levels.push({
+    auth: projects.current ? projects.current.auth : null,
+    label: '项目'
+  });
+  return levels;
+});
+
+const inheritAuthHint = computed(function () {
+  return inheritHint(authLevels.value);
+});
 
 watch(
   function () { return props.tab.spec; },
@@ -461,6 +484,7 @@ onBeforeUnmount(function () {
           <div class="pane narrow">
             <auth-editor
               :model-value="spec.auth"
+              :inherit-hint="inheritAuthHint"
               @update:model-value="(v) => { spec.auth = v; }"
             />
           </div>
