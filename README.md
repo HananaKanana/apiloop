@@ -106,6 +106,44 @@ apiloop web --config routes.json        # 首次启动时要导入的旧配置�
 
 默认只监听 `127.0.0.1`。要开放给局域网得显式 `--host 0.0.0.0`，终端会额外提醒确认密码强度。
 
+## 项目与权限
+
+**一个项目只有它的成员能看到、能改。** 不是成员的话，接口一律返回 404（和「项目不存在」
+长得一模一样，免得拿 id 挨个试就能问出「这里有个项目，只是你看不到」）。
+
+每个成员在项目里有三种角色，高级角色包含低级角色的全部能力：
+
+| 角色 | 能做什么 |
+| --- | --- |
+| `viewer` | 查看项目、目录树、接口、示例、期望、环境、历史；发请求（`/send`，以及发请求要用的文件上传）；导出 Postman |
+| `editor` | 在 viewer 的基础上：增删改目录、接口、示例、期望、环境；改项目的 `variables` / `auth` / `description`；把数据导入到这个项目；清空历史 |
+| `owner` | 在 editor 的基础上：改项目的 `name` / `slug`；管理成员；删除项目 |
+
+系统角色 **admin** 对所有项目都拥有 owner 的全部能力，而且**不需要是任何项目的成员** ——
+没被加进项目也不会把自己锁在门外。在项目里看到的 `myRole` 就是上面这四种之一
+（admin 在哪个项目里都显示 `admin`）。
+
+几条具体规则：
+
+- **不是成员 → 404；是成员但角色不够 → 403「需要 <角色> 权限」**，两者不会混。
+- 任何操作都不能让一个项目的 owner 变成 0 个，否则返回 400「项目至少要保留一个 owner」。
+  自己退出只要 viewer 权限，但如果你是最后一个 owner，一样会被这条规则拦下来。
+- 建项目的人自动成为该项目的 owner；`POST /projects` 和 Postman 的 `new` 导入都是这样。
+- 被删除的用户，他的成员关系一起消失。如果因此某个项目没了 owner，由 admin 从成员接口补上。
+- **被 mock 的接口本身始终不鉴权** —— 要测的前端得能直接访问，这条不受项目权限影响。
+
+### 从旧版本升级
+
+升级到这一版时会自动迁移成员表，**不会有人被锁在门外**：
+
+- 所有现有项目 × 所有现有用户，全部先设成 **editor**；
+- 项目的创建者（`created_by`）升成 **owner**；之前 `legacy` 导入时写进去的 owner 原样保留；
+- 还是没有 owner 的项目（比如没有创建者的老项目），由**最早创建的那个 admin** 担任 owner。
+
+迁移之后新建的用户不会自动加入任何项目 —— 要手动把他加进来。
+项目第一次被建出来时如果库里还没有任何用户（`apiloop init` 就是这种顺序），
+下次启动会自动把这个项目交给最早创建的 admin。
+
 ## 数据存储
 
 数据全部放在**一个全局库**里，默认 `~/.apiloop/data.db`，可用 `--db` 指定，
@@ -139,7 +177,7 @@ apiloop web --config routes.json        # 首次启动时要导入的旧配置�
 | `environments` | 环境（一组变量），发送请求时叠加在项目变量之上 |
 | `history` | 发送记录，每个项目只保留最新 500 条 |
 | `users` / `sessions` | 用户与登录态 |
-| `projects` / `project_members` | 项目与成员 |
+| `projects` / `project_members` | 项目与成员；`project_members` 记谁在哪个项目里是什么角色（viewer / editor / owner） |
 | `legacy_imports` | 记下哪些旧配置文件已经导入过，避免重复导入 |
 | `mock_expectations` | mock 期望：按请求条件决定这个接口返回哪一份示例 |
 
@@ -381,6 +419,7 @@ router.use('/hi', (req, res) => {
 | `GET /auth/me` | 当前登录用户 |
 | `PUT /auth/password` | 改密码，body `{oldPassword, newPassword}` |
 | `GET /users` | 用户列表。仅管理员 |
+| `GET /users/lookup?q=` | 搜人（按用户名或显示名模糊匹配，最多 20 条，不含被禁用的）。登录即可，加项目成员时用 |
 | `POST /users` | 新建用户；没传密码会随机生成并在响应里返回一次。仅管理员 |
 | `PUT /users/:id` | 改显示名 / 角色 / 禁用。仅管理员 |
 | `POST /users/:id/reset-password` | 重置密码并返回一次。仅管理员 |
@@ -390,11 +429,14 @@ router.use('/hi', (req, res) => {
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `GET /projects` | 项目列表，默认项目排最前 |
-| `POST /projects` | 新建项目 |
+| `GET /projects` | 项目列表；只返回自己参与的项目（admin 返回全部） |
+| `POST /projects` | 新建项目；任何登录用户都可以，创建者自动成为 owner |
 | `GET /projects/:pid` | 项目详情，`:pid` 可以是 id 或 slug |
-| `PUT /projects/:pid` | 改名字 / 标识 / 描述 / 变量 / 鉴权；标识被占用会报错，不自动改名 |
-| `DELETE /projects/:pid` | 删除项目。仅管理员，根项目与默认项目不能删 |
+| `PUT /projects/:pid` | 改描述 / 变量 / 鉴权要 editor；改名字 / 标识要 owner。标识被占用会报错，不自动改名 |
+| `DELETE /projects/:pid` | 删除项目。owner；根项目与默认项目不能删 |
+| `GET /projects/:pid/members` | 成员列表。viewer |
+| `PUT /projects/:pid/members/:userId` | 加成员或改角色。owner；不是成员就加进来 |
+| `DELETE /projects/:pid/members/:userId` | 移除成员。owner，或者自己退出 |
 
 ### 目录树、接口与示例（契约第 3 节）
 
@@ -505,9 +547,11 @@ lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只
 lib/command.js        start / open / web / init / user 命令实现
 lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
 lib/db/repos/         各表的增删改查
-lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / templatize
+lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman / expectations / members / templatize
+lib/api/guard.js      项目权限中间件：guard(level, locate)，判定逻辑在 lib/access.js
 lib/api/respond.js    接口的响应约定（ok / fail / wrap / notFound）
 lib/api/dto.js        repo 行 → 接口 DTO，以及入参清洗
+lib/access.js         项目权限判定：角色是什么、资源属于哪个项目
 lib/tree.js           目录树业务逻辑：移动、删除目录、复制接口、树的读取与写入
 lib/routes-store.js   单个项目的门面（对外 API 与老版本一致，供旧版管理台使用）
 lib/project-stores.js 每个项目只建一个 store 实例，缓存复用
