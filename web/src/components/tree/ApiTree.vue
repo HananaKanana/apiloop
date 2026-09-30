@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
+import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import TreeContextMenu from './TreeContextMenu.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder']);
@@ -14,17 +15,18 @@ const tree = useTreeStore();
 const message = useMessage();
 const prompt = usePrompt();
 
-const METHOD_COLORS = {
-  GET: '#18a058',
-  POST: '#f0a020',
-  PUT: '#2080f0',
-  PATCH: '#8a2be2',
-  DELETE: '#d03050',
-  HEAD: '#909399',
-  OPTIONS: '#909399',
-  // WebSocket 接口（契约第 17 节）：给它一个自己的颜色，扫一眼就能和 HTTP 分开
-  WS: '#13a8a8'
+/**
+ * 行高 28px（计划里的全局约束）。naive-ui 的树高走 `nodeHeight` 主题变量，
+ * 悬停 / 选中的底色也从主题里给 —— 默认那层太淡，看不出来。
+ */
+const TREE_THEME = {
+  nodeHeight: '28px',
+  nodeColorHover: 'rgba(128, 128, 128, 0.14)',
+  nodeColorActive: 'rgba(128, 128, 128, 0.2)'
 };
+
+/** 方法标签固定宽度，各行的接口名才能对齐 */
+const methodWidth = METHOD_LABEL_WIDTH;
 
 const searchText = ref('');
 const expandedKeys = ref([]);
@@ -63,21 +65,57 @@ watch(
 
 /* ---------------- 渲染 ---------------- */
 
+/** 16×16 的文件夹：收起是描边的闭合文件夹，展开是多一面前翻盖的开口文件夹 */
+const FOLDER_PATH = 'M2 4.6A1.6 1.6 0 0 1 3.6 3h2.5a1 1 0 0 1 .8.4l.9 1.2h4.6A1.6 1.6 0 0 1 14 6.2v5.2A1.6 1.6 0 0 1 12.4 13H3.6A1.6 1.6 0 0 1 2 11.4z';
+const FOLDER_OPEN_BACK = 'M2 4.6A1.6 1.6 0 0 1 3.6 3h2.5a1 1 0 0 1 .8.4l.9 1.2h4.6A1.6 1.6 0 0 1 14 6.2v1.3H2z';
+const FOLDER_OPEN_FRONT = 'M1.7 12.1 3.3 8.3c.2-.5.7-.8 1.2-.8h9c.6 0 1 .5.8 1.1l-1.4 3.6c-.2.5-.7.9-1.3.9H2.5c-.6 0-1-.5-.8-1z';
+
+const SVG_ATTRS = {
+  viewBox: '0 0 16 16',
+  width: '15',
+  height: '15',
+  fill: 'none',
+  stroke: 'currentColor',
+  'stroke-width': '1.3',
+  'stroke-linejoin': 'round',
+  'aria-hidden': 'true'
+};
+
+function folderIcon(expanded) {
+  const paths = expanded
+    ? [
+        h('path', { d: FOLDER_OPEN_BACK, 'stroke-linecap': 'round' }),
+        h('path', { d: FOLDER_OPEN_FRONT })
+      ]
+    : [h('path', { d: FOLDER_PATH, 'stroke-linecap': 'round' })];
+
+  return h('svg', Object.assign({ class: 'folder-icon' }, SVG_ATTRS), paths);
+}
+
+/** 展开 / 收起的小三角，n-tree 自己不会给自定义图标加旋转，所以这里按状态画两个方向 */
+function renderSwitcherIcon(info) {
+  const path = info.expanded ? 'M3.5 6 8 10.5 12.5 6' : 'M6 3.5 10.5 8 6 12.5';
+  return h('svg', Object.assign({ class: 'switcher-icon' }, SVG_ATTRS, { width: '14', height: '14' }), [
+    h('path', { d: path, 'stroke-linecap': 'round' })
+  ]);
+}
+
 function renderLabel(info) {
   const node = info.option;
 
   if (node.kind === 'folder') {
-    return h('span', { class: 'tree-label folder' }, [
+    return h('span', { class: 'tree-label folder', title: node.name }, [
+      folderIcon(Boolean(info.expanded)),
       h('span', { class: 'name' }, node.name)
     ]);
   }
 
   const method = String((node.api && node.api.method) || 'GET').toUpperCase();
-  const color = METHOD_COLORS[method] || '#909399';
+  const name = node.name || '(未命名接口)';
 
-  return h('span', { class: 'tree-label api' }, [
-    h('span', { class: 'method', style: { color: color, borderColor: color } }, method),
-    h('span', { class: 'name' }, node.name || '(未命名接口)')
+  return h('span', { class: 'tree-label api', title: name }, [
+    h('span', { class: 'method', style: { color: methodColor(method), width: methodWidth } }, method),
+    h('span', { class: 'name' }, name)
   ]);
 }
 
@@ -391,10 +429,13 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           v-if="displayTree.length"
           block-line
           expand-on-click
+          :indent="16"
+          :theme-overrides="TREE_THEME"
           :data="displayTree"
           :expanded-keys="expandedKeys"
           :selected-keys="selectedKeys"
           :render-label="renderLabel"
+          :render-switcher-icon="renderSwitcherIcon"
           :render-suffix="renderSuffix"
           :node-props="nodeProps"
           :draggable="projects.canEdit"
@@ -486,6 +527,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 :deep(.tree-label .name) {
@@ -494,15 +536,33 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   white-space: nowrap;
 }
 
+/* 只有文字颜色，没有边框和底色；宽度固定右对齐，各行的名字才能对齐 */
 :deep(.tree-label .method) {
   flex: none;
   font-size: 10px;
   font-weight: 700;
-  line-height: 14px;
-  padding: 0 3px;
-  border: 1px solid;
-  border-radius: 3px;
+  line-height: 1;
+  text-align: right;
+  letter-spacing: 0.2px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:deep(.folder-icon),
+:deep(.switcher-icon) {
+  flex: none;
+  display: block;
+}
+
+:deep(.folder-icon) {
+  opacity: 0.75;
+}
+
+:deep(.switcher-icon) {
+  opacity: 0.55;
+}
+
+:deep(.n-tree-node-content) {
+  border-radius: 4px;
 }
 
 :deep(.mock-dot) {
@@ -510,7 +570,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #18a058;
+  background: #0cbb52;
   margin-left: 6px;
   vertical-align: middle;
 }
