@@ -45,12 +45,12 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `DELETE /folders/:id?apis=move\|delete` | 删目录。`move`（默认）把内容移到父目录，`delete` 递归删 |
 | `POST /projects/:pid/move` | 移动目录或接口到指定位置，并重排 position；移进自己的子孙会被拒 |
 | `GET /apis/:id` | 接口详情（含请求定义、mock 配置、全部示例） |
-| `POST /projects/:pid/apis` | 新建接口 |
+| `POST /projects/:pid/apis` | 新建接口。`method` 可以是 `WS`（WebSocket 接口，契约第 17 节） |
 | `PUT /apis/:id` | 更新接口（含 `scripts`）；改 url 时 `mock.path` 的跟随规则、开启 mock 的前提见契约 |
 | `DELETE /apis/:id` | 删除接口 |
 | `POST /apis/:id/duplicate` | 复制接口（示例整份复制，名字加「 副本」） |
-| `POST /apis/:id/examples` | 新增示例；这是第一个示例时会自动成为 mock 用的那条 |
-| `PUT /examples/:id` | 更新示例 |
+| `POST /apis/:id/examples` | 新增示例；这是第一个示例时会自动成为 mock 用的那条。`responseType` 为 `sse` / `ws` 时按契约第 17 节校验 `body`，不合法返回 400 |
+| `PUT /examples/:id` | 更新示例。只改 `body` 时按库里那个 `responseType` 校验 |
 | `DELETE /examples/:id` | 删除示例；删掉 mock 正在用的那条会自动改指或关掉 mock |
 | `POST /projects/:pid/import/routes` | 把解析出来的 route 批量落进项目，可指定目录 |
 
@@ -69,7 +69,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行前置 / 测试脚本 |
+| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行前置 / 测试脚本。`apiId` 指向 `WS` 接口时返回 400 |
 | `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」。测试脚本在 `end` 之前跑完，结果在 `end.result.scripts` 里 |
 | `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
 | `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果）。查看者不是发起人时，`result.scripts` 的 `console` 为空、变量 `set` 的值为 `***` |
@@ -82,7 +82,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | --- | --- |
 | `POST /import/postman/preview` | 解析并统计，不写库 |
 | `POST /import/postman` | 导入 collection / environment / globals；整个导入是一个事务 |
-| `GET /projects/:pid/export/postman` | 导出成 Postman Collection |
+| `GET /projects/:pid/export/postman` | 导出成 Postman Collection。`method` 为 `WS` 的接口会被跳过，`warnings` 里说明跳过了几个 |
 | `GET /environments/:id/export/postman` | 导出成 Postman Environment |
 
 ## HAR 导入（契约第 13 节）
@@ -130,6 +130,32 @@ scripts = {
 
 > 沙箱限制、支持的 `pm.*` API、变量写回规则见 [README 的「脚本」一节](../README.md#脚本)。
 > 前置脚本出错时请求不发送，`result.error.code` 是 `SCRIPT`。
+
+## SSE 与 WebSocket 的 mock 回放（契约第 17 节）
+
+示例的 `responseType` 多了两种，它们的 `body` 是一段描述**怎么回放**的 JSON：
+
+```js
+// responseType: 'sse'
+{ events: [{ delay, event?, data, id? }], repeat: false }
+
+// responseType: 'ws'     接口的 method 为 'WS'
+{ onOpen: [{ delay, send }],
+  rules: [{ match: { type: 'equals'|'contains'|'regex'|'any', value }, reply: [{ delay, send }] }],
+  fallback: 'none'|'echo' }
+```
+
+写入时校验，不合法返回 400 + 中文原因：
+
+- SSE：`body` 必须是合法 JSON；`events` 非空、最多 5000 条；`delay` 在 0~60000；`data` 必须是字符串；
+- WebSocket：`regex` 必须能编译；`delay` 在 0~60000；**步骤总数**（`onOpen` 条数 +
+  各条规则 `reply` 的条数，规则本身不计）不超过 1000。
+
+`method` 为 `WS` 的接口：存进目录树、可以配 mock，但**不注册 HTTP 路由**，由 mock 服务端在
+`upgrade` 事件上按 mockPath 匹配（规则和 HTTP 路由相同，`:param` 也支持；
+非根项目要带 `/mock/<slug>` 前缀）。每个项目最多同时保持 100 条 mock 连接，超了拒绝。
+
+> 用法、示例格式和「怎么录下来」见 [README 的「SSE 与 WebSocket 的 mock 回放」](../README.md#sse-与-websocket-的-mock-回放)。
 
 ## 流式发送与 WebSocket（契约第 14、15 节）
 

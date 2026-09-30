@@ -50,6 +50,7 @@
     "js-yaml": "^5.4.2",
     "open": "^8.4.0",
     "quickjs-emscripten-core": "0.32.0",
+    "ws": "8.22.0",
     "yargs": "^17.5.1"
   },
   "devDependencies": {
