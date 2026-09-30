@@ -17,6 +17,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { methodColor } from '@/utils/method';
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 640;
@@ -100,6 +101,17 @@ function onNewWs() {
 /** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
 function onOpenFolder(folderId) {
   tabs.openFolder(folderId);
+}
+
+/**
+ * 标签页标题前面的方法缩写（Postman 那一行也是这么排的）。
+ * 目录页签没有方法；WebSocket 页签固定 WS；其余取 spec 里的方法。
+ */
+function tabMethod(tab) {
+  if (!tab) return '';
+  if (tab.kind === 'ws') return 'WS';
+  if (tab.kind === 'folder') return '';
+  return String((tab.spec && tab.spec.method) || 'GET').toUpperCase();
 }
 
 function closeTab(tab) {
@@ -207,6 +219,11 @@ onBeforeUnmount(function () {
             :class="{ active: tab.key === tabs.activeKey }"
             @click="tabs.activate(tab.key)"
           >
+            <span
+              v-if="tabMethod(tab)"
+              class="tab-method"
+              :style="{ color: methodColor(tabMethod(tab)) }"
+            >{{ tabMethod(tab) }}</span>
             <span v-if="tab.dirty" class="dot" title="有没保存的修改" />
             <span class="tab-title">{{ tab.title }}</span>
             <span class="tab-close" title="关闭" @click.stop="closeTab(tab)">×</span>
@@ -325,6 +342,15 @@ onBeforeUnmount(function () {
 .tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 方法缩写：只有文字颜色，没有边框和底色 */
+.tab-method {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .dot {

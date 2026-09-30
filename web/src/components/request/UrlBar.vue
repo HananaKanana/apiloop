@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, h } from 'vue';
 import { NButton, NSelect } from 'naive-ui';
 import VarInput from '@/components/common/VarInput.vue';
+import { methodColor } from '@/utils/method';
 
 /**
  * 地址栏：method 下拉（允许输入自定义方法）+ url 输入框 + 发送 / 取消。
@@ -37,6 +38,14 @@ const methodOptions = computed(function () {
   }
   return list;
 });
+
+/**
+ * 方法名按方法上色、加粗。naive-ui 的 `renderLabel` 在下拉项和「已选中那个」
+ * 两处都会用到，所以选中状态也是带色的。
+ */
+function renderMethodOption(option) {
+  return h('span', { class: 'method-text', style: { color: methodColor(option.value) } }, option.label);
+}
 </script>
 
 <template>
@@ -47,6 +56,7 @@ const methodOptions = computed(function () {
       tag
       filterable
       :options="methodOptions"
+      :render-label="renderMethodOption"
       :value="String(method || 'GET').toUpperCase()"
       @update:value="(v) => emit('update:method', String(v).toUpperCase())"
     />
@@ -96,5 +106,10 @@ const methodOptions = computed(function () {
 .send {
   flex: none;
   width: 72px;
+}
+
+.method-text {
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 </style>
