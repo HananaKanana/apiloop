@@ -4,6 +4,7 @@ import {
   NDropdown,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NModal,
   NSpace,
@@ -12,6 +13,7 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
+import { ChevronDown, Package } from '@vicons/tabler';
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
@@ -146,12 +148,11 @@ function onSelect(key) {
 
 <template>
   <n-dropdown :options="options" :render-label="renderLabel" trigger="click" @select="onSelect">
-    <n-button size="small" quaternary>
-      {{ projects.current ? projects.current.name : '选择项目' }}
-      <template v-if="projects.current && projects.current.isRoot">
-        <n-tag size="tiny" :bordered="false" type="info" style="margin-left: 6px">根</n-tag>
-      </template>
-    </n-button>
+    <button class="switcher">
+      <n-icon size="15" :component="Package" />
+      <span class="name">{{ projects.current ? projects.current.name : '选择项目' }}</span>
+      <n-icon size="14" :component="ChevronDown" />
+    </button>
   </n-dropdown>
 
   <n-modal
@@ -181,3 +182,30 @@ function onSelect(key) {
   </n-modal>
 </template>
 
+<style scoped>
+/* 项目切换：图标 + 名字 + ▾（根 / 只读标签由顶栏紧跟在后面） */
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.switcher:hover {
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.switcher .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

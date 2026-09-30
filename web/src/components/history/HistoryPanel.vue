@@ -1,19 +1,19 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { NButton, NDrawer, NDrawerContent, NEmpty, NSpin, NTag, useDialog, useMessage } from 'naive-ui';
+import { ref, watch } from 'vue';
+import { NButton, NEmpty, NTag, useDialog, useMessage } from 'naive-ui';
 import * as historyApi from '@/api/history';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
-import { useUiStore } from '@/stores/ui';
+import { methodColor } from '@/utils/method';
 
 /**
- * 历史抽屉。列表按 id 倒序，滚动到底部时用 nextBefore 继续往前翻。
+ * 历史列表（侧栏的一页，原来是个抽屉）。
+ * 列表按 id 倒序，滚动到底部时用 nextBefore 继续往前翻。
  */
 const PAGE_SIZE = 50;
 
 const projects = useProjectStore();
 const tabs = useTabsStore();
-const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -21,11 +21,6 @@ const items = ref([]);
 const nextBefore = ref(null);
 const loading = ref(false);
 const loaded = ref(false);
-
-const visible = computed({
-  get: function () { return ui.historyVisible; },
-  set: function (value) { ui.historyVisible = value; }
-});
 
 async function loadPage(reset) {
   const pid = projects.currentId;
@@ -57,7 +52,6 @@ function onScroll(event) {
 async function openEntry(entry) {
   try {
     await tabs.openHistory(entry.id);
-    visible.value = false;
   } catch (err) {
     message.error(err.message);
   }
@@ -110,70 +104,83 @@ function formatMs(value) {
   return Math.round(value) + ' ms';
 }
 
-// 抽屉打开、或者换了项目，都从头拉一遍
+/** 这一页是常驻的（不像抽屉那样开一次拉一次），所以换项目时重新拉 */
 watch(
-  [visible, function () { return projects.currentId; }],
-  function (values) {
-    if (!values[0]) return;
+  function () { return projects.currentId; },
+  function () {
     items.value = [];
     nextBefore.value = null;
+    loaded.value = false;
     loadPage(true);
-  }
+  },
+  { immediate: true }
 );
 </script>
 
 <template>
-  <n-drawer v-model:show="visible" :width="520" placement="right">
-    <n-drawer-content closable>
-      <template #header>历史</template>
-      <template #header-extra>
-        <n-button
-          v-if="projects.canEdit"
-          size="tiny"
-          quaternary
-          type="error"
-          @click="clearAll"
-        >
-          清空历史
-        </n-button>
-      </template>
+  <div class="history-panel">
+    <div class="head">
+      <span class="group-title">历史</span>
+      <n-button
+        v-if="projects.canEdit"
+        size="tiny"
+        quaternary
+        @click="clearAll"
+      >
+        清空
+      </n-button>
+    </div>
 
-      <div class="history-body">
-        <div class="list" @scroll="onScroll">
-          <div
-            v-for="entry in items"
-            :key="entry.id"
-            class="item"
-            @click="openEntry(entry)"
-          >
-            <div class="item-top">
-              <span class="method">{{ entry.method }}</span>
-              <n-tag size="tiny" :bordered="false" :type="statusType(entry)">
-                {{ statusText(entry) }}
-              </n-tag>
-              <span class="spacer" />
-              <span class="time">{{ formatTime(entry.createdAt) }}</span>
-            </div>
-            <div class="item-bottom">
-              <span class="url">{{ entry.url }}</span>
-              <span class="ms">{{ formatMs(entry.totalMs) }}</span>
-            </div>
-          </div>
-
-          <n-empty v-if="loaded && !items.length" description="还没有历史记录" />
-          <div v-if="loading" class="loading">加载中…</div>
-          <div v-else-if="loaded && !nextBefore && items.length" class="loading">没有更多了</div>
+    <div class="list" @scroll="onScroll">
+      <div
+        v-for="entry in items"
+        :key="entry.id"
+        class="item"
+        @click="openEntry(entry)"
+      >
+        <div class="item-top">
+          <span class="method" :style="{ color: methodColor(entry.method) }">{{ entry.method }}</span>
+          <n-tag size="tiny" :bordered="false" :type="statusType(entry)">
+            {{ statusText(entry) }}
+          </n-tag>
+          <span class="spacer" />
+          <span class="time">{{ formatTime(entry.createdAt) }}</span>
+        </div>
+        <div class="item-bottom">
+          <span class="url">{{ entry.url }}</span>
+          <span class="ms">{{ formatMs(entry.totalMs) }}</span>
         </div>
       </div>
-    </n-drawer-content>
-  </n-drawer>
+
+      <n-empty v-if="loaded && !items.length" size="small" description="还没有历史记录" />
+      <div v-if="loading" class="loading">加载中…</div>
+      <div v-else-if="loaded && !nextBefore && items.length" class="loading">没有更多了</div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.history-body {
+.history-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+}
+
+/* 和目录页的分组标题一个样式（对应 Postman 的 COLLECTIONS） */
+.group-title {
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  opacity: 0.6;
+  text-transform: uppercase;
 }
 
 .list {
@@ -183,7 +190,7 @@ watch(
 }
 
 .item {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
   cursor: pointer;
   display: flex;
@@ -205,7 +212,6 @@ watch(
   font-size: 11px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #18a058;
 }
 
 .spacer {

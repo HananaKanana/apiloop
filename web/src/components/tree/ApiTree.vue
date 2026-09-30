@@ -1,6 +1,7 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
-import { NButton, NEmpty, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
+import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
+import { Dots, FileImport, Filter, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
@@ -8,7 +9,7 @@ import { usePrompt } from '@/utils/prompt';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import TreeContextMenu from './TreeContextMenu.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import']);
 
 const projects = useProjectStore();
 const tree = useTreeStore();
@@ -27,6 +28,36 @@ const TREE_THEME = {
 
 /** 方法标签固定宽度，各行的接口名才能对齐 */
 const methodWidth = METHOD_LABEL_WIDTH;
+
+/** 工具条上「＋」和「…」两个菜单 */
+const newOptions = [
+  { label: '接口', key: 'api' },
+  { label: '目录', key: 'folder' },
+  { label: 'WebSocket', key: 'ws' }
+];
+
+const moreOptions = computed(function () {
+  return [{ label: anyExpanded.value ? '全部收起' : '全部展开', key: 'toggle' }];
+});
+
+function onNewSelect(key) {
+  if (key === 'api') {
+    emit('new-api', null);
+    return;
+  }
+  if (key === 'ws') {
+    emit('new-ws');
+    return;
+  }
+  if (key === 'folder') {
+    // 建在当前选中的目录下（和导入的落点规则一致）
+    createFolder(tree.selectedFolderId || null);
+  }
+}
+
+function onMoreSelect(key) {
+  if (key === 'toggle') toggleExpandAll();
+}
 
 const searchText = ref('');
 const expandedKeys = ref([]);
@@ -391,37 +422,41 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
     <div class="toolbar">
       <n-input
         v-model:value="searchText"
+        class="filter"
         size="small"
         clearable
-        placeholder="搜索名称或 url"
-      />
-      <n-button
-        size="small"
-        quaternary
-        :title="anyExpanded ? '全部收起' : '全部展开'"
-        @click="toggleExpandAll"
+        placeholder="过滤"
       >
-        {{ anyExpanded ? '收起' : '展开' }}
+        <template #prefix>
+          <n-icon :component="Filter" />
+        </template>
+      </n-input>
+
+      <!-- 新建：接口 / 目录 / WebSocket 都收在这一个 ＋ 里 -->
+      <n-dropdown v-if="projects.canEdit" trigger="click" :options="newOptions" @select="onNewSelect">
+        <n-button size="small" quaternary title="新建">
+          <template #icon>
+            <n-icon :component="Plus" />
+          </template>
+        </n-button>
+      </n-dropdown>
+
+      <n-button size="small" quaternary title="导入" @click="emit('import')">
+        <template #icon>
+          <n-icon :component="FileImport" />
+        </template>
       </n-button>
-      <n-button
-        v-if="projects.canEdit"
-        size="small"
-        quaternary
-        title="新建接口"
-        @click="emit('new-api', null)"
-      >
-        ＋
-      </n-button>
-      <!-- WebSocket 标签页不进目录树，viewer 也能用，所以不受 canEdit 限制 -->
-      <n-button
-        size="small"
-        quaternary
-        title="新建 WebSocket 调试标签页"
-        @click="emit('new-ws')"
-      >
-        WS
-      </n-button>
+
+      <n-dropdown trigger="click" :options="moreOptions" @select="onMoreSelect">
+        <n-button size="small" quaternary title="更多">
+          <template #icon>
+            <n-icon :component="Dots" />
+          </template>
+        </n-button>
+      </n-dropdown>
     </div>
+
+    <div class="group-title">目录</div>
 
     <div class="body">
       <n-spin :show="tree.loading">
@@ -504,16 +539,31 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px;
-  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+  gap: 2px;
+  padding: 6px 6px 6px 10px;
+}
+
+/* 过滤框占满剩下的宽度，图标按钮固定在右边 */
+.toolbar .filter {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 分组标题，对应 Postman 左边栏的 COLLECTIONS */
+.group-title {
+  flex: none;
+  padding: 2px 12px 6px;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  opacity: 0.6;
+  text-transform: uppercase;
 }
 
 .body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 4px 0;
+  padding: 0 4px 4px;
 }
 
 .delete-desc {

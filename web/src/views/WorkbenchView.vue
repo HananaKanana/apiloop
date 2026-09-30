@@ -1,15 +1,16 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { NButton, NEmpty, NTag, useDialog, useMessage } from 'naive-ui';
+import { NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
+import { LayoutSidebarLeftCollapse, LayoutSidebarLeftExpand } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
-import ApiTree from '@/components/tree/ApiTree.vue';
+import QuickOpen from '@/components/layout/QuickOpen.vue';
+import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
-import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
@@ -35,6 +36,18 @@ const leftWidth = ref(Number(localStorage.getItem('apiloop.treeWidth')) || 280);
 const collapsed = ref(false);
 const dragging = ref(false);
 const showAbout = ref(false);
+
+/** 侧栏开关：⌘\ / Ctrl+\ 或者点侧栏最底下那个图标 */
+function toggleSidebar() {
+  collapsed.value = !collapsed.value;
+}
+
+function onKeydown(event) {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (event.key !== '\\') return;
+  event.preventDefault();
+  toggleSidebar();
+}
 
 function clamp(value) {
   return Math.min(Math.max(value, MIN_WIDTH), MAX_WIDTH);
@@ -152,6 +165,7 @@ onMounted(async function () {
   window.addEventListener('mouseup', stopDrag);
   window.addEventListener('resize', onResize);
   window.addEventListener('beforeunload', onBeforeUnload);
+  window.addEventListener('keydown', onKeydown);
   onResize();
 
   try {
@@ -166,6 +180,7 @@ onBeforeUnmount(function () {
   window.removeEventListener('mouseup', stopDrag);
   window.removeEventListener('resize', onResize);
   window.removeEventListener('beforeunload', onBeforeUnload);
+  window.removeEventListener('keydown', onKeydown);
   stopDrag();
 });
 </script>
@@ -179,28 +194,20 @@ onBeforeUnmount(function () {
       <template #env>
         <env-switcher />
       </template>
-      <template #actions>
-        <!-- 只读角色：说清楚为什么页面上少了那些按钮 -->
-        <n-tag v-if="projects.current && !projects.canEdit" size="tiny" :bordered="false">
-          只读
-        </n-tag>
-        <n-button quaternary size="small" @click="ui.openImport()">导入</n-button>
-        <n-button quaternary size="small" @click="ui.openHistory()">历史</n-button>
-        <n-button quaternary size="small" @click="ui.openMockLog()">Mock 日志</n-button>
-        <n-button quaternary size="small" @click="collapsed = !collapsed">
-          {{ collapsed ? '显示目录' : '隐藏目录' }}
-        </n-button>
-      </template>
     </top-bar>
 
     <div class="body">
       <aside v-show="!collapsed" class="left" :style="{ width: leftWidth + 'px' }">
-        <api-tree
+        <side-bar
           @open="onOpenApi"
           @new-api="onNewApi"
           @new-ws="onNewWs"
           @open-folder="onOpenFolder"
+          @import="ui.openImport()"
         />
+        <button class="collapse" title="收起侧栏（⌘\）" @click="toggleSidebar">
+          <n-icon size="16" :component="LayoutSidebarLeftCollapse" />
+        </button>
       </aside>
 
       <div
@@ -211,6 +218,10 @@ onBeforeUnmount(function () {
       />
 
       <main class="right">
+        <!-- 侧栏收起来之后，得留一个能再打开的入口 -->
+        <button v-if="collapsed" class="expand" title="展开侧栏（⌘\）" @click="toggleSidebar">
+          <n-icon size="16" :component="LayoutSidebarLeftExpand" />
+        </button>
         <div v-if="tabs.tabs.length" class="tab-bar">
           <div
             v-for="tab in tabs.tabs"
@@ -253,9 +264,9 @@ onBeforeUnmount(function () {
       </main>
     </div>
 
-    <history-panel />
     <mock-log-drawer />
     <import-dialog />
+    <quick-open />
     <about-dialog v-model:show="showAbout" />
   </div>
 </template>
@@ -279,7 +290,47 @@ onBeforeUnmount(function () {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+/* 侧栏最底下的折叠按钮 */
+.collapse,
+.expand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  padding: 0;
+}
+
+.collapse {
+  height: 28px;
+  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.collapse:hover,
+.expand:hover {
+  opacity: 1;
+}
+
+/* 侧栏收起来时浮在内容区左上角的小按钮 */
+.expand {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+}
+
+.expand:hover {
+  background: rgba(128, 128, 128, 0.14);
 }
 
 .splitter {
@@ -304,6 +355,8 @@ onBeforeUnmount(function () {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 侧栏收起来时，展开按钮要浮在左上角 */
+  position: relative;
 }
 
 .tab-bar {
