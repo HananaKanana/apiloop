@@ -6,7 +6,6 @@ import { Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
-import EnvQuickView from '@/components/env/EnvQuickView.vue';
 import QuickOpen from '@/components/layout/QuickOpen.vue';
 import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
@@ -250,7 +249,6 @@ onBeforeUnmount(function () {
           </div>
 
           <div class="tab-tail">
-            <env-quick-view />
             <env-switcher />
           </div>
         </div>
