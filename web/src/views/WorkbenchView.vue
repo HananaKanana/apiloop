@@ -19,6 +19,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { useEnvStore } from '@/stores/env';
 import { methodColor } from '@/utils/method';
 
 const MIN_WIDTH = 180;
@@ -30,6 +31,7 @@ const projects = useProjectStore();
 const tree = useTreeStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
+const envs = useEnvStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -124,8 +126,8 @@ function onOpenFolder(folderId) {
 function tabMethod(tab) {
   if (!tab) return '';
   if (tab.kind === 'ws') return 'WS';
-  // 目录页签和环境页签都没有「方法」这一说，不显示缩写
-  if (tab.kind === 'folder' || tab.kind === 'env') return '';
+  // 目录页签没有「方法」这一说，不显示缩写
+  if (tab.kind === 'folder') return '';
   return String((tab.spec && tab.spec.method) || 'GET').toUpperCase();
 }
 
@@ -221,10 +223,10 @@ onBeforeUnmount(function () {
 
       <main class="right">
         <!--
-          标签行始终显示：右边的环境切换器（和它拉环境列表的 watcher）要一直挂着，
-          没有标签页时也不能卸载 —— 否则新建请求时环境变量就没了。
+          标签行要一直挂着：右边的环境切换器（和它拉环境列表的 watcher）不能卸载 ——
+          否则新建请求时环境变量就没了。侧栏切到「环境」时只是藏起来（v-show）。
         -->
-        <div class="tab-bar">
+        <div v-show="ui.sidebarTab !== 'env'" class="tab-bar">
           <div class="tab-list">
             <div
               v-for="tab in tabs.tabs"
@@ -253,14 +255,20 @@ onBeforeUnmount(function () {
           </div>
         </div>
 
-        <div class="tab-body">
+        <!--
+          侧栏切到「环境」：右边整块是环境编辑区，不和接口挤在一排标签页里（用户 2026-09-30）。
+          请求区这时用 v-if 卸掉，免得它的 ⌘S 也跟着响；标签页的状态都在 store 里，切回来照旧。
+        -->
+        <div v-if="ui.sidebarTab === 'env'" class="tab-body">
+          <env-tab v-if="envs.editing" :key="envs.editing.id" :env-id="envs.editing.id" />
+          <div v-else class="placeholder">
+            <n-empty description="还没有环境，点左边的「新建环境」" />
+          </div>
+        </div>
+
+        <div v-else class="tab-body">
           <folder-tab
             v-if="tabs.active && tabs.active.kind === 'folder'"
-            :key="tabs.activeKey"
-            :tab="tabs.active"
-          />
-          <env-tab
-            v-else-if="tabs.active && tabs.active.kind === 'env'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

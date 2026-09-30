@@ -4,15 +4,13 @@ import { NButton, NDropdown, NEmpty, NIcon, useDialog, useMessage } from 'naive-
 import { Check, Dots, Plus } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
-import { useTabsStore } from '@/stores/tabs';
 
 /**
- * 侧栏「环境」页（Task 7）。每个环境一行：点它打开对应的标签页；
+ * 侧栏「环境」页（Task 7）。每个环境一行：点它在右边的环境编辑区里打开；
  * 当前正在用的那个前面打勾；鼠标悬停时右边出现「…」菜单。
  */
 const envs = useEnvStore();
 const projects = useProjectStore();
-const tabs = useTabsStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -28,13 +26,13 @@ const canEdit = computed(function () {
 });
 
 function openEnv(env) {
-  tabs.openEnv(env.id);
+  envs.edit(env.id);
 }
 
 async function createEnv() {
   try {
     const env = await envs.create({ name: '新环境', variables: [] });
-    await tabs.openEnv(env.id);
+    envs.edit(env.id);
     message.success('已创建');
   } catch (err) {
     message.error(err.message);
@@ -67,7 +65,7 @@ async function onMenuSelect(env, key) {
         name: env.name + ' 副本',
         variables: env.variables || []
       });
-      await tabs.openEnv(created.id);
+      envs.edit(created.id);
       message.success('已复制');
     } catch (err) {
       message.error(err.message);
@@ -111,7 +109,7 @@ async function onMenuSelect(env, key) {
         v-for="env in list"
         :key="env.id"
         class="item"
-        :class="{ active: env.id === envs.selectedId }"
+        :class="{ active: envs.editing && env.id === envs.editing.id }"
         @click="openEnv(env)"
       >
         <!-- 当前正在用的那个打勾，其余留空（不给常态留占位） -->
@@ -119,6 +117,7 @@ async function onMenuSelect(env, key) {
           <n-icon v-if="env.id === envs.selectedId" size="14" :component="Check" />
         </span>
         <span class="name">{{ env.name }}</span>
+        <span v-if="envs.isDirty(env.id)" class="dirty-dot" title="有没保存的修改" />
         <span class="count">{{ (env.variables || []).length }}</span>
 
         <n-dropdown
@@ -182,6 +181,14 @@ async function onMenuSelect(env, key) {
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.dirty-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--apiloop-primary);
 }
 
 .item:hover {

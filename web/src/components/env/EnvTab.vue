@@ -4,30 +4,26 @@ import { NButton, NDropdown, NIcon, NInput, NTag, useDialog, useMessage } from '
 import { Dots } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
-import { useTabsStore } from '@/stores/tabs';
 import * as importExportApi from '@/api/importExport';
 import { downloadJson } from '@/utils/download';
 import VarTable from '@/components/common/VarTable.vue';
 
 /**
- * 环境标签页（Task 7）。环境就是「名字 + 一串变量」，原来那个管理弹窗又窄又空，
- * 现在改成和接口、目录并列的标签页：名字可以直接点着改，变量表占满整屏。
+ * 环境编辑区。侧栏切到「环境」时，右边整块就是它 —— 不再和接口挤在同一排标签页里
+ * （用户 2026-09-30）。名字可以直接点着改，变量表占满整屏。
  *
- * 编辑的是**一份草稿**：保存前不动 store 里的对象，所以「未保存」的圆点、
- * ⌘S、切项目时的提醒都跟接口标签页是同一套规则。
+ * 编辑的是**一份草稿**，放在 env store 的 `drafts` 里：保存前不动服务端返回的那份，
+ * 切回目录、换一个环境再回来，改了一半的内容都还在。
  */
 const props = defineProps({
-  tab: { type: Object, required: true }
+  envId: { type: String, required: true }
 });
 
 const envs = useEnvStore();
 const projects = useProjectStore();
-const tabs = useTabsStore();
 const message = useMessage();
 const dialog = useDialog();
 
-const draftName = ref('');
-const draftVariables = ref([]);
 const saving = ref(false);
 const keyword = ref('');
 
@@ -36,53 +32,40 @@ const canEdit = computed(function () {
 });
 
 const env = computed(function () {
-  return envs.environments.find(function (item) { return item.id === props.tab.envId; }) || null;
+  return envs.environments.find(function (item) { return item.id === props.envId; }) || null;
 });
 
 const isCurrent = computed(function () {
-  return envs.selectedId === props.tab.envId;
+  return envs.selectedId === props.envId;
 });
 
-/** 草稿和 store 里的那份不一样就算「未保存」 */
-const dirty = computed(function () {
-  const saved = env.value;
-  if (!saved) return false;
-  return draftName.value !== saved.name ||
-    JSON.stringify(draftVariables.value) !== JSON.stringify(saved.variables || []);
-});
-
-/** 灌草稿：打开时、以及环境被别处改过（比如刚保存完）时 */
-function resetDraft() {
-  const saved = env.value;
-  draftName.value = saved ? saved.name : '';
-  draftVariables.value = saved ? JSON.parse(JSON.stringify(saved.variables || [])) : [];
+/** 服务端那份的深拷贝，当作草稿的起点 */
+function freshDraft(saved) {
+  return { name: saved.name, variables: JSON.parse(JSON.stringify(saved.variables || [])) };
 }
 
-/**
- * 只在**内容真的变了**的时候重灌草稿。
- * 不能直接 `watch(env)`：`envs.create()` / `envs.remove()` 内部都会 `load()`，
- * 把 `environments` 整个换成新对象 —— 那样每开着一个环境标签页都会被重置，
- * 没保存的修改被悄悄清掉、未保存圆点也跟着没了。
- * 自己保存成功时服务端返回的内容变了，这个 watch 照常会触发。
- */
-watch(
-  function () {
-    const saved = env.value;
-    return saved ? JSON.stringify({ name: saved.name, variables: saved.variables || [] }) : '';
-  },
-  resetDraft,
-  { immediate: true }
-);
+// 还没有草稿就按服务端那份建一份（放在 watch 里建，别在 computed 的 getter 里改 store）
+watch(env, function (saved) {
+  if (saved && !envs.drafts[props.envId]) envs.drafts[props.envId] = freshDraft(saved);
+}, { immediate: true });
 
-// 标签页标题跟着名字走（改名时标签上立刻能看出来）
-watch(draftName, function (value) {
-  props.tab.title = value || '环境';
+function draft() {
+  return envs.drafts[props.envId] || null;
+}
+
+const draftName = computed({
+  get: function () { const d = draft(); return d ? d.name : ''; },
+  set: function (value) { const d = draft(); if (d) d.name = value; }
 });
 
-// 让「切项目 / 关页面」的未保存提醒也认这个标签页
-watch(dirty, function (value) {
-  props.tab.dirty = value;
-}, { immediate: true });
+const draftVariables = computed({
+  get: function () { const d = draft(); return d ? d.variables : []; },
+  set: function (value) { const d = draft(); if (d) d.variables = value; }
+});
+
+const dirty = computed(function () {
+  return envs.isDirty(props.envId);
+});
 
 const count = computed(function () {
   return draftVariables.value.filter(function (row) {
@@ -104,7 +87,9 @@ async function save() {
 
   saving.value = true;
   try {
-    await envs.update(saved.id, { name: name, variables: draftVariables.value });
+    const updated = await envs.update(saved.id, { name: name, variables: draftVariables.value });
+    // 用服务端返回的那份重建草稿（它会丢掉没填名字的空行），「未保存」随之消失
+    envs.drafts[props.envId] = freshDraft(updated);
     message.success('已保存');
   } catch (err) {
     message.error(err.message);
@@ -136,7 +121,7 @@ onBeforeUnmount(function () {
 /* ---------------- 设为当前 / 复制 / 导出 / 删除 ---------------- */
 
 function setCurrent() {
-  envs.select(props.tab.envId);
+  envs.select(props.envId);
   message.success('已设为当前环境');
 }
 
@@ -149,7 +134,7 @@ async function duplicate() {
       name: draftName.value.trim() + ' 副本',
       variables: draftVariables.value
     });
-    await tabs.openEnv(created.id);
+    envs.edit(created.id);
     message.success('已复制');
   } catch (err) {
     message.error(err.message);
@@ -181,7 +166,6 @@ function removeEnv() {
     onPositiveClick: async function () {
       try {
         await envs.remove(saved.id);
-        tabs.close(props.tab.key);
         message.success('已删除');
       } catch (err) {
         message.error(err.message);
@@ -221,6 +205,7 @@ function onMenuSelect(key) {
         placeholder="环境名"
         @update:value="(v) => { draftName = v; }"
       />
+      <span v-if="dirty" class="dirty-dot" title="有没保存的修改，⌘S 保存" />
 
       <n-tag v-if="isCurrent" size="small" :bordered="false">当前</n-tag>
       <n-button v-else-if="canEdit" size="small" quaternary @click="setCurrent">设为当前</n-button>
@@ -289,6 +274,14 @@ function onMenuSelect(key) {
 .head .name {
   flex: none;
   width: 260px;
+}
+
+.dirty-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--apiloop-primary);
 }
 
 .spacer {
