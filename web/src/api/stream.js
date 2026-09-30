@@ -64,7 +64,7 @@ async function readStream(res, onEvent) {
   }
 }
 
-async function run(promise, onEvent) {
+async function run(promise, onEvent, onOpen) {
   let res;
   try {
     res = await promise;
@@ -81,13 +81,17 @@ async function run(promise, onEvent) {
   if (!res.ok) throw await toError(res);
   if (!res.body) throw new Error('这个浏览器不支持流式响应');
 
+  // 长连接建立了（响应头到了）。重连成功时靠它把「重连中」的状态收回来 ——
+  // 重连后服务端只补发 seq 之后的事件，不会再发一次 open 事件。
+  if (onOpen) onOpen(res);
+
   return readStream(res, onEvent);
 }
 
 /**
  * @param {string} path 以 / 开头的接口路径，不含 /__admin/api 前缀
  * @param {any} body 按 JSON 序列化
- * @param {{signal?: AbortSignal, onEvent?: (event: object) => void}} options
+ * @param {{signal?: AbortSignal, onEvent?: (event: object) => void, onOpen?: (res: Response) => void}} options
  */
 export function postNdjson(path, body, options) {
   const opts = options || {};
@@ -99,7 +103,7 @@ export function postNdjson(path, body, options) {
   };
   if (opts.signal) init.signal = opts.signal;
 
-  return run(fetch(API_PREFIX + path, init), opts.onEvent);
+  return run(fetch(API_PREFIX + path, init), opts.onEvent, opts.onOpen);
 }
 
 export function getNdjson(path, options) {
@@ -111,5 +115,5 @@ export function getNdjson(path, options) {
   };
   if (opts.signal) init.signal = opts.signal;
 
-  return run(fetch(API_PREFIX + path, init), opts.onEvent);
+  return run(fetch(API_PREFIX + path, init), opts.onEvent, opts.onOpen);
 }

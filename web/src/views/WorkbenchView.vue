@@ -7,6 +7,7 @@ import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import ApiTree from '@/components/tree/ApiTree.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
+import WsTab from '@/components/ws/WsTab.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
@@ -90,6 +91,11 @@ function onNewApi(folderId) {
   tabs.openDraft(folderId);
 }
 
+/** WebSocket 标签页不进目录树，和当前选中的目录没关系 */
+function onNewWs() {
+  tabs.openWs();
+}
+
 function closeTab(tab) {
   if (!tab.dirty) {
     tabs.close(tab.key);
@@ -162,7 +168,7 @@ onBeforeUnmount(function () {
 
     <div class="body">
       <aside v-show="!collapsed" class="left" :style="{ width: leftWidth + 'px' }">
-        <api-tree @open="onOpenApi" @new-api="onNewApi" />
+        <api-tree @open="onOpenApi" @new-api="onNewApi" @new-ws="onNewWs" />
       </aside>
 
       <div
@@ -188,7 +194,16 @@ onBeforeUnmount(function () {
         </div>
 
         <div class="tab-body">
-          <request-tab v-if="tabs.active" :key="tabs.activeKey" :tab="tabs.active" />
+          <ws-tab
+            v-if="tabs.active && tabs.active.kind === 'ws'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <request-tab
+            v-else-if="tabs.active"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
           <div v-else class="placeholder">
             <n-empty description="从左边选一个接口，或者点目录树右上角的 ＋ 新建请求" />
           </div>

@@ -7,7 +7,7 @@ import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree'
 import { usePrompt } from '@/utils/prompt';
 import TreeContextMenu from './TreeContextMenu.vue';
 
-const emit = defineEmits(['open', 'new-api']);
+const emit = defineEmits(['open', 'new-api', 'new-ws']);
 
 const projects = useProjectStore();
 const tree = useTreeStore();
@@ -339,6 +339,15 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         @click="emit('new-api', null)"
       >
         ＋
+      </n-button>
+      <!-- WebSocket 标签页不进目录树，viewer 也能用，所以不受 canEdit 限制 -->
+      <n-button
+        size="small"
+        quaternary
+        title="新建 WebSocket 调试标签页"
+        @click="emit('new-ws')"
+      >
+        WS
       </n-button>
     </div>
 
