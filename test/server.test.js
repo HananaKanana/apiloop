@@ -8,6 +8,7 @@ var bodyParser = require('body-parser');
 var { once } = require('node:events');
 
 var storeModule = require('../lib/routes-store');
+var db = require('../lib/db');
 var runtimeModule = require('../lib/mock-runtime');
 var adminModule = require('../lib/admin');
 
@@ -15,7 +16,7 @@ var ctx = null;
 
 test.before(async function () {
     var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-http-'));
-    var store = storeModule.createStore({ file: path.join(dir, 'routes.json') });
+    var store = storeModule.createStore({ file: path.join(dir, 'routes.db') });
     store.load();
     store.startWatching();
 
@@ -272,27 +273,30 @@ test('导出 JSON', async function () {
     assert.ok(doc.routes.length > 0);
 });
 
-test('外部编辑 routes.json 触发热更新', async function () {
-    var doc = JSON.parse(fs.readFileSync(ctx.store.filePath, 'utf-8'));
+test('外部改数据库触发热更新', async function () {
+    // 模拟外部拿 sqlite3 命令行改数据：另开一条连接把接口写进库
+    var handle = db.openDatabase(ctx.store.filePath);
+    var doc = db.readAll(handle);
     doc.routes.push({
-        id: 'r_from_disk', name: '磁盘接口', enabled: true, method: 'GET', path: '/api/from-disk',
+        id: 'r_from_db', name: '外部接口', enabled: true, method: 'GET', path: '/api/from-db',
         status: 200, delay: 0, cors: false, headers: [], query: [], body: [],
-        responseType: 'json', response: '{"from":"disk"}'
+        responseType: 'json', response: '{"from":"db"}'
     });
-    fs.writeFileSync(ctx.store.filePath, JSON.stringify(doc, null, 2));
+    db.writeAll(handle, doc);
+    db.close(handle);
 
     var deadline = Date.now() + 5000;
     var ok = false;
     while (Date.now() < deadline) {
-        var res = await fetch(ctx.base + '/api/from-disk');
+        var res = await fetch(ctx.base + '/api/from-db');
         if (res.status === 200) {
-            assert.strictEqual((await res.json()).from, 'disk');
+            assert.strictEqual((await res.json()).from, 'db');
             ok = true;
             break;
         }
         await new Promise(function (resolve) { setTimeout(resolve, 100); });
     }
-    assert.ok(ok, '外部修改 routes.json 后应自动热更新');
+    assert.ok(ok, '外部改库后应自动热更新');
 });
 
 test('删除接口后返回 404', async function () {
@@ -426,8 +430,10 @@ test('分组排序接口', async function () {
     assert.ok(after.indexOf('排序乙') < after.indexOf('排序甲'));
 
     // 顺序要真的落盘
-    var doc = JSON.parse(fs.readFileSync(ctx.store.filePath, 'utf-8'));
-    assert.ok(doc.groups.indexOf('排序丙') < doc.groups.indexOf('排序甲'));
+    var handle = db.openDatabase(ctx.store.filePath);
+    var stored = db.readAll(handle);
+    db.close(handle);
+    assert.ok(stored.groups.indexOf('排序丙') < stored.groups.indexOf('排序甲'), '分组顺序应写进数据库');
 
     // 非法输入
     var bad = await ctx.api('POST', '/groups/reorder', { names: ['查无此组'] });

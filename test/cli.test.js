@@ -6,6 +6,8 @@ var path = require('path');
 var net = require('net');
 var { spawn, spawnSync } = require('node:child_process');
 
+var db = require('../lib/db');
+
 var CLI = path.join(__dirname, '..', 'bin', 'server');
 
 function runCli(args, cwd) {
@@ -70,20 +72,23 @@ test('非法命令以 1 退出并打印帮助', function () {
     assert.ok(result.stderr.indexOf('Usage') > -1);
 });
 
-test('init 生成 router.js / index.html / routes.json', function () {
+test('init 生成 router.js 与示例数据库', function () {
     var dir = tempDir();
     var result = runCli(['init'], dir);
     assert.strictEqual(result.status, 0, result.stderr);
 
     assert.ok(fs.existsSync(path.join(dir, 'router.js')));
-    assert.ok(fs.existsSync(path.join(dir, 'index.html')));
+    assert.strictEqual(fs.existsSync(path.join(dir, 'index.html')), false,
+        '不该再生成 index.html —— web 模式下它会被管理台盖住');
 
-    var configPath = path.join(dir, 'routes.json');
-    assert.ok(fs.existsSync(configPath), 'init 应生成 routes.json');
-    var doc = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    assert.strictEqual(doc.version, 1);
-    assert.ok(doc.routes.length >= 3);
-    assert.ok(Array.isArray(doc.groups) && doc.groups.indexOf('用户') > -1, 'init 应声明示例分组');
+    var configPath = path.join(dir, 'routes.db');
+    assert.ok(fs.existsSync(configPath), 'init 应生成 routes.db');
+
+    var handle = db.openDatabase(configPath);
+    var doc = db.readAll(handle);
+    db.close(handle);
+    assert.ok(doc.routes.length >= 3, '库里应有示例接口');
+    assert.ok(doc.groups.indexOf('用户') > -1, 'init 应声明示例分组');
     assert.strictEqual(fs.existsSync(path.join(dir, 'npm-debug.log')), false, '不应再拷贝 npm-debug.log');
 
     // 再跑一次不应覆盖已有配置
@@ -157,7 +162,7 @@ test('web：启动管理台，API 与 mock 路由都可用', async function () {
     }
 });
 
-test('start：也会加载 routes.json（不需要 web 也能用配置好的接口）', async function () {
+test('start：会自动导入旧的 routes.json 并供出接口', async function () {
     var dir = tempDir();
     fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({
         version: 1,
@@ -190,7 +195,7 @@ test('start：也会加载 routes.json（不需要 web 也能用配置好的接�
             }
             await new Promise(function (resolve) { setTimeout(resolve, 120); });
         }
-        assert.ok(body, 'start 也应加载 routes.json 里的接口');
+        assert.ok(body, '旧 routes.json 应被自动导入并生效');
         assert.strictEqual(body.source, 'routes.json');
 
         // start 模式不挂管理台
