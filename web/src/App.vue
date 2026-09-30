@@ -17,7 +17,11 @@ const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null));
 </script>
 
 <template>
-  <n-config-provider :theme="theme" :locale="zhCN" :date-locale="dateZhCN">
+  <!--
+    abstract：不渲染外层的包裹 div。那个 div 没有高度，会把 html → body → #app → 页面
+    这条 height: 100% 链截断，工作台就被目录树撑高、整页一起滚动，右半边跟着滚没了。
+  -->
+  <n-config-provider abstract :theme="theme" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
