@@ -54,6 +54,11 @@ const api = computed(function () {
   return props.tab.api;
 });
 
+/** 只读角色（viewer）看不到任何写入口；真正的拦截在服务端 */
+const canEdit = computed(function () {
+  return projects.canEdit;
+});
+
 const mock = computed(function () {
   const value = api.value && api.value.mock;
   return {
@@ -379,6 +384,7 @@ async function onDrop() {
             <n-switch
               size="small"
               :value="mock.enabled"
+              :disabled="!canEdit"
               @update:value="(v) => patchMock({ enabled: v })"
             />
           </n-form-item>
@@ -387,9 +393,10 @@ async function onDrop() {
             <n-input
               size="small"
               :value="draftPath"
+              :disabled="!canEdit"
               placeholder="/api/users"
               @update:value="(v) => { draftPath = v; }"
-              @blur="draftPath !== mock.path && patchMock({ path: draftPath })"
+              @blur="canEdit && draftPath !== mock.path && patchMock({ path: draftPath })"
             />
           </n-form-item>
 
@@ -399,6 +406,7 @@ async function onDrop() {
               :value="mock.delay"
               :min="0"
               :max="60000"
+              :disabled="!canEdit"
               @update:value="(v) => patchMock({ delay: v || 0 })"
             />
           </n-form-item>
@@ -407,6 +415,7 @@ async function onDrop() {
             <n-switch
               size="small"
               :value="mock.cors"
+              :disabled="!canEdit"
               @update:value="(v) => patchMock({ cors: v })"
             />
           </n-form-item>
@@ -429,7 +438,15 @@ async function onDrop() {
           <div class="section">
             <div class="list-head">
               <span>示例</span>
-              <n-button size="tiny" quaternary type="primary" @click="createExample">新建</n-button>
+              <n-button
+                v-if="canEdit"
+                size="tiny"
+                quaternary
+                type="primary"
+                @click="createExample"
+              >
+                新建
+              </n-button>
             </div>
 
             <div class="list-body">
@@ -458,7 +475,7 @@ async function onDrop() {
                     {{ (SOURCE_LABELS[example.source] || SOURCE_LABELS.manual).text }}
                   </n-tag>
                 </div>
-                <div class="item-actions">
+                <div v-if="canEdit" class="item-actions">
                   <n-button size="tiny" quaternary @click.stop="useAsMock(example)">设为 mock</n-button>
                   <n-button size="tiny" quaternary @click.stop="renameExample(example)">改名</n-button>
                   <n-button size="tiny" quaternary type="error" @click.stop="removeExample(example)">
@@ -474,7 +491,15 @@ async function onDrop() {
           <div class="section">
             <div class="list-head">
               <span>期望</span>
-              <n-button size="tiny" quaternary type="primary" @click="createExpectation">新建</n-button>
+              <n-button
+                v-if="canEdit"
+                size="tiny"
+                quaternary
+                type="primary"
+                @click="createExpectation"
+              >
+                新建
+              </n-button>
             </div>
 
             <div class="list-body">
@@ -487,7 +512,7 @@ async function onDrop() {
                   dragging: index === dragIndex,
                   'drop-target': index === overIndex && dragIndex !== -1 && index !== dragIndex
                 }"
-                draggable="true"
+                :draggable="canEdit"
                 @click="selectExpectation(item.id)"
                 @dragstart="onDragStart(index)"
                 @dragover.prevent="onDragOver(index)"
@@ -499,6 +524,7 @@ async function onDrop() {
                   <n-switch
                     size="tiny"
                     :value="item.enabled"
+                    :disabled="!canEdit"
                     @click.stop
                     @update:value="(v) => toggleExpectation(item, v)"
                   />
@@ -511,6 +537,7 @@ async function onDrop() {
                     → {{ exampleName(item.exampleId) }}
                   </span>
                   <n-button
+                    v-if="canEdit"
                     size="tiny"
                     quaternary
                     type="error"
@@ -540,6 +567,7 @@ async function onDrop() {
             :api="api"
             :expectation="selectedExpectation"
             :examples="examples"
+            :readonly="!canEdit"
             @saved="onExpectationSaved"
             @failed="onExpectationFailed"
           />
@@ -549,6 +577,7 @@ async function onDrop() {
             :example="selectedExample"
             :placeholders="(session.meta && session.meta.placeholders) || []"
             :templates="(session.meta && session.meta.templates) || []"
+            :readonly="!canEdit"
             @saved="emitSaved"
           />
           <n-empty v-else description="左边选一个示例或期望，或者新建一个" />

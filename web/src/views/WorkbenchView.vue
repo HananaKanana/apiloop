@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { NButton, NEmpty, useDialog, useMessage } from 'naive-ui';
+import { NButton, NEmpty, NTag, useDialog, useMessage } from 'naive-ui';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
@@ -146,6 +146,10 @@ onBeforeUnmount(function () {
         <env-switcher />
       </template>
       <template #actions>
+        <!-- 只读角色：说清楚为什么页面上少了那些按钮 -->
+        <n-tag v-if="projects.current && !projects.canEdit" size="tiny" :bordered="false">
+          只读
+        </n-tag>
         <n-button quaternary size="small" @click="ui.openImport()">导入</n-button>
         <n-button quaternary size="small" @click="ui.openHistory()">历史</n-button>
         <n-button quaternary size="small" @click="collapsed = !collapsed">

@@ -18,6 +18,27 @@ export const useProjectStore = defineStore('project', function () {
     return projects.value.find(function (item) { return item.id === currentId.value; }) || null;
   });
 
+  /**
+   * 当前项目里「我」的角色。admin 是系统角色，服务端对任何项目都返回 'admin'，
+   * 它的能力等同 owner。
+   *
+   * 注意：按角色隐藏或禁用只是体验优化，真正的拦截在服务端的 guard 上。
+   * 所以所有写操作仍然要处理 403，把服务端返回的中文错误原样提示出来。
+   */
+  const myRole = computed(function () {
+    return (current.value && current.value.myRole) || '';
+  });
+
+  /** 能改数据：editor 及以上 */
+  const canEdit = computed(function () {
+    return myRole.value === 'admin' || myRole.value === 'owner' || myRole.value === 'editor';
+  });
+
+  /** 能改项目本身：改名称 / 标识、管成员、删项目 */
+  const isOwner = computed(function () {
+    return myRole.value === 'admin' || myRole.value === 'owner';
+  });
+
   function setCurrent(id) {
     currentId.value = id || '';
     if (id) localStorage.setItem(STORAGE_KEY, id);
@@ -76,6 +97,9 @@ export const useProjectStore = defineStore('project', function () {
     projects: projects,
     currentId: currentId,
     current: current,
+    myRole: myRole,
+    canEdit: canEdit,
+    isOwner: isOwner,
     loading: loading,
     load: load,
     create: create,

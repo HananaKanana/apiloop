@@ -28,7 +28,9 @@ import PlaceholderMenu from './PlaceholderMenu.vue';
 const props = defineProps({
   example: { type: Object, required: true },
   placeholders: { type: Array, default: function () { return []; } },
-  templates: { type: Array, default: function () { return []; } }
+  templates: { type: Array, default: function () { return []; } },
+  /** 只读角色：字段全部禁用，写入口（保存 / 模板化 / 插入字段）不出现 */
+  readonly: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['saved']);
@@ -71,6 +73,8 @@ watch(
 );
 
 function scheduleSave() {
+  if (props.readonly) return;
+
   dirty.value = true;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(save, 600);
@@ -172,6 +176,7 @@ async function runPreview() {
           :value="draft.status"
           :min="100"
           :max="599"
+          :disabled="readonly"
           @update:value="(v) => { draft.status = v || 200; scheduleSave(); }"
         />
       </n-form-item>
@@ -181,30 +186,33 @@ async function runPreview() {
           size="small"
           :value="draft.responseType"
           :options="RESPONSE_TYPES"
+          :disabled="readonly"
           @update:value="(v) => { draft.responseType = v; scheduleSave(); }"
         />
       </n-form-item>
 
       <span class="spacer" />
 
-      <n-tag v-if="dirty" size="tiny" :bordered="false" type="warning">未保存</n-tag>
+      <template v-if="!readonly">
+        <n-tag v-if="dirty" size="tiny" :bordered="false" type="warning">未保存</n-tag>
 
-      <n-button size="small" secondary :disabled="!dirty" @click="save">保存</n-button>
+        <n-button size="small" secondary :disabled="!dirty" @click="save">保存</n-button>
 
-      <placeholder-menu :placeholders="placeholders" @insert="insertPlaceholder">
-        <n-button size="small" quaternary>插入 Mock 字段</n-button>
-      </placeholder-menu>
+        <placeholder-menu :placeholders="placeholders" @insert="insertPlaceholder">
+          <n-button size="small" quaternary>插入 Mock 字段</n-button>
+        </placeholder-menu>
 
-      <n-dropdown
-        v-if="templateOptions.length"
-        trigger="click"
-        :options="templateOptions"
-        @select="applyTemplate"
-      >
-        <n-button size="small" quaternary>常用模板</n-button>
-      </n-dropdown>
+        <n-dropdown
+          v-if="templateOptions.length"
+          trigger="click"
+          :options="templateOptions"
+          @select="applyTemplate"
+        >
+          <n-button size="small" quaternary>常用模板</n-button>
+        </n-dropdown>
 
-      <n-button size="small" quaternary @click="openTemplatize">智能模板化</n-button>
+        <n-button size="small" quaternary @click="openTemplatize">智能模板化</n-button>
+      </template>
 
       <n-button size="small" secondary type="primary" :loading="previewing" @click="runPreview">
         预览
@@ -217,6 +225,7 @@ async function runPreview() {
         v-model="draft.headers"
         key-placeholder="名称"
         value-placeholder="值"
+        :disabled="readonly"
         @update:model-value="scheduleSave"
       />
     </div>
@@ -228,6 +237,7 @@ async function runPreview() {
         :model-value="draft.body"
         :language="draft.responseType === 'json' ? 'json' : (draft.responseType === 'html' ? 'html' : 'text')"
         min-height="240px"
+        :readonly="readonly"
         @update:model-value="(v) => { draft.body = v; scheduleSave(); }"
       />
     </div>

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NAlert,
@@ -9,24 +9,34 @@ import {
   NFormItem,
   NInput,
   NSpace,
+  NTabPane,
+  NTabs,
   useDialog,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
-import { useSessionStore } from '@/stores/session';
 import VarTable from '@/components/common/VarTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
+import MembersPanel from '@/components/members/MembersPanel.vue';
 
+/**
+ * 项目设置。按角色收口：
+ * - 改名称 / 标识、管成员、删项目 —— 只有 owner（admin 等同 owner）；
+ * - 改说明 / 变量 / 鉴权 —— editor 及以上；
+ * - viewer 只能看，页面上不留任何可点的写入口。
+ *
+ * 这些都只是体验优化，真正的拦截在服务端 guard 上，所以 403 一律原样提示。
+ */
 const route = useRoute();
 const router = useRouter();
 const projects = useProjectStore();
-const session = useSessionStore();
 const message = useMessage();
 const dialog = useDialog();
 
 const loading = ref(true);
 const saving = ref(false);
 const errorText = ref('');
+const activeTab = ref('basic');
 
 const form = ref({
   name: '',
@@ -37,6 +47,14 @@ const form = ref({
 });
 
 const projectId = ref('');
+
+const canEdit = computed(function () {
+  return projects.canEdit;
+});
+
+const isOwner = computed(function () {
+  return projects.isOwner;
+});
 
 function fillFrom(project) {
   form.value = {
@@ -75,13 +93,18 @@ async function save() {
 
   saving.value = true;
   try {
-    await projects.update(projectId.value, {
-      name: form.value.name.trim(),
-      slug: form.value.slug.trim(),
+    // 名称和标识只有 owner 能改，只提交自己能改的字段，别替服务端做判断
+    const patch = {
       description: form.value.description,
       variables: form.value.variables,
       auth: form.value.auth
-    });
+    };
+    if (isOwner.value) {
+      patch.name = form.value.name.trim();
+      patch.slug = form.value.slug.trim();
+    }
+
+    await projects.update(projectId.value, patch);
     message.success('已保存');
   } catch (err) {
     // 标识被占用这类 400 原样提示，服务端文案已经说清楚了
@@ -109,6 +132,12 @@ function removeProject() {
   });
 }
 
+/** 退出项目之后要把项目列表重新拉一遍，否则切换器里还留着已经看不到的项目 */
+async function onLeft() {
+  await projects.load();
+  router.replace('/workbench');
+}
+
 onMounted(load);
 watch(function () { return route.params.pid; }, load);
 </script>
@@ -122,7 +151,7 @@ watch(function () { return route.params.pid; }, load);
       </n-space>
       <n-space align="center">
         <n-button
-          v-if="session.isAdmin"
+          v-if="isOwner"
           size="small"
           quaternary
           type="error"
@@ -132,6 +161,7 @@ watch(function () { return route.params.pid; }, load);
           删除项目
         </n-button>
         <n-button
+          v-if="canEdit"
           type="primary"
           size="small"
           :loading="saving"
@@ -148,33 +178,51 @@ watch(function () { return route.params.pid; }, load);
         {{ errorText }}
       </n-alert>
 
-      <n-card v-else :bordered="false" size="small" title="基本信息">
-        <n-form label-placement="top">
-          <n-form-item label="名称">
-            <n-input v-model:value="form.name" placeholder="项目名称" />
-          </n-form-item>
-          <n-form-item label="标识">
-            <n-input v-model:value="form.slug" placeholder="用于 /mock/<标识>/ 前缀" />
-          </n-form-item>
-          <n-form-item label="说明">
-            <n-input v-model:value="form.description" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
-          </n-form-item>
-        </n-form>
-      </n-card>
+      <n-tabs v-else v-model:value="activeTab" type="line" size="small" animated>
+        <n-tab-pane name="basic" tab="基本信息">
+          <n-card :bordered="false" size="small" title="基本信息">
+            <n-form label-placement="top">
+              <n-form-item label="名称">
+                <n-input v-model:value="form.name" :disabled="!isOwner" placeholder="项目名称" />
+              </n-form-item>
+              <n-form-item label="标识">
+                <n-input
+                  v-model:value="form.slug"
+                  :disabled="!isOwner"
+                  placeholder="用于 /mock/<标识>/ 前缀"
+                />
+              </n-form-item>
+              <n-form-item label="说明">
+                <n-input
+                  v-model:value="form.description"
+                  type="textarea"
+                  :disabled="!canEdit"
+                  :autosize="{ minRows: 2, maxRows: 5 }"
+                />
+              </n-form-item>
+            </n-form>
+            <p v-if="!isOwner" class="tip">只有 owner 能修改项目名称和标识。</p>
+          </n-card>
 
-      <n-card v-if="!errorText" :bordered="false" size="small" title="项目变量" class="card">
-        <p class="tip">
-          项目变量在发送时先展开，同名的话会被当前环境里的变量覆盖。
-        </p>
-        <var-table v-model="form.variables" />
-      </n-card>
+          <n-card :bordered="false" size="small" title="项目变量" class="card">
+            <p class="tip">
+              项目变量在发送时先展开，同名的话会被当前环境里的变量覆盖。
+            </p>
+            <var-table v-model="form.variables" :disabled="!canEdit" />
+          </n-card>
 
-      <n-card v-if="!errorText" :bordered="false" size="small" title="项目级鉴权" class="card">
-        <p class="tip">
-          接口自己的鉴权留空或选了「继承父级」时，就沿用到这里。
-        </p>
-        <auth-editor v-model="form.auth" />
-      </n-card>
+          <n-card :bordered="false" size="small" title="项目级鉴权" class="card">
+            <p class="tip">
+              接口自己的鉴权留空或选了「继承父级」时，就沿用到这里。
+            </p>
+            <auth-editor v-model="form.auth" :disabled="!canEdit" />
+          </n-card>
+        </n-tab-pane>
+
+        <n-tab-pane name="members" tab="成员">
+          <members-panel v-if="projectId" :pid="projectId" @left="onLeft" />
+        </n-tab-pane>
+      </n-tabs>
     </div>
   </div>
 </template>

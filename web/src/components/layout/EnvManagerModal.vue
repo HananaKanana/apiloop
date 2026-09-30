@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { NButton, NEmpty, NInput, NModal, NSpace, useDialog, useMessage } from 'naive-ui';
 import { useEnvStore } from '@/stores/env';
+import { useProjectStore } from '@/stores/project';
 import * as importExportApi from '@/api/importExport';
 import { downloadJson } from '@/utils/download';
 import VarTable from '@/components/common/VarTable.vue';
@@ -13,8 +14,14 @@ const props = defineProps({
 const emit = defineEmits(['update:show']);
 
 const envs = useEnvStore();
+const projects = useProjectStore();
 const message = useMessage();
 const dialog = useDialog();
+
+/** 环境管理里的编辑操作对 viewer 全部收起来，导出还留着 */
+const canEdit = computed(function () {
+  return projects.canEdit;
+});
 
 const activeId = ref('');
 const draftName = ref('');
@@ -137,7 +144,15 @@ function removeEnv() {
       <aside class="list">
         <div class="list-head">
           <span>环境</span>
-          <n-button size="tiny" quaternary type="primary" @click="createEnv">新增</n-button>
+          <n-button
+            v-if="canEdit"
+            size="tiny"
+            quaternary
+            type="primary"
+            @click="createEnv"
+          >
+            新增
+          </n-button>
         </div>
 
         <div class="list-body">
@@ -160,16 +175,29 @@ function removeEnv() {
             <n-input
               size="small"
               :value="draftName"
+              :disabled="!canEdit"
               @update:value="(v) => { draftName = v; }"
               @blur="renameEnv"
               @keyup.enter="renameEnv"
             />
             <n-button size="small" quaternary @click="exportEnv">导出</n-button>
-            <n-button size="small" quaternary type="error" @click="removeEnv">删除</n-button>
+            <n-button
+              v-if="canEdit"
+              size="small"
+              quaternary
+              type="error"
+              @click="removeEnv"
+            >
+              删除
+            </n-button>
           </n-space>
 
           <div class="vars">
-            <var-table :model-value="draftVariables" @update:model-value="onVariablesChange" />
+            <var-table
+              :model-value="draftVariables"
+              :disabled="!canEdit"
+              @update:model-value="onVariablesChange"
+            />
           </div>
         </template>
 

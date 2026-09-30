@@ -9,7 +9,8 @@ import { NAlert, NFormItem, NInput, NSelect, NSpace } from 'naive-ui';
  * 导入进来的 oauth2 / digest 这类不支持的鉴权，只读显示一句提示，不让人误以为它会生效。
  */
 const props = defineProps({
-  modelValue: { type: Object, default: null }
+  modelValue: { type: Object, default: null },
+  disabled: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -70,6 +71,7 @@ function patch(fields) {
           :value="currentType"
           :options="TYPE_OPTIONS"
           size="small"
+          :disabled="disabled"
           @update:value="changeType"
         />
       </n-form-item>
@@ -79,6 +81,7 @@ function patch(fields) {
           <n-input
             size="small"
             :value="auth.token || ''"
+            :disabled="disabled"
             placeholder="支持 {{变量}}"
             @update:value="(v) => { patch({ token: v }); }"
           />
@@ -91,6 +94,7 @@ function patch(fields) {
             <n-input
               size="small"
               :value="auth.username || ''"
+              :disabled="disabled"
               @update:value="(v) => { patch({ username: v }); }"
             />
           </n-form-item>
@@ -100,6 +104,7 @@ function patch(fields) {
               type="password"
               show-password-on="click"
               :value="auth.password || ''"
+              :disabled="disabled"
               @update:value="(v) => { patch({ password: v }); }"
             />
           </n-form-item>
@@ -112,6 +117,7 @@ function patch(fields) {
             <n-input
               size="small"
               :value="auth.key || ''"
+              :disabled="disabled"
               @update:value="(v) => { patch({ key: v }); }"
             />
           </n-form-item>
@@ -119,6 +125,7 @@ function patch(fields) {
             <n-input
               size="small"
               :value="auth.value || ''"
+              :disabled="disabled"
               @update:value="(v) => { patch({ value: v }); }"
             />
           </n-form-item>
@@ -127,6 +134,7 @@ function patch(fields) {
               size="small"
               :value="auth.in === 'query' ? 'query' : 'header'"
               :options="API_KEY_IN_OPTIONS"
+              :disabled="disabled"
               @update:value="(v) => { patch({ in: v }); }"
             />
           </n-form-item>

@@ -113,6 +113,10 @@ function onSelectedChange(keys) {
 }
 
 function openMenu(event, node) {
+  // viewer 的右键菜单里没有任何能点的项（新建 / 重命名 / 删除 / 复制都要写权限），
+  // 索性不弹出来 —— 弹一个全是灰项的菜单比不弹更让人困惑
+  if (!projects.canEdit) return;
+
   menu.value = {
     show: true,
     x: event.clientX,
@@ -327,7 +331,15 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         placeholder="搜索名称或 url"
       />
       <n-button size="small" quaternary title="全部展开" @click="expandAll">展开</n-button>
-      <n-button size="small" quaternary title="新建接口" @click="emit('new-api', null)">＋</n-button>
+      <n-button
+        v-if="projects.canEdit"
+        size="small"
+        quaternary
+        title="新建接口"
+        @click="emit('new-api', null)"
+      >
+        ＋
+      </n-button>
     </div>
 
     <div class="body">
@@ -341,7 +353,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           :render-label="renderLabel"
           :render-suffix="renderSuffix"
           :node-props="nodeProps"
-          :draggable="true"
+          :draggable="projects.canEdit"
           :allow-drop="allowDrop"
           :cancelable="false"
           @update:expanded-keys="(keys) => { expandedKeys = keys; }"
@@ -351,7 +363,9 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         <n-empty
           v-else
           size="small"
-          :description="searchText ? '没有匹配的接口' : '还没有接口，右键目录或点右上角 ＋ 新建'"
+          :description="searchText
+            ? '没有匹配的接口'
+            : (projects.canEdit ? '还没有接口，右键目录或点右上角 ＋ 新建' : '这个项目还没有接口')"
         />
       </n-spin>
     </div>
