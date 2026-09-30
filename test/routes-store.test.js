@@ -259,7 +259,8 @@ test('文件监听：外部改库后触发 change 并重新加载', async functi
         assert.ok(reloaded(), '外部改库后应重新加载，当前: ' + JSON.stringify(store.getRoutes()));
         assert.ok(events > 0, '外部改动应触发 change 事件');
     } finally {
-        store.stopWatching();
+        // stopWatching 现在是空操作（轮询归 handle 管），要停得直接停 handle
+        ctx.handle.stopPolling();
     }
 });
 

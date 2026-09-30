@@ -29,8 +29,6 @@ test.before(async function () {
     store.startWatching();
 
     var app = express();
-    app.use(bodyParser.json());
-    app.use(bodyParser.urlencoded({ extended: true }));
 
     // 管理台接口现在要登录，先建一个管理员
     usersRepo.create(handle, {
@@ -44,6 +42,9 @@ test.before(async function () {
     app.use(admin.apiPath, admin.api);
     app.use(admin.rootStatic);
     app.get('/', function (req, res) { res.redirect(302, admin.defaultPage); });
+    // 与 command.js 保持一致：body 解析排在管理台之后，只管 mock 接口
+    app.use(bodyParser.json());
+    app.use(bodyParser.urlencoded({ extended: true }));
     app.use(runtimeModule.createRuntime(store).middleware);
 
     var server = app.listen(0);
