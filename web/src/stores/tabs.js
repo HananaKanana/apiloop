@@ -69,6 +69,20 @@ export function emptyWsSpec() {
   return { url: '', params: { headers: [], query: [] }, auth: null };
 }
 
+/** 服务端返回的 Api 里，和 WebSocket 请求对应的那部分（WS 接口用同一批字段存） */
+export function wsSpecFromApi(api) {
+  return {
+    url: api.url || '',
+    params: {
+      headers: JSON.parse(JSON.stringify((api.params && api.params.headers) || [])),
+      query: JSON.parse(JSON.stringify((api.params && api.params.query) || []))
+    },
+    auth: api.auth === undefined || api.auth === null
+      ? null
+      : JSON.parse(JSON.stringify(api.auth))
+  };
+}
+
 /**
  * 目录设置标签页里可编辑的那部分（契约第 3 节 `PUT /folders/:id`）。
  * 放进 `spec` 是为了直接复用标签页那套「和快照比出 dirty」的机制。
@@ -139,6 +153,9 @@ export const useTabsStore = defineStore('tabs', function () {
     }
 
     const data = await apisApi.getApi(apiId);
+    // WS 接口用 WebSocket 标签页打开（契约第 17 节），不是那套 HTTP 界面
+    if (data.api.method === 'WS') return pushWsApiTab(data.api);
+
     const spec = specFromApi(data.api);
     const tab = Object.assign({
       key: key,
@@ -191,7 +208,8 @@ export const useTabsStore = defineStore('tabs', function () {
 
   /**
    * 新建一个 WebSocket 调试标签页。它**不进目录树**，所以没有 apiId，
-   * 也不参与 dirty / 保存那一套。
+   * 也不参与 dirty / 保存那一套；想留下来就点「保存到目录」，那时会变成
+   * 绑定接口的 WebSocket 标签页（见 markSaved 的 WS 分支）。
    */
   function openWs() {
     wsSeq += 1;
@@ -206,6 +224,36 @@ export const useTabsStore = defineStore('tabs', function () {
       savedSnapshot: null,
       options: { cookies: true },
       api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
+   * 绑定接口的 WebSocket 标签页。key 和普通接口标签页一样是 `api:<id>` ——
+   * 同一个接口只会有一个标签页，只是渲染成 WebSocket 的样子。
+   */
+  function pushWsApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = wsSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'ws',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || 'WebSocket',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
       dirty: false,
       result: null,
       sendError: '',
@@ -350,7 +398,9 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      return tab.kind === 'api' && !known.has(tab.apiId);
+      // 绑定了接口的 WebSocket 标签页（kind 是 ws）也要一起收
+      return (tab.kind === 'api' || tab.kind === 'ws') &&
+        Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
   }
@@ -365,6 +415,23 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function markSaved(tab, api) {
+    // WS 接口存下来之后要换成 WebSocket 的样子：spec 形状和普通接口不一样
+    if (api.method === 'WS') {
+      const wsSpec = wsSpecFromApi(api);
+      tab.kind = 'ws';
+      tab.apiId = api.id;
+      tab.api = api;
+      tab.key = 'api:' + api.id;
+      tab.title = api.name || 'WebSocket';
+      tab.folderId = api.folderId || null;
+      tab.spec = wsSpec;
+      tab.savedSnapshot = snapshot(wsSpec);
+      tab.options = { cookies: true };
+      tab.dirty = false;
+      activeKey.value = tab.key;
+      return;
+    }
+
     const spec = specFromApi(api);
     tab.api = api;
     tab.apiId = api.id;

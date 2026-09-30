@@ -1,29 +1,42 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   NAlert,
   NButton,
   NDropdown,
+  NForm,
+  NFormItem,
   NInput,
+  NModal,
+  NSelect,
+  NSpace,
+  NSwitch,
   NTabPane,
   NTabs,
   NTag,
-  NSwitch,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useWsStore } from '@/stores/ws';
+import { useTabsStore } from '@/stores/tabs';
+import { useTreeStore } from '@/stores/tree';
+import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
+import MockPanel from '@/components/mock/MockPanel.vue';
 import WsMessageLog from './WsMessageLog.vue';
+import WsScenarioDialog from './WsScenarioDialog.vue';
+import { buildWsScenario } from '@/utils/wsScenario';
 
 /**
- * WebSocket 调试标签页（契约第 15 节）。
+ * WebSocket 标签页（契约第 15、17 节）。两种形态共用这一个组件：
+ * - **临时**（`apiId` 为空）：就是个调试窗口，不进目录树；想留下来点「保存到目录」；
+ * - **绑定接口**（`apiId` 有值）：接口在目录树里，这里改的 url / 请求头 / query / 鉴权
+ *   可以保存回接口，还多一个 Mock 页签和「保存为 mock」。
  *
- * 标签页本身**不进目录树、不记历史**，就是个临时调试窗口。真正的连接由服务端建立，
- * 会话状态放在 stores/ws.js 里 —— 组件会随着切换标签页被卸载重建，
- * 状态放这里等于一切走就断线。
+ * 真正的连接由服务端建立，会话状态放在 stores/ws.js 里 —— 组件会随着切换标签页
+ * 被卸载重建，状态放这里等于一切走就断线。
  */
 const props = defineProps({
   tab: { type: Object, required: true }
@@ -32,11 +45,22 @@ const props = defineProps({
 const projects = useProjectStore();
 const envs = useEnvStore();
 const ws = useWsStore();
+const tabs = useTabsStore();
+const tree = useTreeStore();
 const message = useMessage();
 
 const activePane = ref('headers');
 const sending = ref(false);
 const draft = ref('');
+
+const saving = ref(false);
+const showSaveDialog = ref(false);
+const saveForm = ref({ name: '', folderId: null });
+
+const showScenario = ref(false);
+const scenario = ref(null);
+const scenarioStats = ref({ pushed: 0, ruleCount: 0, skipped: 0 });
+const savingScenario = ref(false);
 
 const EMPTY_STATE = {
   status: 'idle',
@@ -80,6 +104,15 @@ const options = computed(function () {
   return props.tab.options || { cookies: true };
 });
 
+/** 绑定了接口：可以保存、有 Mock 页签、可以「保存为 mock」 */
+const bound = computed(function () {
+  return Boolean(props.tab.apiId);
+});
+
+const canEdit = computed(function () {
+  return projects.canEdit;
+});
+
 const connected = computed(function () {
   return state.value.status === 'open';
 });
@@ -104,6 +137,14 @@ const channelHint = computed(function () {
   if (state.value.channel === 'retrying') return '事件流断了，正在重连…';
   if (state.value.channel === 'ended') return '会话已被服务端回收';
   return '';
+});
+
+/** 消息日志里有没有可以用来生成场景的文本消息 */
+const canSaveScenario = computed(function () {
+  if (!bound.value || !canEdit.value) return false;
+  return (state.value.events || []).some(function (event) {
+    return event && event.type === 'message' && !event.base64;
+  });
 });
 
 /* ---------------- 最近用过的地址（按项目存 localStorage） ---------------- */
@@ -195,7 +236,7 @@ async function onConnect() {
 
   if (ok) {
     saveRecent(projects.currentId, url);
-    props.tab.title = titleFromUrl(url);
+    if (!bound.value) props.tab.title = titleFromUrl(url);
   }
 }
 
@@ -228,9 +269,160 @@ function onComposerKeydown(event) {
   onSend();
 }
 
+/* ---------------- 保存（绑定了接口才有） ---------------- */
+
+async function save() {
+  if (!bound.value) return;
+
+  saving.value = true;
+  try {
+    const data = await apisApi.updateApi(props.tab.apiId, {
+      url: props.tab.spec.url,
+      params: props.tab.spec.params,
+      auth: props.tab.spec.auth
+    });
+    tabs.markSaved(props.tab, data.api);
+    message.success('已保存');
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+/* ---------------- 保存到目录（临时标签页） ---------------- */
+
+function folderOptions() {
+  const list = [{ label: '（根目录）', value: null }];
+  (function walk(nodes, depth) {
+    (nodes || []).forEach(function (node) {
+      if (node.kind !== 'folder') return;
+      list.push({ label: '　'.repeat(depth) + node.name, value: node.id });
+      walk(node.children, depth + 1);
+    });
+  })(tree.nodes, 0);
+  return list;
+}
+
+function openSaveDialog() {
+  saveForm.value = {
+    name: props.tab.spec.url ? titleFromUrl(props.tab.spec.url) : 'WebSocket',
+    folderId: null
+  };
+  showSaveDialog.value = true;
+}
+
+async function confirmSaveToFolder() {
+  if (!String(saveForm.value.name || '').trim()) {
+    message.warning('请填写接口名称');
+    return;
+  }
+
+  saving.value = true;
+  try {
+    const data = await apisApi.createApi(projects.currentId, {
+      method: 'WS',
+      name: String(saveForm.value.name).trim(),
+      folderId: saveForm.value.folderId,
+      url: props.tab.spec.url,
+      params: props.tab.spec.params,
+      auth: props.tab.spec.auth
+    });
+    // markSaved 的 WS 分支会把这个临时标签页变成绑定接口的样子
+    tabs.markSaved(props.tab, data.api);
+    showSaveDialog.value = false;
+    await tree.refresh();
+    message.success('已保存到目录');
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+/* ---------------- 保存为 mock ---------------- */
+
+function openScenario() {
+  const built = buildWsScenario(state.value.events || []);
+  scenario.value = built.scenario;
+  scenarioStats.value = {
+    pushed: built.pushed,
+    ruleCount: built.ruleCount,
+    skipped: built.skipped
+  };
+  showScenario.value = true;
+}
+
+async function confirmScenario() {
+  if (!scenario.value || !props.tab.apiId) return;
+
+  savingScenario.value = true;
+  try {
+    const data = await apisApi.createExample(props.tab.apiId, {
+      name: 'WS 录制于 ' + stamp(),
+      // WS 的握手是 101，示例上存这个值只是表明它是个 WebSocket 场景
+      status: 101,
+      headers: [],
+      body: JSON.stringify(scenario.value, null, 2),
+      responseType: 'ws',
+      isTemplate: false,
+      source: 'recorded'
+    });
+
+    props.tab.api = data.api;
+    props.tab.focusExampleId = data.example.id;
+    showScenario.value = false;
+    activePane.value = 'mock';
+    message.success('已存为 WebSocket 示例');
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    savingScenario.value = false;
+  }
+}
+
+function stamp() {
+  const now = new Date();
+  function pad(value) { return String(value).padStart(2, '0'); }
+  return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
+    ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+}
+
+/* ---------------- 快捷键 ---------------- */
+
+function onKeydown(event) {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (String(event.key).toLowerCase() !== 's') return;
+  event.preventDefault();
+
+  if (!canEdit.value) {
+    message.warning('当前角色是只读，不能保存修改');
+    return;
+  }
+  if (bound.value) save();
+  else openSaveDialog();
+}
+
 onMounted(function () {
+  window.addEventListener('keydown', onKeydown);
   ws.ensure(props.tab.key);
 });
+
+onBeforeUnmount(function () {
+  window.removeEventListener('keydown', onKeydown);
+});
+
+/**
+ * 绑定接口的标签页要跟着接口标签页一样标「未保存」。
+ * 临时标签页不算：它没有基线，标了也永远是脏的。
+ */
+watch(
+  function () { return props.tab.spec; },
+  function () {
+    if (bound.value) tabs.touch(props.tab);
+  },
+  { deep: true }
+);
 </script>
 
 <template>
@@ -263,6 +455,13 @@ onMounted(function () {
       <n-button v-else size="small" type="primary" :loading="busy" @click="onConnect">
         连接
       </n-button>
+
+      <n-button v-if="canEdit && bound" size="small" :loading="saving" @click="save">
+        保存
+      </n-button>
+      <n-button v-if="canEdit && !bound" size="small" @click="openSaveDialog">
+        保存到目录
+      </n-button>
     </div>
 
     <n-alert v-if="state.error" type="error" :show-icon="false" class="notice">
@@ -273,7 +472,7 @@ onMounted(function () {
       {{ state.note }}
     </n-alert>
 
-    <div class="panes">
+    <div class="panes" :class="{ full: activePane === 'mock' }">
       <n-tabs v-model:value="activePane" type="line" size="small" animated>
         <n-tab-pane name="headers" tab="Headers">
           <div class="pane">
@@ -322,38 +521,87 @@ onMounted(function () {
             </div>
           </div>
         </n-tab-pane>
+
+        <n-tab-pane v-if="bound" name="mock" tab="Mock">
+          <div class="pane">
+            <mock-panel :tab="tab" />
+          </div>
+        </n-tab-pane>
       </n-tabs>
     </div>
 
-    <div class="log-head">
-      <span class="label">消息日志</span>
-      <n-button size="tiny" quaternary @click="onClearLog">清空日志</n-button>
-    </div>
+    <template v-if="activePane !== 'mock'">
+      <div class="log-head">
+        <span class="label">消息日志</span>
+        <n-button
+          v-if="canSaveScenario"
+          size="tiny"
+          quaternary
+          type="primary"
+          title="按消息日志生成回放场景，存成 ws 类型的示例"
+          @click="openScenario"
+        >
+          保存为 mock
+        </n-button>
+        <n-button size="tiny" quaternary @click="onClearLog">清空日志</n-button>
+      </div>
 
-    <div class="log">
-      <ws-message-log :events="state.events" :dropped="state.dropped" />
-    </div>
+      <div class="log">
+        <ws-message-log :events="state.events" :dropped="state.dropped" />
+      </div>
 
-    <div class="composer">
-      <n-input
-        v-model:value="draft"
-        type="textarea"
-        size="small"
-        :autosize="{ minRows: 2, maxRows: 6 }"
-        placeholder="要发送的内容，Ctrl+Enter 发送"
-        @keydown="onComposerKeydown"
-      />
-      <n-button
-        class="send"
-        size="small"
-        type="primary"
-        :disabled="!connected"
-        :loading="sending"
-        @click="onSend"
-      >
-        发送
-      </n-button>
-    </div>
+      <div class="composer">
+        <n-input
+          v-model:value="draft"
+          type="textarea"
+          size="small"
+          :autosize="{ minRows: 2, maxRows: 6 }"
+          placeholder="要发送的内容，Ctrl+Enter 发送"
+          @keydown="onComposerKeydown"
+        />
+        <n-button
+          class="send"
+          size="small"
+          type="primary"
+          :disabled="!connected"
+          :loading="sending"
+          @click="onSend"
+        >
+          发送
+        </n-button>
+      </div>
+    </template>
+
+    <n-modal
+      v-model:show="showSaveDialog"
+      preset="card"
+      title="保存到目录"
+      style="width: 460px; max-width: 92vw"
+    >
+      <n-form>
+        <n-form-item label="名称">
+          <n-input v-model:value="saveForm.name" placeholder="接口名称" />
+        </n-form-item>
+        <n-form-item label="目录">
+          <n-select v-model:value="saveForm.folderId" :options="folderOptions()" />
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showSaveDialog = false">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="confirmSaveToFolder">保存</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <ws-scenario-dialog
+      v-model:show="showScenario"
+      :scenario="scenario"
+      :stats="scenarioStats"
+      :saving="savingScenario"
+      @confirm="confirmScenario"
+    />
   </div>
 </template>
 
@@ -397,6 +645,12 @@ onMounted(function () {
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
+/* Mock 页签内容多，给它整块高度，日志和输入区先收起来 */
+.panes.full {
+  flex: 1;
+  max-height: none;
+}
+
 .pane {
   padding: 8px 2px;
 }
@@ -438,7 +692,11 @@ onMounted(function () {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
+}
+
+.log-head .label {
+  flex: 1;
 }
 
 .label {

@@ -16,7 +16,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel']);
 
-const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map(function (name) {
+// WS 也是一种接口（契约第 17 节）：存进目录树，打开时是 WebSocket 标签页。
+// 放在这里是为了「新建接口」时能直接选它，和选 GET / POST 一样。
+const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS'].map(function (name) {
   return { label: name, value: name };
 });
 

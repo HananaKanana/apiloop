@@ -89,12 +89,26 @@ const selectedExpectation = computed(function () {
   return expectations.value.find(function (item) { return item.id === selectedExpectationId.value; }) || null;
 });
 
+/**
+ * WebSocket 接口（契约第 17 节）：走 ws 的回放，没有期望、也不看 CORS 和延迟
+ * —— 那几项是 HTTP 的事，摆在这里会让人以为它们对这个接口有用。
+ */
+const isWs = computed(function () {
+  return Boolean(api.value && api.value.method === 'WS');
+});
+
 const mockUrl = computed(function () {
   const project = projects.current;
   const prefix = project && project.isRoot ? '' : '/mock/' + (project ? project.slug : '');
   // mock 是 computed，脚本里必须写 .value；只有模板里才会自动解包。
   // 写成 mock.path 会拿到 undefined，拼出来就是 http://host/mock/<slug>undefined
-  return window.location.origin + prefix + mock.value.path;
+  //
+  // WS 接口给的是 WebSocket 地址。http → ws / https → wss 正好是一次前缀替换，
+  // 端口也能跟着一起带过来（window.location.origin 里含端口）。
+  const origin = isWs.value
+    ? window.location.origin.replace(/^http/, 'ws')
+    : window.location.origin;
+  return origin + prefix + mock.value.path;
 });
 
 watch(
@@ -212,15 +226,31 @@ async function selectExample(id) {
 }
 
 async function createExample() {
+  // WS 接口的新示例直接给一个能用的场景骨架，省得用户对着空 JSON 发呆
+  const payload = isWs.value
+    ? {
+        name: '新示例',
+        status: 101,
+        responseType: 'ws',
+        headers: [],
+        body: JSON.stringify({
+          onOpen: [{ delay: 0, send: '{"type":"hello"}' }],
+          rules: [],
+          fallback: 'none'
+        }, null, 2),
+        source: 'manual'
+      }
+    : {
+        name: '新示例',
+        status: 200,
+        responseType: 'json',
+        headers: [],
+        body: '{\n  "code": 0,\n  "msg": "ok",\n  "data": {}\n}',
+        source: 'manual'
+      };
+
   try {
-    const data = await apisApi.createExample(props.tab.apiId, {
-      name: '新示例',
-      status: 200,
-      responseType: 'json',
-      headers: [],
-      body: '{\n  "code": 0,\n  "msg": "ok",\n  "data": {}\n}',
-      source: 'manual'
-    });
+    const data = await apisApi.createExample(props.tab.apiId, payload);
     props.tab.api = data.api;
     await selectExample(data.example.id);
     message.success('已新建示例');
@@ -457,7 +487,7 @@ async function onDrop() {
             />
           </n-form-item>
 
-          <n-form-item label="延迟(ms)" :show-feedback="false" class="delay">
+          <n-form-item v-if="!isWs" label="延迟(ms)" :show-feedback="false" class="delay">
             <n-input-number
               size="small"
               :value="mock.delay"
@@ -468,7 +498,7 @@ async function onDrop() {
             />
           </n-form-item>
 
-          <n-form-item label="CORS" :show-feedback="false" class="inline">
+          <n-form-item v-if="!isWs" label="CORS" :show-feedback="false" class="inline">
             <n-switch
               size="small"
               :value="mock.cors"
@@ -485,9 +515,14 @@ async function onDrop() {
         </div>
       </div>
 
-      <n-alert type="info" :show-icon="false" class="notice">
+      <n-alert v-if="!isWs" type="info" :show-icon="false" class="notice">
         期望从上到下依次检查，第一条满足全部条件的期望生效；都不满足时返回默认示例。响应头
         <code>X-Apiloop-Mock</code> 会标明命中了哪一条。
+      </n-alert>
+
+      <n-alert v-else type="info" :show-icon="false" class="notice">
+        WebSocket 接口用默认示例回放：连接后按示例里的 onOpen 推送，收到消息后按规则回复。
+        这里不支持期望。
       </n-alert>
 
       <div class="body">
@@ -545,7 +580,7 @@ async function onDrop() {
             </div>
           </div>
 
-          <div class="section">
+          <div v-if="!isWs" class="section">
             <div class="list-head">
               <span>期望</span>
               <n-button
