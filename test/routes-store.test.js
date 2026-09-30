@@ -4,7 +4,7 @@ var fs = require('fs');
 var os = require('os');
 var path = require('path');
 var storeModule = require('../lib/routes-store');
-var db = require('../lib/db');
+var db = require('../lib/legacy/routes-db');
 
 function tempStore() {
     var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-store-'));

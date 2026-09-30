@@ -6,7 +6,7 @@ var path = require('path');
 var net = require('net');
 var { spawn, spawnSync } = require('node:child_process');
 
-var db = require('../lib/db');
+var db = require('../lib/legacy/routes-db');
 
 var CLI = path.join(__dirname, '..', 'bin', 'server');
 
