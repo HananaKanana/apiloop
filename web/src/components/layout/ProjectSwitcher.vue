@@ -28,6 +28,12 @@ const showCreate = ref(false);
 const creating = ref(false);
 const form = ref({ name: '', slug: '', description: '' });
 
+/**
+ * 选项的自定义渲染，通过 n-dropdown 的 render-label 传入。
+ *
+ * 注意不能把它挂在选项的 `render` 字段上：naive-ui 只认 `type: 'render'` 的整行渲染，
+ * 普通选项上的 `render` 会被忽略，再加上没有 `label`，下拉里就只剩一排空白。
+ */
 function renderLabel(option) {
   return h('div', { class: 'proj-option' }, [
     h('span', { class: 'name' }, option.name),
@@ -42,17 +48,17 @@ const options = computed(function () {
   const items = projects.projects.map(function (project) {
     return {
       key: project.id,
+      label: project.name,
       name: project.name,
       slug: project.slug,
-      isRoot: Boolean(project.isRoot),
-      render: renderLabel
+      isRoot: Boolean(project.isRoot)
     };
   });
 
   items.push({ type: 'divider', key: '__divider' });
-  items.push({ key: '__settings', name: '项目设置', slug: '', render: renderLabel });
-  items.push({ key: '__export', name: '导出为 Postman 集合', slug: '', render: renderLabel });
-  items.push({ key: '__create', name: '新建项目', slug: '', render: renderLabel });
+  items.push({ key: '__settings', label: '项目设置', name: '项目设置', slug: '' });
+  items.push({ key: '__export', label: '导出为 Postman 集合', name: '导出为 Postman 集合', slug: '' });
+  items.push({ key: '__create', label: '新建项目', name: '新建项目', slug: '' });
   return items;
 });
 
@@ -125,7 +131,7 @@ function onSelect(key) {
 </script>
 
 <template>
-  <n-dropdown :options="options" trigger="click" @select="onSelect">
+  <n-dropdown :options="options" :render-label="renderLabel" trigger="click" @select="onSelect">
     <n-button size="small" quaternary>
       {{ projects.current ? projects.current.name : '选择项目' }}
       <template v-if="projects.current && projects.current.isRoot">
