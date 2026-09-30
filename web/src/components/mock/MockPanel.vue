@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import {
+  NAlert,
   NButton,
   NEmpty,
   NFormItem,
@@ -13,16 +14,20 @@ import {
   useMessage
 } from 'naive-ui';
 import * as apisApi from '@/api/apis';
+import * as expectationsApi from '@/api/expectations';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
 import { usePrompt } from '@/utils/prompt';
+import { conditionSummary } from '@/utils/expectation';
 import ExampleEditor from './ExampleEditor.vue';
+import ExpectationEditor from './ExpectationEditor.vue';
 
 /**
- * Mock 页签：mock 配置 + 示例列表 + 示例编辑器。
+ * Mock 页签：mock 配置 + 示例列表 + 期望列表 + 各自的编辑器。
  *
- * 所有写操作都走 PUT /apis/:id 的 mock 字段，改完用服务端返回的 api 覆盖本地的，
- * 不在前端自己拼状态。
+ * 所有写操作都走服务端返回的 api 覆盖本地的，不在前端自己拼状态。
+ * 期望的「修改」接口只回 `{ expectation }`，所以那一条要单独并回列表里
+ * （见 mergeExpectation）—— 别指望它带上整个 api。
  */
 const props = defineProps({
   tab: { type: Object, required: true }
@@ -35,8 +40,15 @@ const dialog = useDialog();
 const prompt = usePrompt();
 
 const selectedId = ref('');
+const selectedExpectationId = ref('');
 /** mock.path 单独存一份草稿：mock 是 computed，直接绑它改的是临时对象 */
 const draftPath = ref('');
+/** 期望 id → 服务端返回的错误原因。错误要显示在出错的那一条旁边，不能只弹一下 */
+const expectationErrors = ref({});
+
+/** 期望列表拖拽排序时的两个下标 */
+const dragIndex = ref(-1);
+const overIndex = ref(-1);
 
 const api = computed(function () {
   return props.tab.api;
@@ -57,8 +69,16 @@ const examples = computed(function () {
   return (api.value && api.value.examples) || [];
 });
 
+const expectations = computed(function () {
+  return (api.value && api.value.expectations) || [];
+});
+
 const selectedExample = computed(function () {
   return examples.value.find(function (item) { return item.id === selectedId.value; }) || null;
+});
+
+const selectedExpectation = computed(function () {
+  return expectations.value.find(function (item) { return item.id === selectedExpectationId.value; }) || null;
 });
 
 const mockUrl = computed(function () {
@@ -78,6 +98,9 @@ watch(
 watch(
   function () { return api.value && api.value.id; },
   function () {
+    expectationErrors.value = {};
+    selectedExpectationId.value = '';
+
     const list = examples.value;
     if (!list.length) {
       selectedId.value = '';
@@ -124,6 +147,11 @@ const SOURCE_LABELS = {
   imported: { text: '导入', type: 'info' }
 };
 
+function selectExample(id) {
+  selectedId.value = id;
+  selectedExpectationId.value = '';
+}
+
 async function createExample() {
   try {
     const data = await apisApi.createExample(props.tab.apiId, {
@@ -135,7 +163,7 @@ async function createExample() {
       source: 'manual'
     });
     props.tab.api = data.api;
-    selectedId.value = data.example.id;
+    selectExample(data.example.id);
     message.success('已新建示例');
   } catch (err) {
     message.error(err.message);
@@ -158,7 +186,7 @@ async function renameExample(example) {
 async function removeExample(example) {
   dialog.error({
     title: '删除示例',
-    content: '确定删除「' + example.name + '」吗？',
+    content: '确定删除「' + example.name + '」吗？指向它的期望会一起删掉。',
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async function () {
@@ -192,6 +220,146 @@ async function copyMockUrl() {
     message.success('已复制 mock 地址');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');
+  }
+}
+
+/* ---------------- 期望 ---------------- */
+
+function exampleName(exampleId) {
+  const found = examples.value.find(function (item) { return item.id === exampleId; });
+  return found ? found.name : '(已删除的示例)';
+}
+
+function mergeExpectation(expectation) {
+  const list = ((api.value && api.value.expectations) || []).slice();
+  const index = list.findIndex(function (item) { return item.id === expectation.id; });
+  if (index !== -1) list[index] = expectation;
+  if (api.value) api.value.expectations = list;
+}
+
+function setExpectationError(id, text) {
+  const next = Object.assign({}, expectationErrors.value);
+  next[id] = text;
+  expectationErrors.value = next;
+}
+
+function clearExpectationError(id) {
+  if (!expectationErrors.value[id]) return;
+  const next = Object.assign({}, expectationErrors.value);
+  delete next[id];
+  expectationErrors.value = next;
+}
+
+function selectExpectation(id) {
+  selectedExpectationId.value = id;
+  selectedId.value = '';
+}
+
+async function createExpectation() {
+  if (!examples.value.length) {
+    message.warning('先新建一个示例 —— 期望要指明返回哪一条示例');
+    return;
+  }
+
+  try {
+    const data = await expectationsApi.createExpectation(props.tab.apiId, {
+      name: '新期望',
+      enabled: true,
+      conditions: [],
+      exampleId: mock.value.exampleId || examples.value[0].id
+    });
+    props.tab.api = data.api;
+    selectExpectation(data.expectation.id);
+    message.success('已新建期望');
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+async function toggleExpectation(item, value) {
+  try {
+    const data = await expectationsApi.updateExpectation(item.id, { enabled: value });
+    mergeExpectation(data.expectation);
+    clearExpectationError(item.id);
+  } catch (err) {
+    // 开关拨不动的时候，原因也要落在这一条上
+    setExpectationError(item.id, err.message);
+    message.error(err.message);
+  }
+}
+
+function removeExpectation(item) {
+  dialog.error({
+    title: '删除期望',
+    content: '确定删除「' + (item.name || '未命名期望') + '」吗？',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async function () {
+      try {
+        const data = await expectationsApi.removeExpectation(item.id);
+        props.tab.api = data.api;
+        if (selectedExpectationId.value === item.id) selectedExpectationId.value = '';
+        clearExpectationError(item.id);
+        message.success('已删除');
+      } catch (err) {
+        message.error(err.message);
+      }
+    }
+  });
+}
+
+/** 编辑器保存成功：把这一条并回列表，并清掉它上次的错误 */
+function onExpectationSaved(expectation) {
+  mergeExpectation(expectation);
+  clearExpectationError(expectation.id);
+}
+
+function onExpectationFailed(payload) {
+  setExpectationError(payload.id, payload.message);
+}
+
+/* ---------------- 拖动排序 ---------------- */
+
+function onDragStart(index) {
+  dragIndex.value = index;
+}
+
+function onDragOver(index) {
+  overIndex.value = index;
+}
+
+function onDragEnd() {
+  dragIndex.value = -1;
+  overIndex.value = -1;
+}
+
+async function onDrop() {
+  const from = dragIndex.value;
+  const to = overIndex.value;
+  onDragEnd();
+
+  if (from === -1 || to === -1 || from === to) return;
+
+  const list = expectations.value.slice();
+  const moved = list.splice(from, 1)[0];
+  list.splice(to, 0, moved);
+
+  // 先本地排好，界面立刻跟手；服务端返回的 api 才是最终真相
+  if (api.value) api.value.expectations = list;
+
+  try {
+    const data = await expectationsApi.reorderExpectations(
+      props.tab.apiId,
+      list.map(function (item) { return item.id; })
+    );
+    props.tab.api = data.api;
+  } catch (err) {
+    message.error(err.message);
+    try {
+      await refreshApi();
+    } catch (refreshError) {
+      // 拉不回来就先这样
+    }
   }
 }
 </script>
@@ -251,62 +419,139 @@ async function copyMockUrl() {
         </div>
       </div>
 
+      <n-alert type="info" :show-icon="false" class="notice">
+        期望从上到下依次检查，第一条满足全部条件的期望生效；都不满足时返回默认示例。响应头
+        <code>X-Apiloop-Mock</code> 会标明命中了哪一条。
+      </n-alert>
+
       <div class="body">
         <aside class="list">
-          <div class="list-head">
-            <span>示例</span>
-            <n-button size="tiny" quaternary type="primary" @click="createExample">新建</n-button>
-          </div>
-
-          <div class="list-body">
-            <div
-              v-for="example in examples"
-              :key="example.id"
-              class="list-item"
-              :class="{ active: example.id === selectedId }"
-              @click="selectedId = example.id"
-            >
-              <div class="item-main">
-                <span class="item-name">{{ example.name }}</span>
-                <n-tag
-                  v-if="mock.exampleId === example.id"
-                  size="tiny"
-                  :bordered="false"
-                  type="success"
-                >
-                  mock 使用中
-                </n-tag>
-                <n-tag
-                  size="tiny"
-                  :bordered="false"
-                  :type="(SOURCE_LABELS[example.source] || SOURCE_LABELS.manual).type"
-                >
-                  {{ (SOURCE_LABELS[example.source] || SOURCE_LABELS.manual).text }}
-                </n-tag>
-              </div>
-              <div class="item-actions">
-                <n-button size="tiny" quaternary @click.stop="useAsMock(example)">设为 mock</n-button>
-                <n-button size="tiny" quaternary @click.stop="renameExample(example)">改名</n-button>
-                <n-button size="tiny" quaternary type="error" @click.stop="removeExample(example)">
-                  删除
-                </n-button>
-              </div>
+          <div class="section">
+            <div class="list-head">
+              <span>示例</span>
+              <n-button size="tiny" quaternary type="primary" @click="createExample">新建</n-button>
             </div>
 
-            <n-empty v-if="!examples.length" size="small" description="还没有示例" />
+            <div class="list-body">
+              <div
+                v-for="example in examples"
+                :key="example.id"
+                class="list-item"
+                :class="{ active: example.id === selectedId }"
+                @click="selectExample(example.id)"
+              >
+                <div class="item-main">
+                  <span class="item-name">{{ example.name }}</span>
+                  <n-tag
+                    v-if="mock.exampleId === example.id"
+                    size="tiny"
+                    :bordered="false"
+                    type="success"
+                  >
+                    mock 使用中
+                  </n-tag>
+                  <n-tag
+                    size="tiny"
+                    :bordered="false"
+                    :type="(SOURCE_LABELS[example.source] || SOURCE_LABELS.manual).type"
+                  >
+                    {{ (SOURCE_LABELS[example.source] || SOURCE_LABELS.manual).text }}
+                  </n-tag>
+                </div>
+                <div class="item-actions">
+                  <n-button size="tiny" quaternary @click.stop="useAsMock(example)">设为 mock</n-button>
+                  <n-button size="tiny" quaternary @click.stop="renameExample(example)">改名</n-button>
+                  <n-button size="tiny" quaternary type="error" @click.stop="removeExample(example)">
+                    删除
+                  </n-button>
+                </div>
+              </div>
+
+              <n-empty v-if="!examples.length" size="small" description="还没有示例" />
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="list-head">
+              <span>期望</span>
+              <n-button size="tiny" quaternary type="primary" @click="createExpectation">新建</n-button>
+            </div>
+
+            <div class="list-body">
+              <div
+                v-for="(item, index) in expectations"
+                :key="item.id"
+                class="exp-item"
+                :class="{
+                  active: item.id === selectedExpectationId,
+                  dragging: index === dragIndex,
+                  'drop-target': index === overIndex && dragIndex !== -1 && index !== dragIndex
+                }"
+                draggable="true"
+                @click="selectExpectation(item.id)"
+                @dragstart="onDragStart(index)"
+                @dragover.prevent="onDragOver(index)"
+                @drop.prevent="onDrop"
+                @dragend="onDragEnd"
+              >
+                <div class="exp-top">
+                  <span class="exp-name">{{ item.name || '(未命名期望)' }}</span>
+                  <n-switch
+                    size="tiny"
+                    :value="item.enabled"
+                    @click.stop
+                    @update:value="(v) => toggleExpectation(item, v)"
+                  />
+                </div>
+                <div class="exp-summary" :title="conditionSummary(item.conditions)">
+                  {{ conditionSummary(item.conditions) }}
+                </div>
+                <div class="exp-foot">
+                  <span class="exp-example" :title="exampleName(item.exampleId)">
+                    → {{ exampleName(item.exampleId) }}
+                  </span>
+                  <n-button
+                    size="tiny"
+                    quaternary
+                    type="error"
+                    @click.stop="removeExpectation(item)"
+                  >
+                    删除
+                  </n-button>
+                </div>
+                <div v-if="expectationErrors[item.id]" class="exp-error">
+                  {{ expectationErrors[item.id] }}
+                </div>
+              </div>
+
+              <n-empty
+                v-if="!expectations.length"
+                size="small"
+                description="还没有期望，所有请求都返回默认示例"
+              />
+            </div>
           </div>
         </aside>
 
         <section class="editor">
+          <expectation-editor
+            v-if="selectedExpectation"
+            :key="selectedExpectation.id"
+            :api="api"
+            :expectation="selectedExpectation"
+            :examples="examples"
+            @saved="onExpectationSaved"
+            @failed="onExpectationFailed"
+          />
           <example-editor
-            v-if="selectedExample"
+            v-else-if="selectedExample"
             :key="selectedExample.id"
             :example="selectedExample"
             :placeholders="(session.meta && session.meta.placeholders) || []"
             :templates="(session.meta && session.meta.templates) || []"
             @saved="emitSaved"
           />
-          <n-empty v-else description="左边选一个示例，或者新建一个" />
+          <n-empty v-else description="左边选一个示例或期望，或者新建一个" />
         </section>
       </div>
     </template>
@@ -371,6 +616,11 @@ async function copyMockUrl() {
   opacity: 0.85;
 }
 
+.notice {
+  flex: none;
+  font-size: 12px;
+}
+
 .body {
   flex: 1;
   min-height: 0;
@@ -388,6 +638,17 @@ async function copyMockUrl() {
   overflow: hidden;
 }
 
+.section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.section + .section {
+  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+}
+
 .list-head {
   display: flex;
   align-items: center;
@@ -400,6 +661,7 @@ async function copyMockUrl() {
 
 .list-body {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 4px;
 }
@@ -442,6 +704,78 @@ async function copyMockUrl() {
 .list-item:hover .item-actions,
 .list-item.active .item-actions {
   display: flex;
+}
+
+.exp-item {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.exp-item:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.exp-item.active {
+  background: rgba(32, 128, 240, 0.14);
+}
+
+.exp-item.dragging {
+  opacity: 0.5;
+}
+
+.exp-item.drop-target {
+  border-top-color: var(--n-primary-color, #2080f0);
+  border-top-style: dashed;
+}
+
+.exp-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.exp-summary {
+  margin-top: 2px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.exp-foot {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  opacity: 0.6;
+}
+
+.exp-example {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exp-error {
+  margin-top: 4px;
+  color: #d03050;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .editor {
