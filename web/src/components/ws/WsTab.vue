@@ -166,12 +166,17 @@ function setOption(key, value) {
 }
 
 async function onConnect() {
+  // 连接中再点一次会建出两个会话，前一个就漏在服务端了
+  if (busy.value) return;
+
   const url = String(props.tab.spec.url || '').trim();
   if (!url) {
     message.warning('请先填写 WebSocket 地址');
     return;
   }
-  if (!/^wss?:\/\//i.test(url)) {
+  // 地址以 {{变量}} 开头时（比如 {{baseUrl}}/socket）本机判不了，交给服务端在
+  // 变量替换之后再判，它返回的是同一个中文错误
+  if (url.indexOf('{{') !== 0 && !/^wss?:\/\//i.test(url)) {
     message.warning('地址必须以 ws:// 或 wss:// 开头');
     return;
   }
