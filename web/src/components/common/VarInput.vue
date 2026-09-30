@@ -237,16 +237,21 @@ const enterKey = keymap.of([
 
 /* ---------------- 主题（照着 n-input small 做） ---------------- */
 
+/*
+ * 变量颜色（2026-09-30 随主色改成 Postman 橙一起调整）：已定义的用蓝色 ——
+ * 原来的绿色和 GET 标签、以及当时的绿色主色撞在一起，页面上一片绿分不清层次；
+ * 现在主色是橙，POST 标签也是橙，所以变量不能用橙，蓝色和两者都拉得开。
+ */
 const VAR_COLORS = {
-  '.cm-var-ok': { color: '#0cbb52', backgroundColor: 'rgba(12, 187, 82, 0.12)', borderRadius: '2px' },
-  '.cm-var-missing': { color: '#eb2013', backgroundColor: 'rgba(235, 32, 19, 0.12)', borderRadius: '2px' },
-  '.cm-var-mock': { color: '#623ce4', backgroundColor: 'rgba(98, 60, 228, 0.12)', borderRadius: '2px' }
+  '.cm-var-ok': { color: '#1d4ed8', backgroundColor: 'rgba(29, 78, 216, 0.10)', borderRadius: '2px' },
+  '.cm-var-missing': { color: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.10)', borderRadius: '2px' },
+  '.cm-var-mock': { color: '#7c3aed', backgroundColor: 'rgba(124, 58, 237, 0.10)', borderRadius: '2px' }
 };
 
 const DARK_VAR_COLORS = {
-  '.cm-var-ok': { color: '#4ade80', backgroundColor: 'rgba(74, 222, 128, 0.16)' },
-  '.cm-var-missing': { color: '#ff6b5e', backgroundColor: 'rgba(255, 107, 94, 0.16)' },
-  '.cm-var-mock': { color: '#b39dff', backgroundColor: 'rgba(179, 157, 255, 0.16)' }
+  '.cm-var-ok': { color: '#93c5fd', backgroundColor: 'rgba(147, 197, 253, 0.16)' },
+  '.cm-var-missing': { color: '#fca5a5', backgroundColor: 'rgba(252, 165, 165, 0.16)' },
+  '.cm-var-mock': { color: '#c4b5fd', backgroundColor: 'rgba(196, 181, 253, 0.16)' }
 };
 
 const theme = EditorView.theme(Object.assign({
@@ -438,7 +443,7 @@ defineExpose({ focus: focus });
 }
 
 .var-input.focused {
-  border-color: var(--n-primary-color, #2080f0);
+  border-color: var(--apiloop-primary);
 }
 
 .var-input.readonly {

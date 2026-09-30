@@ -200,7 +200,7 @@ const overflowText = computed(function () {
 }
 
 .dir.out {
-  color: var(--n-primary-color, #2080f0);
+  color: var(--apiloop-primary);
 }
 
 .time {

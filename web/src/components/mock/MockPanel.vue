@@ -852,7 +852,7 @@ async function onDrop() {
 }
 
 .exp-item.drop-target {
-  border-top-color: var(--n-primary-color, #2080f0);
+  border-top-color: var(--apiloop-primary);
   border-top-style: dashed;
 }
 
