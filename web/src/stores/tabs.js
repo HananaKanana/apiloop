@@ -459,7 +459,13 @@ export const useTabsStore = defineStore('tabs', function () {
       if (!event || !event.type) return;
 
       if (event.type === 'head') {
-        tab.head = { response: event.response || null, redirects: event.redirects || [] };
+        tab.head = {
+          response: event.response || null,
+          redirects: event.redirects || [],
+          // 收到响应头的时刻。「保存为 SSE 示例」算第一条事件的 delay 要从这里起算
+          // （契约第 17 节：第一条的 delay 是相对于响应头）
+          time: Date.now()
+        };
         const type = headerValue(event.response && event.response.headers, 'content-type');
         if (type.toLowerCase().indexOf('text/event-stream') !== -1) {
           tab.sseEvents = [];

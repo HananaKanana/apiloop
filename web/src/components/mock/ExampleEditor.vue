@@ -40,8 +40,40 @@ const message = useMessage();
 const RESPONSE_TYPES = [
   { label: 'JSON', value: 'json' },
   { label: '文本', value: 'text' },
-  { label: 'HTML', value: 'html' }
+  { label: 'HTML', value: 'html' },
+  { label: 'SSE', value: 'sse' },
+  { label: 'WebSocket', value: 'ws' }
 ];
+
+/**
+ * sse / ws 两种示例的 `body` 不是响应体，而是一段**回放场景**（契约第 17 节），
+ * 所以编辑器切成 JSON 模式，并且给一行格式说明 + 一个能直接用的骨架。
+ * 骨架是「插入示例结构」的内容，也是这两种类型最省事的起点。
+ */
+const SCENARIO = {
+  sse: {
+    title: 'SSE 回放场景',
+    hint: '{ events: [{ delay /* 毫秒，和上一条的间隔；第一条相对响应头 */, event?, data, id? }], repeat }',
+    template: {
+      events: [
+        { delay: 0, data: '第一条消息' },
+        { delay: 1000, event: 'ping', data: '{"code":0}' }
+      ],
+      repeat: false
+    }
+  },
+  ws: {
+    title: 'WebSocket 回放场景',
+    hint: '{ onOpen: [{ delay, send }], rules: [{ match: { type, value }, reply: [{ delay, send }] }], fallback }',
+    template: {
+      onOpen: [{ delay: 0, send: '{"type":"hello"}' }],
+      rules: [
+        { match: { type: 'equals', value: 'ping' }, reply: [{ delay: 200, send: 'pong' }] }
+      ],
+      fallback: 'echo'
+    }
+  }
+};
 
 const draft = ref(null);
 const editorRef = ref(null);
@@ -51,8 +83,26 @@ const showPreview = ref(false);
 /** 有改动还没落库。自动保存的路径会在保存成功后清掉它 */
 const dirty = ref(false);
 const showTemplatize = ref(false);
+/** 服务端返回的 400 原因（场景不合法这类），留在编辑器上方给用户看 */
+const saveError = ref('');
 
 let saveTimer = null;
+
+const isScenario = computed(function () {
+  return Boolean(draft.value && (draft.value.responseType === 'sse' || draft.value.responseType === 'ws'));
+});
+
+const scenario = computed(function () {
+  return draft.value ? SCENARIO[draft.value.responseType] || null : null;
+});
+
+/** 两种场景都是 JSON；普通响应体还是按原来的规则 */
+const editorLanguage = computed(function () {
+  if (!draft.value) return 'text';
+  if (isScenario.value || draft.value.responseType === 'json') return 'json';
+  if (draft.value.responseType === 'html') return 'html';
+  return 'text';
+});
 
 function reset(source) {
   draft.value = {
@@ -64,6 +114,7 @@ function reset(source) {
     isTemplate: source.isTemplate === true
   };
   dirty.value = false;
+  saveError.value = '';
 }
 
 watch(
@@ -76,6 +127,8 @@ function scheduleSave() {
   if (props.readonly) return;
 
   dirty.value = true;
+  // 用户一动手，上次那条 400 就不该再挂在那里了
+  saveError.value = '';
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(save, 600);
 }
@@ -98,10 +151,24 @@ async function save() {
       isTemplate: draft.value.isTemplate
     });
     dirty.value = false;
+    saveError.value = '';
     emit('saved', data.example);
   } catch (err) {
-    message.error(err.message);
+    // 400 的原因（比如 sse 场景不合法）要留在编辑器上方，只弹一下用户会漏掉
+    saveError.value = err.message;
   }
+}
+
+/**
+ * 「插入示例结构」：直接换掉 body，而不是往光标处插 —— 示例上原来那点
+ * 默认 JSON 拼上场景骨架只会变成不合法的 JSON，一键得到能用的场景才是这个按钮的用处。
+ * （CodeMirror 的撤销可以退回。）
+ */
+function insertScenario() {
+  if (!draft.value || !scenario.value) return;
+
+  draft.value.body = JSON.stringify(scenario.value.template, null, 2);
+  scheduleSave();
 }
 
 /* ---------------- 智能模板化 ---------------- */
@@ -213,7 +280,7 @@ async function runPreview() {
         </placeholder-menu>
 
         <n-dropdown
-          v-if="templateOptions.length"
+          v-if="!isScenario && templateOptions.length"
           trigger="click"
           :options="templateOptions"
           @select="applyTemplate"
@@ -221,7 +288,10 @@ async function runPreview() {
           <n-button size="small" quaternary>常用模板</n-button>
         </n-dropdown>
 
-        <n-button size="small" quaternary @click="openTemplatize">智能模板化</n-button>
+        <!-- 智能模板化会整段重写响应体，对「回放场景」是错的，两种场景下不出现 -->
+        <n-button v-if="!isScenario" size="small" quaternary @click="openTemplatize">
+          智能模板化
+        </n-button>
       </template>
 
       <n-button size="small" secondary type="primary" :loading="previewing" @click="runPreview">
@@ -241,11 +311,31 @@ async function runPreview() {
     </div>
 
     <div class="block body-block">
-      <p class="label">响应体</p>
+      <div class="body-head">
+        <p class="label">{{ scenario ? scenario.title : '响应体' }}</p>
+        <span class="spacer" />
+        <n-button
+          v-if="scenario && !readonly"
+          size="tiny"
+          quaternary
+          type="primary"
+          title="会用骨架替换当前内容（可以撤销）"
+          @click="insertScenario"
+        >
+          插入示例结构
+        </n-button>
+      </div>
+
+      <p v-if="scenario" class="format-hint">{{ scenario.hint }}</p>
+
+      <n-alert v-if="saveError" type="error" :show-icon="false" class="notice">
+        {{ saveError }}
+      </n-alert>
+
       <code-editor
         ref="editorRef"
         :model-value="draft.body"
-        :language="draft.responseType === 'json' ? 'json' : (draft.responseType === 'html' ? 'html' : 'text')"
+        :language="editorLanguage"
         min-height="240px"
         :readonly="readonly"
         @update:model-value="(v) => { draft.body = v; scheduleSave(); }"
@@ -322,6 +412,26 @@ async function runPreview() {
 .body-block {
   flex: 1;
   min-height: 0;
+}
+
+.body-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.body-head .spacer {
+  flex: 1;
+}
+
+/* sse / ws 场景的格式说明：等宽字体，让花括号对齐好认一点 */
+.format-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
 }
 
 .label {

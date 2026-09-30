@@ -120,6 +120,22 @@ watch(
   { immediate: true }
 );
 
+/**
+ * 「保存为 SSE 示例」这类操作会把它新存下的示例 id 挂在标签页上，让这里选中。
+ * 读完立刻清掉，否则下次打开 Mock 页签又会被它抢走选中。
+ * immediate 是必要的：这个页签是按需渲染的，挂载时可能已经带着 id 了。
+ */
+watch(
+  function () { return props.tab.focusExampleId; },
+  function (id) {
+    if (!id) return;
+    selectedExpectationId.value = '';
+    selectedId.value = id;
+    props.tab.focusExampleId = null;
+  },
+  { immediate: true }
+);
+
 /* ---------------- 配置 ---------------- */
 
 async function refreshApi() {

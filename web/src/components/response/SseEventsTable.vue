@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
-import { NAlert } from 'naive-ui';
+import { NAlert, NButton } from 'naive-ui';
 import { formatBytes } from '@/utils/bytes';
 
 /**
@@ -12,8 +12,12 @@ import { formatBytes } from '@/utils/bytes';
 const props = defineProps({
   events: { type: Array, default: function () { return []; } },
   /** 因为超过 2000 条被丢掉的条数 */
-  dropped: { type: Number, default: 0 }
+  dropped: { type: Number, default: 0 },
+  /** 能不能存成 SSE 示例（editor 及以上 + 绑定了接口 + 响应已经结束） */
+  canSave: { type: Boolean, default: false }
 });
+
+const emit = defineEmits(['save-example']);
 
 const listEl = ref(null);
 const expanded = ref(-1);
@@ -94,6 +98,17 @@ const overflowText = computed(function () {
     <div class="toolbar">
       <span class="count">共 {{ events.length }} 条事件</span>
       <span class="tip">点一行展开看完整 data</span>
+      <span class="spacer" />
+      <n-button
+        v-if="canSave"
+        size="tiny"
+        secondary
+        type="primary"
+        title="按每个事件的到达时间算出 delay，存成 sse 类型的示例"
+        @click="emit('save-example')"
+      >
+        保存为 SSE 示例
+      </n-button>
     </div>
 
     <div ref="listEl" class="list" @scroll="onScroll">
@@ -157,6 +172,10 @@ const overflowText = computed(function () {
 
 .tip {
   opacity: 0.55;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .list {

@@ -366,6 +366,84 @@ function onTemplatizeConfirm(payload) {
   saveExample(payload.body, true);
 }
 
+/* ---------------- 保存为 SSE 示例（契约第 17 节） ---------------- */
+
+/** 逐跳和长度相关的响应头不录进示例：SSE 回放时长度由服务端自己决定 */
+const SSE_HEADER_SKIP = ['content-length', 'content-encoding', 'transfer-encoding', 'connection'];
+
+function sseExampleHeaders() {
+  const head = props.tab.head;
+  const headers = (head && head.response && head.response.headers) || [];
+
+  return headers.filter(function (pair) {
+    return SSE_HEADER_SKIP.indexOf(String(pair[0]).toLowerCase()) === -1;
+  }).map(function (pair) {
+    return {
+      key: pair[0],
+      value: pair[1],
+      type: 'string',
+      required: false,
+      desc: '',
+      enabled: true
+    };
+  });
+}
+
+/**
+ * 把这次收到的事件存成 `sse` 类型的示例。
+ *
+ * `delay` 是**和上一条之间的间隔**，第一条相对于响应头到达的时刻（契约第 17 节），
+ * 所以要从 `tab.head.time` 起算。事件视图最多留 2000 条，丢过的话要提醒用户
+ * 存下来的不是全部。
+ */
+async function saveSseExample() {
+  const tab = props.tab;
+  const events = tab.sseEvents || [];
+  if (!tab.apiId || !events.length) return;
+
+  let previous = (tab.head && tab.head.time) || events[0].time;
+  const list = events.map(function (item) {
+    const delay = Math.max(0, Math.round(item.time - previous));
+    previous = item.time;
+
+    const entry = { delay: delay, data: item.data };
+    // 解析器把没有 event 字段的都当成 message，存回去时就不写它了
+    if (item.event && item.event !== 'message') entry.event = item.event;
+    if (item.id) entry.id = item.id;
+    return entry;
+  });
+
+  const status = (tab.result && tab.result.response && tab.result.response.status) || 200;
+
+  savingExample.value = true;
+  try {
+    const data = await apisApi.createExample(tab.apiId, {
+      name: status + ' SSE 录制于 ' + stamp(),
+      status: status,
+      headers: sseExampleHeaders(),
+      body: JSON.stringify({ events: list, repeat: false }, null, 2),
+      responseType: 'sse',
+      isTemplate: false,
+      source: 'recorded'
+    });
+
+    tab.api = data.api;
+    // 切到 Mock 页签并选中刚存下的这条，用户接着就能启用 mock
+    tab.focusExampleId = data.example.id;
+    activePane.value = 'mock';
+
+    if (tab.sseDropped) {
+      message.warning('已保存，但事件超过上限，只保存了最近 2000 条');
+    } else {
+      message.success('已存为 SSE 示例');
+    }
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    savingExample.value = false;
+  }
+}
+
 async function saveExample(body, isTemplate) {
   const response = props.tab.result && props.tab.result.response;
   if (!response || !props.tab.apiId) return;
@@ -563,6 +641,7 @@ onBeforeUnmount(function () {
         :saving-example="savingExample"
         :readonly="!projects.canEdit"
         @save-example="openSaveExample"
+        @save-sse-example="saveSseExample"
       />
     </div>
 
