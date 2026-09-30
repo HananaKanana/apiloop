@@ -1,0 +1,452 @@
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { NInput } from 'naive-ui';
+import {
+  Decoration,
+  EditorView,
+  hoverTooltip,
+  keymap,
+  placeholder as placeholderExt
+} from '@codemirror/view';
+import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { autocompletion, completionStatus } from '@codemirror/autocomplete';
+import { history, historyKeymap, defaultKeymap, standardKeymap } from '@codemirror/commands';
+import { findVariables } from '@/utils/variables';
+
+/**
+ * 带 `{{变量}}` 高亮 / 补全 / 悬停提示的**单行**输入框。
+ *
+ * 外观照着 naive-ui 的小号输入框做，所以能直接换掉原来的 `n-input` 而不动布局。
+ *
+ * 几条要守住的行为（审阅重点第 1 条）：
+ * - 只允许一行：粘贴带换行的内容时，换行直接去掉；
+ * - 补全列表开着时，回车是「选中补全项」，**不发送**；列表没开才把回车交给父组件；
+ * - 中文输入法组字过程中，回车既不发送也不选中；
+ * - 没传 `scope` 时退化成普通输入框 —— 调用方没给作用域（比如响应头表格），
+ *   就不该去猜哪个变量「未定义」，也不该挂一个 CodeMirror 上去。
+ */
+const props = defineProps({
+  modelValue: { type: String, default: '' },
+  placeholder: { type: String, default: '' },
+  readonly: { type: Boolean, default: false },
+  /** `resolveScope()` 的结果；不传就用普通输入框 */
+  scope: { type: Map, default: null },
+  /** 补全列表里值预览最多显示多少个字符 */
+  previewLimit: { type: Number, default: 30 }
+});
+
+const emit = defineEmits(['update:modelValue', 'enter']);
+
+const host = ref(null);
+const focused = ref(false);
+
+const hasScope = computed(function () {
+  return props.scope instanceof Map;
+});
+
+/**
+ * 表格里几十行的时候，每一格都挂一个 CodeMirror 是浪费（实测 41 行要 179ms 才渲染完）。
+ * 只给「正在编辑」或者「值里已经有 `{{`」的格子挂，其余仍然是普通输入框。
+ * 一旦挂上就一直用编辑器，避免清空内容时又换回输入框、把焦点弄丢。
+ */
+const editing = ref(false);
+
+const hasToken = computed(function () {
+  return String(props.modelValue || '').indexOf('{{') !== -1;
+});
+
+const useEditor = computed(function () {
+  return hasScope.value && (editing.value || hasToken.value);
+});
+
+/** 从普通输入框切到编辑器时，创建完要把焦点接过去 */
+let pendingFocus = false;
+
+/** 编辑器扩展是建一次就一直用的，作用域随时会变，所以放在这个盒子里给它读 */
+const scopeRef = { current: new Map() };
+
+let view = null;
+let applying = false;
+
+/* ---------------- 高亮 ---------------- */
+
+const refreshEffect = StateEffect.define();
+
+function currentScope() {
+  return scopeRef.current instanceof Map ? scopeRef.current : new Map();
+}
+
+function decorate(state) {
+  const known = currentScope();
+  const ranges = [];
+
+  findVariables(state.doc.toString()).forEach(function (item) {
+    let cls = 'cm-var-mock';
+    if (item.kind === 'var') cls = known.has(item.name) ? 'cm-var-ok' : 'cm-var-missing';
+    ranges.push(Decoration.mark({ class: cls }).range(item.from, item.to));
+  });
+
+  return Decoration.set(ranges, true);
+}
+
+const highlightField = StateField.define({
+  create: decorate,
+  update: function (deco, tr) {
+    if (tr.docChanged || tr.effects.some(function (effect) { return effect.is(refreshEffect); })) {
+      return decorate(tr.state);
+    }
+    return deco;
+  },
+  provide: function (field) { return EditorView.decorations.from(field); }
+});
+
+/* ---------------- 补全 ---------------- */
+
+function valuePreview(entry) {
+  if (!entry) return '';
+  if (entry.secret) return '••••';
+  const value = String(entry.value === undefined || entry.value === null ? '' : entry.value);
+  return value.length > props.previewLimit ? value.slice(0, props.previewLimit) + '…' : value;
+}
+
+/** 环境 > 目录 > 项目：生效的那一级排前面 */
+function sourceRank(source) {
+  const text = String(source || '');
+  if (text.indexOf('环境') === 0) return 2;
+  if (text.indexOf('目录') === 0) return 1;
+  return 0;
+}
+
+function completionOptions() {
+  const list = [];
+  currentScope().forEach(function (entry, name) {
+    list.push({
+      label: name,
+      detail: valuePreview(entry),
+      info: entry.source,
+      boost: sourceRank(entry.source),
+      // 不挂 apply 的话，组件库只把名字插进去，补出来是 `{{name`（少一对花括号）
+      apply: applyCompletion
+    });
+  });
+  return list;
+}
+
+/**
+ * 只在「正在输入 `{{...`」时给补全。
+ * 过滤和排序自己做（`filter: false`），这样「前缀匹配优先、其次包含匹配」
+ * 这条要求是写死的，不依赖组件库默认的评分。
+ */
+function completionSource(context) {
+  const before = context.matchBefore(/\{\{[^{}]*$/);
+  if (!before) return null;
+
+  const typed = before.text.slice(2).toLowerCase();
+  const matched = completionOptions().filter(function (option) {
+    return option.label.toLowerCase().indexOf(typed) !== -1;
+  });
+
+  matched.sort(function (a, b) {
+    const prefixA = a.label.toLowerCase().indexOf(typed) === 0 ? 0 : 1;
+    const prefixB = b.label.toLowerCase().indexOf(typed) === 0 ? 0 : 1;
+    if (prefixA !== prefixB) return prefixA - prefixB;
+    return (b.boost || 0) - (a.boost || 0);
+  });
+
+  return {
+    from: before.from + 2,
+    options: matched,
+    filter: false,
+    validFor: /^[^{}]*$/
+  };
+}
+
+/** 选中之后补成 `{{name}}`；光标后面已经有 `}}` 就不再补一对 */
+function applyCompletion(target, completion, from, to) {
+  const after = target.state.sliceDoc(to, Math.min(to + 2, target.state.doc.length));
+  const insert = completion.label + (after === '}}' ? '' : '}}');
+
+  target.dispatch({
+    changes: { from: from, to: to, insert: insert },
+    selection: { anchor: from + insert.length }
+  });
+  target.focus();
+}
+
+/* ---------------- 悬停提示 ---------------- */
+
+function tooltipDom(text) {
+  const dom = document.createElement('div');
+  dom.className = 'var-tip';
+  dom.textContent = text;
+  return dom;
+}
+
+const variableTooltip = hoverTooltip(function (editorView, pos) {
+  const item = findVariables(editorView.state.doc.toString()).find(function (found) {
+    return pos >= found.from && pos <= found.to;
+  });
+  if (!item) return null;
+
+  let content;
+  if (item.kind === 'mock') {
+    content = '{{@' + item.name + '}}：mock 占位符，只在 mock 渲染时展开';
+  } else {
+    const entry = currentScope().get(item.name);
+    content = entry
+      ? (entry.secret ? '••••' : String(entry.value || '')) + ' · ' + entry.source
+      : '未定义 —— 在环境、目录或项目变量里添加';
+  }
+
+  return {
+    pos: item.from,
+    end: item.to,
+    above: true,
+    create: function () { return { dom: tooltipDom(content) }; }
+  };
+});
+
+/* ---------------- 单行 / 回车 ---------------- */
+
+const singleLine = EditorState.transactionFilter.of(function (tr) {
+  if (!tr.docChanged) return tr;
+  const lines = tr.newDoc.text;
+  if (lines.length <= 1) return tr;
+  // 粘贴进来带换行的内容：直接拼成一行
+  return [tr, { changes: { from: 0, to: tr.newDoc.length, insert: lines.join('') } }];
+});
+
+const enterKey = keymap.of([
+  {
+    key: 'Enter',
+    run: function (editorView) {
+      // 补全列表开着：这一下回车是「选中补全项」，交回给补全插件
+      if (completionStatus(editorView.state) === 'active') return false;
+      // 中文输入法组字中：回车是在确认候选词，既不发送也不吃掉
+      if (editorView.composing) return true;
+      emit('enter');
+      return true;
+    }
+  },
+  // 光标移动、选中（Cmd+A）、撤销（Cmd+Z）这些照旧交给 CodeMirror 自己。
+  // 没挂 history 的话 Cmd+Z 是没反应的，所以这两个 keymap 必须带上。
+  ...historyKeymap,
+  ...defaultKeymap,
+  ...standardKeymap
+]);
+
+/* ---------------- 主题（照着 n-input small 做） ---------------- */
+
+const VAR_COLORS = {
+  '.cm-var-ok': { color: '#0cbb52', backgroundColor: 'rgba(12, 187, 82, 0.12)', borderRadius: '2px' },
+  '.cm-var-missing': { color: '#eb2013', backgroundColor: 'rgba(235, 32, 19, 0.12)', borderRadius: '2px' },
+  '.cm-var-mock': { color: '#623ce4', backgroundColor: 'rgba(98, 60, 228, 0.12)', borderRadius: '2px' }
+};
+
+const DARK_VAR_COLORS = {
+  '.cm-var-ok': { color: '#4ade80', backgroundColor: 'rgba(74, 222, 128, 0.16)' },
+  '.cm-var-missing': { color: '#ff6b5e', backgroundColor: 'rgba(255, 107, 94, 0.16)' },
+  '.cm-var-mock': { color: '#b39dff', backgroundColor: 'rgba(179, 157, 255, 0.16)' }
+};
+
+const theme = EditorView.theme(Object.assign({
+  '&': {
+    fontSize: '13px',
+    color: 'inherit',
+    backgroundColor: 'transparent'
+  },
+  '.cm-content': {
+    padding: '0',
+    fontFamily: 'inherit',
+    caretColor: 'var(--n-text-color, currentColor)'
+  },
+  '.cm-line': { padding: '0' },
+  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '20px', overflow: 'hidden' },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'currentColor' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
+    backgroundColor: 'rgba(32, 128, 240, 0.25)'
+  },
+  '.cm-tooltip': {
+    border: '1px solid var(--n-border-color, rgba(128, 128, 128, 0.24))',
+    borderRadius: '4px',
+    fontSize: '12px',
+    padding: '2px 4px'
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': { maxHeight: '220px', fontFamily: 'inherit' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '2px 6px' },
+  '.cm-completionDetail': { fontStyle: 'normal', opacity: '0.6', marginLeft: '8px' },
+  '.cm-completionInfo': { padding: '4px 8px' },
+  '.var-tip': { padding: '4px 8px', maxWidth: '320px', wordBreak: 'break-all' }
+}, VAR_COLORS, {
+  // 暗色主题：亮一档，别用只在白底上好看的颜色
+  '@media (prefers-color-scheme: dark)': DARK_VAR_COLORS
+}), { dark: false });
+
+/* ---------------- 生命周期 ---------------- */
+
+function createView() {
+  if (!host.value || view) return;
+
+  view = new EditorView({
+    parent: host.value,
+    state: EditorState.create({
+      doc: props.modelValue || '',
+      extensions: [
+        singleLine,
+        // 撤销要能用（审阅重点第 1 条）：CodeMirror 的撤销来自 history()
+        history(),
+        highlightField,
+        EditorView.lineWrapping,
+        placeholderExt(props.placeholder || ''),
+        EditorState.readOnly.of(props.readonly),
+        EditorView.editable.of(!props.readonly),
+        autocompletion({
+          override: [completionSource],
+          activateOnTyping: true,
+          closeOnBlur: true,
+          icons: false,
+          // 自己过滤，见 completionSource
+          defaultKeymap: true
+        }),
+        variableTooltip,
+        enterKey,
+        theme,
+        EditorView.updateListener.of(function (update) {
+          if (update.docChanged && !applying) {
+            emit('update:modelValue', update.state.doc.toString());
+          }
+          if (update.focusChanged) focused.value = update.view.hasFocus;
+        })
+      ]
+    })
+  });
+
+  // 挂上编辑器就一直用它，别再换回普通输入框
+  editing.value = true;
+
+  if (pendingFocus) {
+    pendingFocus = false;
+    view.focus();
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+  }
+}
+
+/** 普通输入框拿到焦点：换成编辑器（用户点进来的第一下，不会丢字） */
+function onPlainFocus() {
+  pendingFocus = true;
+  editing.value = true;
+}
+
+onMounted(function () {
+  scopeRef.current = props.scope instanceof Map ? props.scope : new Map();
+  if (useEditor.value) createView();
+});
+
+onBeforeUnmount(function () {
+  if (view) {
+    view.destroy();
+    view = null;
+  }
+});
+
+watch(useEditor, async function (value) {
+  if (!value) {
+    if (view) {
+      view.destroy();
+      view = null;
+    }
+    return;
+  }
+  await nextTick();
+  createView();
+});
+
+watch(
+  function () { return props.scope; },
+  function (value) {
+    scopeRef.current = value instanceof Map ? value : new Map();
+    // 作用域变了，已经画好的高亮要按新的「已定义 / 未定义」重算
+    if (view) view.dispatch({ effects: refreshEffect.of(null) });
+  }
+);
+
+// 外部值变了才写回编辑器，避免和用户输入互相打架
+watch(
+  function () { return props.modelValue; },
+  function (value) {
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current === (value || '')) return;
+    applying = true;
+    view.dispatch({ changes: { from: 0, to: current.length, insert: value || '' } });
+    applying = false;
+  }
+);
+
+watch(
+  function () { return props.readonly; },
+  function () {
+    if (view) view.destroy();
+    view = null;
+    createView();
+  }
+);
+
+/** 给外面（比如「去环境管理」之后想聚焦回来）用 */
+function focus() {
+  if (view) view.focus();
+}
+
+defineExpose({ focus: focus });
+</script>
+
+<template>
+  <div
+    v-if="useEditor"
+    ref="host"
+    class="var-input"
+    :class="{ focused: focused, readonly: readonly }"
+  />
+
+  <!-- 没给作用域、或者这一格还用不着编辑器：普通输入框 -->
+  <n-input
+    v-else
+    size="small"
+    :value="modelValue"
+    :placeholder="placeholder"
+    :readonly="readonly"
+    @focus="onPlainFocus"
+    @update:value="(v) => emit('update:modelValue', v)"
+    @keyup.enter="emit('enter')"
+  />
+</template>
+
+<style scoped>
+/* 外观照着 naive-ui 的小号输入框，这样换掉 n-input 不会动到布局 */
+.var-input {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.4));
+  border-radius: 3px;
+  background-color: var(--n-color, transparent);
+  transition: border-color 0.3s var(--n-bezier, ease-in-out);
+}
+
+.var-input.focused {
+  border-color: var(--n-primary-color, #2080f0);
+}
+
+.var-input.readonly {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.var-input :deep(.cm-editor) {
+  width: 100%;
+}
+</style>

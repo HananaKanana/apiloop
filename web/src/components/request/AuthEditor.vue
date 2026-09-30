@@ -1,12 +1,17 @@
 <script setup>
 import { computed } from 'vue';
 import { NAlert, NFormItem, NInput, NSelect, NSpace } from 'naive-ui';
+import VarInput from '@/components/common/VarInput.vue';
 
 /**
  * 鉴权编辑器。既给接口用，也给目录和项目用。
  *
  * 数据形状见契约：null 与 { type: 'inherit' } 都表示「沿用父级」。
  * 导入进来的 oauth2 / digest 这类不支持的鉴权，只读显示一句提示，不让人误以为它会生效。
+ *
+ * token / 用户名 / key / value 用 VarInput（`Bearer {{token}}` 这种写法很常见，
+ * 要能高亮和补全）；**密码那一格仍然是普通的打码输入框** ——
+ * CodeMirror 里没法做密码遮罩，为了一个基本不会写变量的字段牺牲遮罩不划算。
  */
 const props = defineProps({
   modelValue: { type: Object, default: null },
@@ -17,7 +22,9 @@ const props = defineProps({
    * 「沿用上一级」有用得多 —— 用户不知道那个「上一级」到底配没配。
    * 传空串就用原来的通用文案。
    */
-  inheritHint: { type: String, default: '' }
+  inheritHint: { type: String, default: '' },
+  /** resolveScope() 的结果，给变量高亮和补全用 */
+  scope: { type: Map, default: null }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -85,12 +92,12 @@ function patch(fields) {
 
       <template v-if="currentType === 'bearer'">
         <n-form-item label="Token" :show-feedback="false">
-          <n-input
-            size="small"
-            :value="auth.token || ''"
-            :disabled="disabled"
+          <var-input
+            :model-value="auth.token || ''"
+            :readonly="disabled"
+            :scope="scope"
             placeholder="支持 {{变量}}"
-            @update:value="(v) => { patch({ token: v }); }"
+            @update:model-value="(v) => { patch({ token: v }); }"
           />
         </n-form-item>
       </template>
@@ -98,11 +105,11 @@ function patch(fields) {
       <template v-else-if="currentType === 'basic'">
         <n-space vertical size="small" class="full">
           <n-form-item label="用户名" :show-feedback="false">
-            <n-input
-              size="small"
-              :value="auth.username || ''"
-              :disabled="disabled"
-              @update:value="(v) => { patch({ username: v }); }"
+            <var-input
+              :model-value="auth.username || ''"
+              :readonly="disabled"
+              :scope="scope"
+              @update:model-value="(v) => { patch({ username: v }); }"
             />
           </n-form-item>
           <n-form-item label="密码" :show-feedback="false">
@@ -121,19 +128,19 @@ function patch(fields) {
       <template v-else-if="currentType === 'apikey'">
         <n-space vertical size="small" class="full">
           <n-form-item label="Key" :show-feedback="false">
-            <n-input
-              size="small"
-              :value="auth.key || ''"
-              :disabled="disabled"
-              @update:value="(v) => { patch({ key: v }); }"
+            <var-input
+              :model-value="auth.key || ''"
+              :readonly="disabled"
+              :scope="scope"
+              @update:model-value="(v) => { patch({ key: v }); }"
             />
           </n-form-item>
           <n-form-item label="Value" :show-feedback="false">
-            <n-input
-              size="small"
-              :value="auth.value || ''"
-              :disabled="disabled"
-              @update:value="(v) => { patch({ value: v }); }"
+            <var-input
+              :model-value="auth.value || ''"
+              :readonly="disabled"
+              :scope="scope"
+              @update:model-value="(v) => { patch({ value: v }); }"
             />
           </n-form-item>
           <n-form-item label="位置" :show-feedback="false">

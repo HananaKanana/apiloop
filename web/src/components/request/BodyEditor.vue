@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { NButton, NCheckbox, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
+import VarInput from '@/components/common/VarInput.vue';
 import * as sendApi from '@/api/send';
 
 /**
@@ -13,7 +14,9 @@ import * as sendApi from '@/api/send';
  */
 const props = defineProps({
   spec: { type: Object, required: true },
-  projectId: { type: String, default: '' }
+  projectId: { type: String, default: '' },
+  /** resolveScope() 的结果，给表单值的变量高亮和补全用 */
+  scope: { type: Map, default: null }
 });
 
 const message = useMessage();
@@ -226,12 +229,12 @@ async function onFilePicked(event) {
                   <span class="file-path">{{ row.src || '尚未选择' }}</span>
                 </n-space>
               </template>
-              <n-input
+              <var-input
                 v-else
-                size="small"
-                :value="row.value"
+                :model-value="row.value"
+                :scope="scope"
                 placeholder="值"
-                @update:value="(v) => updateFormRow(index, { value: v })"
+                @update:model-value="(v) => updateFormRow(index, { value: v })"
               />
             </div>
             <div class="cell action">
