@@ -15,6 +15,12 @@ export const useTreeStore = defineStore('tree', function () {
   const apis = ref([]);
   const loading = ref(false);
   const projectId = ref('');
+  /** 树里当前选中的目录，导入 cURL / OpenAPI 时当作落点 */
+  const selectedFolderId = ref(null);
+
+  function setSelectedFolder(id) {
+    selectedFolderId.value = id || null;
+  }
 
   const nodes = computed(function () {
     return buildTree(folders.value, apis.value);
@@ -104,6 +110,8 @@ export const useTreeStore = defineStore('tree', function () {
     apiById: apiById,
     loading: loading,
     projectId: projectId,
+    selectedFolderId: selectedFolderId,
+    setSelectedFolder: setSelectedFolder,
     load: load,
     refresh: refresh,
     createFolder: createFolder,

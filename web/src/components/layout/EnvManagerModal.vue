@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { NButton, NEmpty, NInput, NModal, NSpace, useDialog, useMessage } from 'naive-ui';
 import { useEnvStore } from '@/stores/env';
+import * as importExportApi from '@/api/importExport';
+import { downloadJson } from '@/utils/download';
 import VarTable from '@/components/common/VarTable.vue';
 
 const props = defineProps({
@@ -89,10 +91,22 @@ async function renameEnv() {
   }
 }
 
-function removeEnv() {
+async function exportEnv() {
   const env = active.value;
   if (!env) return;
 
+  try {
+    const data = await importExportApi.exportEnvironment(env.id);
+    downloadJson(data.filename, data.json);
+    message.success('已导出');
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+function removeEnv() {
+  const env = active.value;
+  if (!env) return;
   dialog.error({
     title: '删除环境',
     content: '确定删除「' + env.name + '」吗？',
@@ -150,6 +164,7 @@ function removeEnv() {
               @blur="renameEnv"
               @keyup.enter="renameEnv"
             />
+            <n-button size="small" quaternary @click="exportEnv">导出</n-button>
             <n-button size="small" quaternary type="error" @click="removeEnv">删除</n-button>
           </n-space>
 

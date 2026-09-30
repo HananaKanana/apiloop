@@ -12,8 +12,10 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
+import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
+import { downloadJson } from '@/utils/download';
 
 const emit = defineEmits(['change']);
 
@@ -49,6 +51,7 @@ const options = computed(function () {
 
   items.push({ type: 'divider', key: '__divider' });
   items.push({ key: '__settings', name: '项目设置', slug: '', render: renderLabel });
+  items.push({ key: '__export', name: '导出为 Postman 集合', slug: '', render: renderLabel });
   items.push({ key: '__create', name: '新建项目', slug: '', render: renderLabel });
   return items;
 });
@@ -56,6 +59,18 @@ const options = computed(function () {
 function openCreate() {
   form.value = { name: '', slug: '', description: '' };
   showCreate.value = true;
+}
+
+async function exportCollection() {
+  if (!projects.currentId) return;
+
+  try {
+    const data = await importExportApi.exportCollection(projects.currentId);
+    downloadJson(data.filename, data.json);
+    message.success('已导出');
+  } catch (err) {
+    message.error(err.message);
+  }
 }
 
 async function submitCreate() {
@@ -84,6 +99,7 @@ async function submitCreate() {
 function onSelect(key) {
   if (key === '__create') return openCreate();
   if (key === '__settings') return emit('change', '__settings');
+  if (key === '__export') return exportCollection();
   if (key === projects.currentId) return;
 
   // 切项目会把标签页全清掉，有没保存的修改就先问一句
