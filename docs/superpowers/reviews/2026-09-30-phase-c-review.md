@@ -69,3 +69,10 @@
 - 小瑕疵（不强制）：Express 的路由默认不区分大小写，所以 `/__ADMIN/x` 这样的 mock 路径也会被管理台接走，而 `reservedPrefixOf` 是区分大小写比较的。建议比较前先转成小写。
 
 **C 阶段验收完成。**
+
+# 大小写小瑕疵复审（330410f）：通过
+
+`reservedPrefixOf` 在比较前先转成小写。我实测了下面几个路径：
+
+- `/__ADMIN/x`、`/__Apiloop`：被拦截；
+- `/__administrator`、`/api/__admin`：放行。
