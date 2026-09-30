@@ -133,13 +133,18 @@ apiloop web --config routes.json        # 首次启动时要导入的旧配置�
 
 | 表 | 存什么 |
 | --- | --- |
-| `apis` | 接口定义：方法、路径、mock 开关、延时、跨域…… |
+| `apis` | 接口定义：方法、路径、请求参数、鉴权、脚本、mock 开关、延时、跨域…… |
 | `examples` | 示例响应：状态码、响应头、响应体。**一处数据两用** —— 调试时是保存下来的响应，mock 时就是返回的数据 |
-| `folders` | 分组（对应管理台侧边栏的分组，重命名会自动同步组内接口） |
+| `folders` | 目录，支持嵌套；`position` 只在同一个父目录内部有意义 |
+| `environments` | 环境（一组变量），发送请求时叠加在项目变量之上 |
+| `history` | 发送记录，每个项目只保留最新 500 条 |
 | `users` / `sessions` | 用户与登录态 |
 | `projects` / `project_members` | 项目与成员 |
 | `legacy_imports` | 记下哪些旧配置文件已经导入过，避免重复导入 |
-| `environments` / `history` / `mock_expectations` | 已建表，留给后续版本 |
+| `mock_expectations` | 已建表，留给后续版本 |
+
+`position` 只在同级内比较：同一个父目录下，先按 `position` 列子目录，
+再按 `position` 列接口。
 
 想直接看或改数据，用 `sqlite3` 命令行即可（改完服务会自动热更新）：
 
@@ -281,44 +286,112 @@ router.use('/hi', (req, res) => {
 ## 管理台 API
 
 管理台前端用的就是这些接口，也可以直接调。**除登录接口外都需要先登录**，
-请求要带上登录返回的 cookie：
+请求要带上登录返回的 cookie。路径都省略前缀 `/__admin/api`，统一返回
+`{ ok: true, ... }` 或 `{ ok: false, error: "..." }`。
 
-登录与用户：
+字段名、状态码与各种规则的完整定义见 **[管理台接口 v2 契约](docs/design/2026-09-30-admin-api-v2.md)**，
+下面只列路径与一句话说明。
 
-| 方法与路径 | 说明 |
-| --- | --- |
-| `POST /__admin/api/auth/login` | 登录，body `{username, password}`，成功种 cookie。**公开** |
-| `POST /__admin/api/auth/logout` | 退出 |
-| `GET /__admin/api/auth/me` | 当前登录用户 |
-| `PUT /__admin/api/auth/password` | 改密码，body `{oldPassword, newPassword}` |
-| `GET /__admin/api/users` | 用户列表 |
-| `POST /__admin/api/users` | 新建用户；没传密码会随机生成并在响应里返回一次 |
-| `PUT /__admin/api/users/:id` | 改显示名 / 角色 / 禁用 |
-| `POST /__admin/api/users/:id/reset-password` | 重置密码并返回一次 |
-| `DELETE /__admin/api/users/:id` | 删除用户 |
-
-其余接口（**都需要登录**）：
+### 登录与用户
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `GET /__admin/api/meta` | 占位符、字段类型、响应模板、方法列表、配置路径 |
-| `GET /__admin/api/routes` | 全部接口配置 |
-| `POST /__admin/api/routes` | 新建 |
-| `PUT /__admin/api/routes/:id` | 更新 |
-| `DELETE /__admin/api/routes/:id` | 删除 |
-| `POST /__admin/api/routes/:id/duplicate` | 复制 |
-| `GET /__admin/api/groups` | 分组列表（含每个分组的接口数） |
-| `POST /__admin/api/groups` | 新建分组，body `{ name }` |
-| `PUT /__admin/api/groups/:name` | 重命名分组，body `{ name }`，该分组下接口一起改名 |
-| `DELETE /__admin/api/groups/:name` | 删除分组；默认把接口移到未分组，加 `?routes=delete` 则连接口一起删 |
-| `POST /__admin/api/groups/reorder` | 调整分组顺序，body `{ names: [...] }`，只传部分分组也可以 |
-| `POST /__admin/api/preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
-| `POST /__admin/api/import/curl` | 解析 cURL |
-| `POST /__admin/api/import/openapi` | 解析 OpenAPI / Swagger |
-| `POST /__admin/api/import/routes` | 批量落库 |
-| `GET /__admin/api/export` | 导出 routes.json |
+| `POST /auth/login` | 登录，body `{username, password}`，成功种 cookie。**公开** |
+| `POST /auth/logout` | 退出 |
+| `GET /auth/me` | 当前登录用户 |
+| `PUT /auth/password` | 改密码，body `{oldPassword, newPassword}` |
+| `GET /users` | 用户列表。仅管理员 |
+| `POST /users` | 新建用户；没传密码会随机生成并在响应里返回一次。仅管理员 |
+| `PUT /users/:id` | 改显示名 / 角色 / 禁用。仅管理员 |
+| `POST /users/:id/reset-password` | 重置密码并返回一次。仅管理员 |
+| `DELETE /users/:id` | 删除用户。仅管理员 |
 
-统一返回 `{ ok: true, ... }` 或 `{ ok: false, error: "..." }`。
+### 项目（契约第 2 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects` | 项目列表，默认项目排最前 |
+| `POST /projects` | 新建项目 |
+| `GET /projects/:pid` | 项目详情，`:pid` 可以是 id 或 slug |
+| `PUT /projects/:pid` | 改名字 / 标识 / 描述 / 变量 / 鉴权；标识被占用会报错，不自动改名 |
+| `DELETE /projects/:pid` | 删除项目。仅管理员，根项目与默认项目不能删 |
+
+### 目录树、接口与示例（契约第 3 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/tree` | 整棵树，返回扁平的目录与接口列表，前端自己组装 |
+| `POST /projects/:pid/folders` | 新建目录，同一父目录下不允许重名 |
+| `PUT /folders/:id` | 改名字 / 描述 / 鉴权 / 变量 |
+| `DELETE /folders/:id?apis=move\|delete` | 删目录。`move`（默认）把内容移到父目录，`delete` 递归删 |
+| `POST /projects/:pid/move` | 移动目录或接口到指定位置，并重排 position；移进自己的子孙会被拒 |
+| `GET /apis/:id` | 接口详情（含请求定义、mock 配置、全部示例） |
+| `POST /projects/:pid/apis` | 新建接口 |
+| `PUT /apis/:id` | 更新接口；改 url 时 `mock.path` 的跟随规则、开启 mock 的前提见契约 |
+| `DELETE /apis/:id` | 删除接口 |
+| `POST /apis/:id/duplicate` | 复制接口（示例整份复制，名字加「 副本」） |
+| `POST /apis/:id/examples` | 新增示例；这是第一个示例时会自动成为 mock 用的那条 |
+| `PUT /examples/:id` | 更新示例 |
+| `DELETE /examples/:id` | 删除示例；删掉 mock 正在用的那条会自动改指或关掉 mock |
+| `POST /projects/:pid/import/routes` | 把解析出来的 route 批量落进项目，可指定目录 |
+
+### 环境（契约第 4 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/environments` | 环境列表 |
+| `POST /projects/:pid/environments` | 新建环境 |
+| `PUT /environments/:id` | 改名字 / 变量 |
+| `DELETE /environments/:id` | 删除环境 |
+
+> 「当前选中哪个环境」由前端存在 localStorage，服务端不存。
+
+### 发送、历史与文件（契约第 5 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求 |
+| `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
+| `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果） |
+| `DELETE /projects/:pid/history` | 清空该项目的历史 |
+| `POST /projects/:pid/files` | 上传文件（`application/octet-stream` + `X-Filename`），返回服务端绝对路径 |
+
+### Postman 导入导出（契约第 6 节）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /import/postman/preview` | 解析并统计，不写库 |
+| `POST /import/postman` | 导入 collection / environment / globals；整个导入是一个事务 |
+| `GET /projects/:pid/export/postman` | 导出成 Postman Collection |
+| `GET /environments/:id/export/postman` | 导出成 Postman Environment |
+
+### 元信息与纯解析
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /meta` | 占位符、字段类型、响应模板、方法列表、当前用户与根项目、mock 前缀 |
+| `POST /preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
+| `POST /import/curl` | 解析 cURL |
+| `POST /import/openapi` | 解析 OpenAPI / Swagger |
+
+### 旧版管理台专用（**P2 之后移除**）
+
+这几个接口只作用于根项目，是给尚未迁移的旧版页面用的，新版管理台不再调用：
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /routes` | 全部接口配置 |
+| `POST /routes` | 新建 |
+| `PUT /routes/:id` | 更新 |
+| `DELETE /routes/:id` | 删除 |
+| `POST /routes/:id/duplicate` | 复制 |
+| `GET /groups` | 分组列表（含每个分组的接口数） |
+| `POST /groups` | 新建分组，body `{ name }` |
+| `PUT /groups/:name` | 重命名分组，body `{ name }`，该分组下接口一起改名 |
+| `DELETE /groups/:name` | 删除分组；默认把接口移到未分组，加 `?routes=delete` 则连接口一起删 |
+| `POST /groups/reorder` | 调整分组顺序，body `{ names: [...] }`，只传部分分组也可以 |
+| `POST /import/routes` | 批量落库（旧版，作用于根项目；新版用 `POST /projects/:pid/import/routes`） |
+| `GET /export` | 导出 routes.json |
 
 ## 开发与测试
 
@@ -327,6 +400,9 @@ npm test
 ```
 
 82 个用例，覆盖模板引擎与 JSON 容错、cURL / OpenAPI 导入、配置存储与热更新、旧配置迁移、分组管理、登录与用户管理、mock 按项目挂载、管理台 API、以及 CLI 端到端（`init` / `web` / `start` / 端口占用 / 帮助信息）。
+
+按项目约定**不新增测试**：管理台接口 v2 的每一批改动都用一次性脚本自测完即删，
+覆盖范围写在对应的提交信息里。既有的 82 个用例每个 Task 结束都必须全绿。
 
 测试一律用 `--db` 指到临时目录，**不会碰真实的 `~/.apiloop`**。
 
@@ -338,17 +414,25 @@ lib/app-info.js       产品名、数据目录、cookie 名等常量（改名只
 lib/command.js        start / open / web / init / user 命令实现
 lib/db/               全局库：连库、迁移、事务、变更广播（node:sqlite，零依赖）
 lib/db/repos/         各表的增删改查
-lib/routes-store.js   单个项目的门面（对外 API 与老版本一致）
+lib/api/              管理台接口 v2，按资源拆：projects / environments / tree / send / postman
+lib/api/respond.js    接口的响应约定（ok / fail / wrap / notFound）
+lib/api/dto.js        repo 行 → 接口 DTO，以及入参清洗
+lib/tree.js           目录树业务逻辑：移动、删除目录、复制接口、树的读取与写入
+lib/routes-store.js   单个项目的门面（对外 API 与老版本一致，供旧版管理台使用）
 lib/project-stores.js 每个项目只建一个 store 实例，缓存复用
 lib/mock-host.js      按项目挂载 mock：根路径 + /mock/<slug>
 lib/auth.js           密码哈希、会话、登录中间件、初始管理员
 lib/admin-auth.js     /auth/* 与 /users/* 接口
-lib/admin.js          管理台后端 API 与静态页
+lib/admin.js          管理台后端：挂载 v2 接口、旧版接口与静态页
 lib/legacy-import.js  把目录里的旧配置导入成项目
 lib/legacy/           只读的 P0 格式库读取器
 lib/mock-engine.js    模板渲染与随机数据生成
 lib/mock-runtime.js   把配置编译成 Express 路由，支持热更新
 lib/importers.js      cURL / OpenAPI(Swagger) 解析
+lib/executor.js       请求执行器：由服务端代发真实 HTTP 请求
+lib/postman.js        Postman 集合 / 环境的解析与生成
+lib/variables.js      变量替换（{{name}}），与 mock 占位符 {{@xxx}} 区分
+lib/url-utils.js      URL 拼装与 mock 路径推导
 lib/web/              管理台前端（零构建：index.html + app.js + style.css）
 sample/               `apiloop init` 用的示例文件
 test/                 node:test 测试
