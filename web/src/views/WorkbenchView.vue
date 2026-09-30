@@ -1,11 +1,19 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { NButton, NEmpty } from 'naive-ui';
+import { useRouter } from 'vue-router';
+import { NButton, NEmpty, useMessage } from 'naive-ui';
 import TopBar from '@/components/layout/TopBar.vue';
+import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
+import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
+import { useProjectStore } from '@/stores/project';
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 640;
 const COLLAPSE_BREAKPOINT = 1024;
+
+const router = useRouter();
+const projects = useProjectStore();
+const message = useMessage();
 
 const leftWidth = ref(Number(localStorage.getItem('apiloop.treeWidth')) || 280);
 const collapsed = ref(false);
@@ -39,11 +47,27 @@ function onResize() {
   if (window.innerWidth < COLLAPSE_BREAKPOINT) collapsed.value = true;
 }
 
-onMounted(function () {
+function onProjectChange(id) {
+  if (id === '__settings') {
+    if (projects.currentId) {
+      router.push('/projects/' + projects.currentId + '/settings');
+    }
+    return;
+  }
+  // 切了项目：环境由 EnvSwitcher 的 watcher 重新拉，目录树由 ApiTree 的 watcher 重新拉
+}
+
+onMounted(async function () {
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', stopDrag);
   window.addEventListener('resize', onResize);
   onResize();
+
+  try {
+    await projects.load();
+  } catch (err) {
+    message.error(err.message);
+  }
 });
 
 onBeforeUnmount(function () {
@@ -57,6 +81,12 @@ onBeforeUnmount(function () {
 <template>
   <div class="shell">
     <top-bar>
+      <template #project>
+        <project-switcher @change="onProjectChange" />
+      </template>
+      <template #env>
+        <env-switcher />
+      </template>
       <template #actions>
         <n-button quaternary size="small" @click="collapsed = !collapsed">
           {{ collapsed ? '显示目录' : '隐藏目录' }}

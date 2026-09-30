@@ -235,7 +235,7 @@ onMounted(load);
           :data="users"
           :loading="loading"
           :bordered="false"
-          :row-key="function (row) { return row.id; }"
+          :row-key="(row) => { return row.id; }"
           size="small"
         />
       </n-card>
