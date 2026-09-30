@@ -118,7 +118,6 @@ async function onMenuSelect(env, key) {
         </span>
         <span class="name">{{ env.name }}</span>
         <span v-if="envs.isDirty(env.id)" class="dirty-dot" title="有没保存的修改" />
-        <span class="count">{{ (env.variables || []).length }}</span>
 
         <n-dropdown
           trigger="click"
@@ -214,12 +213,6 @@ async function onMenuSelect(env, key) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.count {
-  flex: none;
-  font-size: 11px;
-  opacity: 0.55;
 }
 
 /* 「…」平时不显示，鼠标到这一行才出来 */
