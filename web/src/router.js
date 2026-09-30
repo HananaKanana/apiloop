@@ -3,6 +3,7 @@ import { useSessionStore } from '@/stores/session';
 import LoginView from '@/views/LoginView.vue';
 import WorkbenchView from '@/views/WorkbenchView.vue';
 import UsersView from '@/views/UsersView.vue';
+import ProjectSettingsView from '@/views/ProjectSettingsView.vue';
 
 /**
  * 用 hash 路由，后端的静态文件服务就不用为前端路由做任何特殊处理。
@@ -12,6 +13,11 @@ const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
   { path: '/workbench', name: 'workbench', component: WorkbenchView },
   { path: '/users', name: 'users', component: UsersView, meta: { admin: true } },
+  {
+    path: '/projects/:pid/settings',
+    name: 'project-settings',
+    component: ProjectSettingsView
+  },
   { path: '/:pathMatch(.*)*', redirect: '/workbench' }
 ];
 
