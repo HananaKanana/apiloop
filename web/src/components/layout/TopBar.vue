@@ -124,9 +124,6 @@ onBeforeUnmount(function () {
       <span class="brand">{{ session.appName || 'apiloop' }}</span>
 
       <slot name="project" />
-      <n-tag v-if="projects.current && projects.current.isRoot" size="tiny" :bordered="false">
-        根
-      </n-tag>
       <n-tag v-if="projects.current && !projects.canEdit" size="tiny" :bordered="false">
         只读
       </n-tag>

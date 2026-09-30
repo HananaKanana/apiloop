@@ -8,7 +8,6 @@ import {
   NInput,
   NModal,
   NSpace,
-  NTag,
   NButton,
   useDialog,
   useMessage
@@ -43,7 +42,7 @@ function renderLabel(option) {
    * 挤成一串，「qb」显示成「qbqb」。
    *
    * 标识显示成它的 mock 前缀（/mock/qb），一眼能看出是什么，不会像名字重复了一遍；
-   * 根项目挂在根路径，只显示「根」标签。
+   * 根项目挂在根路径，不显示标识（原来的「根」标签用户觉得多余，2026-09-30 去掉）。
    */
   const hint = option.slug && !option.isRoot ? '/mock/' + option.slug : '';
 
@@ -53,9 +52,6 @@ function renderLabel(option) {
       ? h('span', {
         style: 'font-size: 12px; opacity: 0.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;'
       }, hint)
-      : null,
-    option.isRoot
-      ? h(NTag, { size: 'tiny', bordered: false, type: 'info' }, { default: () => '根' })
       : null
   ]);
 }
@@ -183,7 +179,7 @@ function onSelect(key) {
 </template>
 
 <style scoped>
-/* 项目切换：图标 + 名字 + ▾（根 / 只读标签由顶栏紧跟在后面） */
+/* 项目切换：图标 + 名字 + ▾（只读标签由顶栏紧跟在后面） */
 .switcher {
   display: flex;
   align-items: center;
