@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>server-mock 管理台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 后端连接失败等全局提示条 -->
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <ellipse cx="12" cy="6" rx="8" ry="3" fill="currentColor" opacity=".95"></ellipse>
+        <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+      </svg>
+      <h1>server-mock 管理台</h1>
+      <span id="configPath" class="config-path" title=""></span>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnNew" class="btn" type="button">新建接口</button>
+      <button id="btnImportCurl" class="btn" type="button">从 cURL 导入</button>
+      <button id="btnImportOpenapi" class="btn" type="button">从 OpenAPI 导入</button>
+      <button id="btnExport" class="btn" type="button">导出 JSON</button>
+      <button id="btnSave" class="btn btn-primary" type="button" title="Ctrl/Cmd + S">保存</button>
+    </div>
+  </header>
+
+  <!-- 主体：左列表 + 右编辑器 -->
+  <div class="main">
+    <aside class="sidebar">
+      <div class="sidebar-search">
+        <input id="searchInput" class="input input-sm" type="search" placeholder="搜索名称 / 路径" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="routeList" class="route-list"></div>
+    </aside>
+    <main id="editorPane" class="editor-pane"></main>
+  </div>
+
+  <!-- 底部状态条 -->
+  <footer class="statusbar">
+    <span id="statusDot" class="status-dot"></span>
+    <span id="statusText">就绪</span>
+    <span id="statusRight" class="status-right"></span>
+  </footer>
+
+  <!-- 导入弹窗 -->
+  <div id="modalOverlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">导入</h2>
+        <button id="modalClose" class="icon-btn" type="button" title="关闭" aria-label="关闭">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="importText" class="import-text mono" spellcheck="false" placeholder="在此粘贴内容…"></textarea>
+        <div id="importError" class="alert alert-error" hidden></div>
+        <div id="importPreview" class="import-preview"></div>
+      </div>
+      <div class="modal-foot">
+        <span id="importHint" class="modal-hint"></span>
+        <button id="btnImportCancel" class="btn" type="button">取消</button>
+        <button id="btnImportParse" class="btn" type="button">解析预览</button>
+        <button id="btnImportConfirm" class="btn btn-primary" type="button" disabled>确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

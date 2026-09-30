@@ -9,11 +9,12 @@ var chalk = require('chalk');
 var yargs = require('yargs/yargs');
 var hideBin = require('yargs/helpers').hideBin;
 
-var VALID_COMMANDS = ['start', 'init', 'open'];
+var VALID_COMMANDS = ['start', 'init', 'open', 'web'];
 
 var COMMANDS = {
     open: 'Start a web server and open html file in your browser, if any',
     start: 'Start a web server',
+    web: 'Start a web server with the visual mock console at /__mock',
     init: 'Create the sample file router.js'
 };
 
@@ -26,13 +27,22 @@ var EXAMPLES = {
         ['--port=3000', 'set server port, default 8080'],
         ['--public=public', 'set the static file path, the default is the current folder'],
         ['--views=views', 'set the template path, the default is the current folder'],
-        ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs']
+        ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs'],
+        ['--config=routes.json', 'set the mock routes config file, default routes.json']
+    ],
+    web: [
+        ['--port=3000', 'set server port, default 8080'],
+        ['--public=public', 'set the static file path, the default is the current folder'],
+        ['--views=views', 'set the template path, the default is the current folder'],
+        ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs'],
+        ['--config=mock/routes.json', 'set the mock routes config file, default routes.json']
     ],
     open: [
         ['--port=3000', 'set server port, default 8080'],
         ['--public=public', 'set the static file path, the default is the current folder'],
         ['--views=views', 'set the template path, the default is the current folder'],
-        ['--tpl=ejs', 'set the template type, support ejs, pug']
+        ['--tpl=ejs', 'set the template type, support ejs, pug'],
+        ['--config=routes.json', 'set the mock routes config file, default routes.json']
     ],
     init: []
 };
@@ -81,7 +91,7 @@ function showRootHelp(name) {
 function parseCommand(command, name) {
     var parser = yargs(hideBin(process.argv))
         .scriptName(name)
-        .usage('Usage: ' + chalk.green(name + ' ' + command + ' [options]'));
+        .usage('Usage: ' + chalk.green(name + ' ' + command + ' [options]') + '\n\n' + COMMANDS[command]);
 
     EXAMPLES[command].forEach(function (item) {
         parser.example(chalk.green(name + ' ' + command + ' ' + item[0]), item[1]);
