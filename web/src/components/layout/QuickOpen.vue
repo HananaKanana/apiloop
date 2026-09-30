@@ -105,6 +105,13 @@ async function open(item) {
 }
 
 function onKeydown(event) {
+  /*
+   * 中文输入法组字过程中，回车是在确认候选词 —— 不能拿它去打开接口。
+   * `isComposing` 是标准字段，Safari 老版本不给，所以同时看 keyCode === 229
+   * （组字期间的 keydown 都是 229）。
+   */
+  if (event.isComposing || event.keyCode === 229) return;
+
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     move(1);

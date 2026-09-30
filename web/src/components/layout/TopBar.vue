@@ -140,9 +140,6 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="group right">
-      <!-- 环境切换暂时还留在顶栏，下一个提交会挪到标签页那一行（和 Postman 一致） -->
-      <slot name="env" />
-
       <n-tooltip trigger="hover">
         <template #trigger>
           <button class="icon-button" @click="openMockLog">

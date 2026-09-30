@@ -31,6 +31,8 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   /** `resolveScope()` 的结果；不传就用普通输入框 */
   scope: { type: Map, default: null },
+  /** 不要自己的边框（地址栏把它和方法的框合成一个整体时用） */
+  borderless: { type: Boolean, default: false },
   /** 补全列表里值预览最多显示多少个字符 */
   previewLimit: { type: Number, default: 30 }
 });
@@ -411,7 +413,7 @@ defineExpose({ focus: focus });
     v-if="useEditor"
     ref="host"
     class="var-input"
-    :class="{ focused: focused, readonly: readonly }"
+    :class="{ focused: focused, readonly: readonly, borderless: borderless }"
   />
 
   <!-- 没给作用域、或者这一格还用不着编辑器：普通输入框 -->
@@ -421,6 +423,7 @@ defineExpose({ focus: focus });
     :value="modelValue"
     :placeholder="placeholder"
     :readonly="readonly"
+    :bordered="!borderless"
     @focus="onPlainFocus"
     @update:value="(v) => emit('update:modelValue', v)"
     @keyup.enter="emit('enter')"
@@ -449,6 +452,13 @@ defineExpose({ focus: focus });
 .var-input.readonly {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 外面已经有框了（地址栏那种合成整体），自己就不要再画一个 */
+.var-input.borderless {
+  border: none;
+  padding: 0;
+  min-height: 26px;
 }
 
 .var-input :deep(.cm-editor) {
