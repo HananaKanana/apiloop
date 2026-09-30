@@ -18,7 +18,9 @@
     "mock": "./bin/server"
   },
   "scripts": {
-    "test": "node --test --test-timeout=30000 test/*.test.js"
+    "test": "node --test --test-timeout=30000 test/*.test.js",
+    "dev:web": "vite --config web/vite.config.js",
+    "build:web": "vite build --config web/vite.config.js"
   },
   "repository": {
     "type": "git",
@@ -51,5 +53,18 @@
     "js-yaml": "^5.4.2",
     "open": "^8.4.0",
     "yargs": "^17.5.1"
+  },
+  "devDependencies": {
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "codemirror": "^6.0.2",
+    "naive-ui": "^2.45.3",
+    "pinia": "^4.0.3",
+    "vite": "^7.3.6",
+    "vue": "^3.5.43",
+    "vue-router": "^4.6.4"
   }
 }
