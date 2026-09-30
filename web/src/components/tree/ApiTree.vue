@@ -155,6 +155,16 @@ function renderSuffix(info) {
 
 function nodeProps(info) {
   return {
+    /**
+     * 点目录：展开 / 收起（n-tree 的 expand-on-click）之外，再把目录设置页打开 —— 和 Postman 一样。
+     * 只点左边那个小箭头时只展开收起，不开页。放在 onClick 而不是 selected 变化里：
+     * 目录已经选中时再点，selected 不会变，但页可能已经被关掉了，要能重新打开。
+     */
+    onClick: function (event) {
+      if (info.option.kind !== 'folder') return;
+      if (event.target && event.target.closest && event.target.closest('.n-tree-node-switcher')) return;
+      emit('open-folder', info.option.id);
+    },
     onContextmenu: function (event) {
       event.preventDefault();
       event.stopPropagation();
