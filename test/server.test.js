@@ -8,7 +8,7 @@ var bodyParser = require('body-parser');
 var { once } = require('node:events');
 
 var storeModule = require('../lib/routes-store');
-var db = require('../lib/db');
+var db = require('../lib/legacy/routes-db');
 var runtimeModule = require('../lib/mock-runtime');
 var adminModule = require('../lib/admin');
 
