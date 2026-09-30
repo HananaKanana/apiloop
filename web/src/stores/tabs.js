@@ -361,8 +361,6 @@ export const useTabsStore = defineStore('tabs', function () {
     return tab;
   }
 
-  /** 关标签页时把还在跑的请求 abort 掉，别让它在后台一直连着 */
-
   /**
    * 打开环境标签页（Task 7）。环境本身就是「名字 + 变量」这么点东西，
    * 原来那个管理弹窗又窄又空，改成和接口、目录并列的标签页。
@@ -412,6 +410,7 @@ export const useTabsStore = defineStore('tabs', function () {
     removed.forEach(function (tab) { close(tab.key); });
   }
 
+  /** 关标签页时把还在跑的请求 abort 掉，别让它在后台一直连着 */
   function abortTab(tab) {
     if (tab && tab.controller) tab.controller.abort();
   }

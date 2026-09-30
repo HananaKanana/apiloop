@@ -112,6 +112,54 @@ const inheritAuthHint = computed(function () {
   return inheritHint(authLevels.value);
 });
 
+/* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
+
+const SPLIT_KEY = 'apiloop.split.';
+/** 两块各自的最小高度，拖到头就不让再拖了 */
+const MIN_PANES = 120;
+const MIN_RESPONSE = 120;
+const DEFAULT_PANES = 260;
+
+function readSplitHeight() {
+  try {
+    const value = Number(localStorage.getItem(SPLIT_KEY + props.tab.kind));
+    if (value >= MIN_PANES) return value;
+  } catch (err) {
+    // 读不到就用默认值
+  }
+  return DEFAULT_PANES;
+}
+
+const rootRef = ref(null);
+const panesHeight = ref(readSplitHeight());
+const draggingSplit = ref(false);
+
+function startSplitDrag() {
+  draggingSplit.value = true;
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'row-resize';
+}
+
+function onSplitMove(event) {
+  if (!draggingSplit.value || !rootRef.value) return;
+  const box = rootRef.value.getBoundingClientRect();
+  const max = rootRef.value.clientHeight - MIN_RESPONSE - 8;
+  panesHeight.value = Math.max(MIN_PANES, Math.min(event.clientY - box.top, max));
+}
+
+function stopSplitDrag() {
+  if (!draggingSplit.value) return;
+  draggingSplit.value = false;
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  // 拖动的位置按标签页类型记下来，下次打开还是这个高度
+  try {
+    localStorage.setItem(SPLIT_KEY + props.tab.kind, String(Math.round(panesHeight.value)));
+  } catch (err) {
+    // 存不下就算了，这次会话内还是好用的
+  }
+}
+
 /**
  * 地址里有没有 `:name` 这类路径变量。有才显示「路径参数」那一块 ——
  * 和 lib/url-utils.js 的 PATH_PARAM 同一套写法（`:` 前面是 `/` 或开头，
@@ -614,15 +662,19 @@ function onKeydown(event) {
 
 onMounted(function () {
   window.addEventListener('keydown', onKeydown);
+  window.addEventListener('mousemove', onSplitMove);
+  window.addEventListener('mouseup', stopSplitDrag);
 });
 
 onBeforeUnmount(function () {
   window.removeEventListener('keydown', onKeydown);
+  window.removeEventListener('mousemove', onSplitMove);
+  window.removeEventListener('mouseup', stopSplitDrag);
 });
 </script>
 
 <template>
-  <div class="request-tab">
+  <div ref="rootRef" class="request-tab">
     <!-- 面包屑：项目 › 目录… › 接口名，右边是保存 -->
     <div class="crumb-bar">
       <div class="crumbs">
@@ -676,7 +728,11 @@ onBeforeUnmount(function () {
       </n-button>
     </div>
 
-    <div class="panes" :class="{ full: activePane === 'mock' }">
+    <div
+      class="panes"
+      :class="{ full: activePane === 'mock' }"
+      :style="activePane === 'mock' ? null : { height: panesHeight + 'px' }"
+    >
       <n-tabs
         v-model:value="activePane"
         type="line"
@@ -977,10 +1033,9 @@ onBeforeUnmount(function () {
 }
 
 .panes {
-  flex: 0 0 auto;
-  max-height: 46%;
+  flex: none;
+  min-height: 120px;
   overflow: auto;
-  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 
 /* 页签条左边留 16px。只推内容、不动 nav 本身，底下的分隔线才能整条贯通 */
@@ -1010,7 +1065,25 @@ onBeforeUnmount(function () {
 /* Mock 页签内容多，给它整块高度，响应面板先收起来 */
 .panes.full {
   flex: 1;
-  max-height: none;
+  min-height: 0;
+  height: auto !important;
+}
+
+/* 上下分栏的分隔线：和左右那条一样，平时透明、鼠标上去才显色 */
+.h-splitter {
+  flex: none;
+  height: 7px;
+  margin: -3px 0 -4px;
+  z-index: 2;
+  cursor: row-resize;
+  background: transparent;
+  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+  transition: background 0.15s;
+}
+
+.h-splitter:hover,
+.h-splitter.active {
+  background: var(--apiloop-primary);
 }
 
 .pane {
