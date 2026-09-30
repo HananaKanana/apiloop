@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { NCheckbox, NIcon, NInput, NTooltip } from 'naive-ui';
+import { NCheckbox, NIcon, NInput, NSelect } from 'naive-ui';
 import { Trash } from '@vicons/tabler';
-import { BARE_INPUT_THEME } from '@/utils/bareInput';
+import { BARE_INPUT_THEME, BARE_SELECT_THEME } from '@/utils/bareInput';
 
 /**
  * 变量表格：key、value、启用、secret。
@@ -14,10 +14,21 @@ import { BARE_INPUT_THEME } from '@/utils/bareInput';
 const props = defineProps({
   modelValue: { type: Array, default: function () { return []; } },
   /** 只读角色看的时候整表禁用：只展示已有的行，不再补那一行空行 */
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  /**
+   * 变量名过滤词。过滤在表内做，为的是把每一行都带着**原始下标**一起渲染 ——
+   * 不然 `updateRow` 会拿过滤后的子集去覆盖整份数据。
+   */
+  filter: { type: String, default: '' }
 });
 
 const emit = defineEmits(['update:modelValue']);
+
+/** 「类型」那一列：和 Postman 的 default / secret 对应 */
+const TYPE_OPTIONS = [
+  { label: '默认', value: 'default' },
+  { label: '保密', value: 'secret' }
+];
 
 function normalize(rows) {
   return (rows || []).map(function (row) {
@@ -39,6 +50,21 @@ const rows = computed(function () {
     list.push({ key: '', value: '', enabled: true, secret: false, __draft: true });
   }
   return list;
+});
+
+/**
+ * 渲染用的行：带原始下标。过滤时隐藏末尾的空行（那行本来也填不了东西）。
+ */
+const visibleRows = computed(function () {
+  const all = rows.value;
+  const keyword = String(props.filter || '').trim().toLowerCase();
+  const indexed = all.map(function (row, index) {
+    return { row: row, index: index };
+  });
+  if (!keyword) return indexed;
+  return indexed.filter(function (item) {
+    return !item.row.__draft && String(item.row.key || '').toLowerCase().indexOf(keyword) !== -1;
+  });
 });
 
 function commit(list) {
@@ -70,66 +96,68 @@ function removeRow(index) {
     <div class="row head">
       <div class="cell check" />
       <div class="cell key">变量名</div>
+      <div class="cell type">类型</div>
       <div class="cell value">值</div>
-      <div class="cell secret">secret</div>
       <div class="cell action" />
     </div>
 
-    <div v-for="(row, index) in rows" :key="index" class="row" :class="{ off: row.enabled === false }">
+    <div
+      v-for="item in visibleRows"
+      :key="item.index"
+      class="row"
+      :class="{ off: item.row.enabled === false }"
+    >
       <div class="cell check">
         <!-- 末尾的空行只是占位，不给复选框（和 KeyValueTable 一致） -->
         <n-checkbox
-          v-if="!row.__draft"
-          :checked="row.enabled"
+          v-if="!item.row.__draft"
+          :checked="item.row.enabled"
           :disabled="disabled"
-          @update:checked="(v) => { updateRow(index, { enabled: v }); }"
+          @update:checked="(v) => { updateRow(item.index, { enabled: v }); }"
         />
       </div>
 
       <div class="cell key">
         <n-input
           size="small"
-          :value="row.key"
+          :value="item.row.key"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
           placeholder="变量名"
-          @update:value="(v) => { updateRow(index, { key: v }); }"
+          @update:value="(v) => { updateRow(item.index, { key: v }); }"
         />
       </div>
 
       <div class="cell value">
         <n-input
           size="small"
-          :value="row.value"
-          :type="row.secret ? 'password' : 'text'"
-          :show-password-on="row.secret ? 'click' : undefined"
+          :value="item.row.value"
+          :type="item.row.secret ? 'password' : 'text'"
+          :show-password-on="item.row.secret ? 'click' : undefined"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
           placeholder="值"
-          @update:value="(v) => { updateRow(index, { value: v }); }"
+          @update:value="(v) => { updateRow(item.index, { value: v }); }"
         />
       </div>
 
-      <div class="cell secret">
-        <n-tooltip trigger="hover">
-          <template #trigger>
-            <n-checkbox
-              v-if="!row.__draft"
-              :checked="row.secret"
-              :disabled="disabled"
-              @update:checked="(v) => { updateRow(index, { secret: v }); }"
-            />
-          </template>
-          标为敏感值，界面上默认打码显示（第一版仍是明文存库）
-        </n-tooltip>
+      <div class="cell type">
+        <n-select
+          size="small"
+          :value="item.row.secret ? 'secret' : 'default'"
+          :options="TYPE_OPTIONS"
+          :disabled="disabled"
+          :theme-overrides="BARE_SELECT_THEME"
+          @update:value="(v) => { updateRow(item.index, { secret: v === 'secret' }); }"
+        />
       </div>
 
       <div class="cell action">
         <button
-          v-if="!disabled && (row.key || row.value)"
+          v-if="!disabled && (item.row.key || item.row.value)"
           class="delete-button"
           title="删除这一行"
-          @click="removeRow(index)"
+          @click="removeRow(item.index)"
         >
           <n-icon size="15" :component="Trash" />
         </button>
@@ -144,7 +172,7 @@ function removeRow(index) {
  * 格子里的输入框没有边框和底色。列宽写在一个变量里，改列只改一处。
  */
 .var-table {
-  --var-cols: 32px minmax(0, 32%) minmax(0, 1fr) 48px 40px;
+  --var-cols: 32px minmax(0, 28%) 92px minmax(0, 1fr) 40px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
   border-radius: 4px;
   overflow: hidden;
@@ -195,7 +223,6 @@ function removeRow(index) {
 }
 
 .cell.check,
-.cell.secret,
 .cell.action {
   justify-content: center;
   padding: 0;

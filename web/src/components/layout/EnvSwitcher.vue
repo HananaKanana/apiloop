@@ -5,17 +5,12 @@ import { ChevronDown } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useUiStore } from '@/stores/ui';
-import EnvManagerModal from './EnvManagerModal.vue';
+import { useTabsStore } from '@/stores/tabs';
 
 const projects = useProjectStore();
 const envs = useEnvStore();
 const ui = useUiStore();
-
-// 响应面板里「变量未定义 → 去环境管理」也走这个开关
-const showManager = computed({
-  get: function () { return ui.envManagerVisible; },
-  set: function (value) { ui.envManagerVisible = value; }
-});
+const tabs = useTabsStore();
 
 // 项目一换，这个项目的环境就重新拉一遍（每个项目各自记着自己上次选的那个）
 watch(
@@ -30,6 +25,16 @@ watch(
   { immediate: true }
 );
 
+// 环境被删掉之后，把它的标签页收掉。放在这里是因为切换器一直挂着（标签行常驻），
+// 而侧栏的「环境」页只有停在那页时才在。
+watch(
+  function () { return envs.environments; },
+  function (list) {
+    tabs.syncWithEnvs((list || []).map(function (item) { return item.id; }));
+  },
+  { deep: true }
+);
+
 const options = computed(function () {
   const items = [{ key: '__none', label: '无环境' }];
   envs.environments.forEach(function (env) {
@@ -42,7 +47,8 @@ const options = computed(function () {
 
 function onSelect(key) {
   if (key === '__manage') {
-    showManager.value = true;
+    // 环境管理已经没有弹窗了：切到侧栏的「环境」页，在那里点开某个环境
+    ui.setSidebarTab('env');
     return;
   }
   envs.select(key === '__none' ? '' : key);
@@ -56,8 +62,6 @@ function onSelect(key) {
       <n-icon size="14" :component="ChevronDown" />
     </button>
   </n-dropdown>
-
-  <env-manager-modal v-model:show="showManager" />
 </template>
 
 <style scoped>

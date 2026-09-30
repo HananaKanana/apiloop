@@ -669,7 +669,7 @@ onBeforeUnmount(function () {
     <!-- 未定义的变量：发送前就提示，别等请求发出去才发现 -->
     <div v-if="undefinedVariables.length" class="var-hint">
       <span>以下变量未定义：{{ undefinedVariables.join('、') }}</span>
-      <n-button size="tiny" quaternary type="primary" @click="ui.openEnvManager()">
+      <n-button size="tiny" quaternary type="primary" @click="ui.setSidebarTab('env')">
         去环境管理
       </n-button>
     </div>

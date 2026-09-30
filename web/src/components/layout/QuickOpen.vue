@@ -160,6 +160,7 @@ watch(results, function () {
         v-model:value="keyword"
         size="large"
         placeholder="搜索接口名或地址"
+        :theme-overrides="{ borderRadius: '0' }"
         @keydown="onKeydown"
       >
         <template #prefix>
@@ -201,10 +202,6 @@ watch(results, function () {
   overflow: hidden;
   background: var(--n-color, #fff);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
-}
-
-.quick-open :deep(.n-input) {
-  --n-border-radius: 0;
 }
 
 .list {

@@ -12,6 +12,7 @@ import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
+import EnvTab from '@/components/env/EnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
@@ -124,7 +125,8 @@ function onOpenFolder(folderId) {
 function tabMethod(tab) {
   if (!tab) return '';
   if (tab.kind === 'ws') return 'WS';
-  if (tab.kind === 'folder') return '';
+  // 目录页签和环境页签都没有「方法」这一说，不显示缩写
+  if (tab.kind === 'folder' || tab.kind === 'env') return '';
   return String((tab.spec && tab.spec.method) || 'GET').toUpperCase();
 }
 
@@ -256,6 +258,11 @@ onBeforeUnmount(function () {
         <div class="tab-body">
           <folder-tab
             v-if="tabs.active && tabs.active.kind === 'folder'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <env-tab
+            v-else-if="tabs.active && tabs.active.kind === 'env'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />
