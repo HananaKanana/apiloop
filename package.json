@@ -3,6 +3,9 @@
   "version": "1.2.0",
   "description": "an simple web server",
   "main": "lib/command.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "files": [
     "bin",
     "lib",
