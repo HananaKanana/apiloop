@@ -64,7 +64,9 @@ const selectedExample = computed(function () {
 const mockUrl = computed(function () {
   const project = projects.current;
   const prefix = project && project.isRoot ? '' : '/mock/' + (project ? project.slug : '');
-  return window.location.origin + prefix + mock.path;
+  // mock 是 computed，脚本里必须写 .value；只有模板里才会自动解包。
+  // 写成 mock.path 会拿到 undefined，拼出来就是 http://host/mock/<slug>undefined
+  return window.location.origin + prefix + mock.value.path;
 });
 
 watch(
