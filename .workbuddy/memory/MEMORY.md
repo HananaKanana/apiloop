@@ -303,6 +303,26 @@ web/                  Vue 源码；sample/ test/ docs/
   紧跟着的构建提交，别急着补一个 —— 补出来的产物会和别人正在构建的互相覆盖。
 - `lib/mock-runtime.js` 的 `applyCors` 会带 `Access-Control-Expose-Headers: X-Apiloop-Mock`。
 
+## 2.0.0 发布收尾（R1 / `8f58a53`，2026-09-30）
+
+- **基线（2.0.0）**：`npm pack` = **72 个文件 / 719.0 KB**（解包 2.27 MB）。
+  清单含 `lib/scripts/`、`lib/web/`、`docs/api.md`；不含 `web/`、`test/`、
+  `docs/superpowers`、`docs/design`、`node_modules`、`.workbuddy`。
+- **`CHANGELOG.md` 不在包里**：`files` 没列它，npm 只自动带 `README.md`。
+  要带得显式加进 `files`（改 `files` 属于改代码，别顺手做）。
+- **冒烟的做法**：`git archive HEAD` 导干净副本 → `npm pack --json`（`entryCount` /
+  `size` 直接读得到）→ 另一空目录 `npm i <tgz>` →
+  `APILOOP_HOME=<临时目录> APILOOP_ADMIN_PASSWORD=… npx apiloop web --port <随机端口>` →
+  curl 走「登录 → 建项目 → 建接口 → 加示例 → 启用 mock → 访问 `/mock/<slug>/路径` →
+  带 `request.scripts` 的 `/send`」，最后删临时目录。
+  两个坑：**服务必须用 `run_in_background` 起**（同一行 `&` 起的进程会随命令结束消失，
+  curl 只会拿到沙箱代理的 502）；**没有扩展名的 JSON 文件不能用 `require()` 读**
+  （按 JS 解析报 `Unexpected token ':'`），用 `JSON.parse(fs.readFileSync(...))`。
+- **README 的「已知限制」现在是一节顶层章节**（`## 已知限制`），按 Cookie 与代理 /
+  WebSocket / Postman 脚本 / mock 回放 四组收敛；Docker 那节自己的叫「部署相关的限制」。
+  另外 README 新增了「目录设置：鉴权与变量」一节（原来根本没有）。
+- **P10（mock 代理转发与录制，契约第 18 节）等 2.0.0 发布之后再开工** —— 用户明确要求。
+
 ## 前端：流式发送与 WebSocket（P7b 的 B 部分，契约第 14、15 节）
 
 - **发送一律走 `POST /send/stream`**（`web/src/api/stream.js` 读 NDJSON）。
