@@ -8,7 +8,11 @@ var bodyParser = require('body-parser');
 var { once } = require('node:events');
 
 var storeModule = require('../lib/routes-store');
-var db = require('../lib/legacy/routes-db');
+var dbModule = require('../lib/db');
+var projectsRepo = require('../lib/db/repos/projects');
+var apisRepo = require('../lib/db/repos/apis');
+var foldersRepo = require('../lib/db/repos/folders');
+var examplesRepo = require('../lib/db/repos/examples');
 var runtimeModule = require('../lib/mock-runtime');
 var adminModule = require('../lib/admin');
 
@@ -16,7 +20,9 @@ var ctx = null;
 
 test.before(async function () {
     var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-http-'));
-    var store = storeModule.createStore({ file: path.join(dir, 'routes.db') });
+    var handle = dbModule.open(path.join(dir, 'data.db'));
+    var project = projectsRepo.create(handle, { name: '测试项目' });
+    var store = storeModule.createStore({ handle: handle, projectId: project.id });
     store.load();
     store.startWatching();
 
@@ -35,6 +41,7 @@ test.before(async function () {
 
     ctx = {
         store: store,
+        handle: handle,
         server: server,
         dir: dir,
         base: 'http://127.0.0.1:' + server.address().port,
@@ -57,7 +64,8 @@ test.before(async function () {
 
 test.after(function () {
     if (!ctx) return;
-    ctx.store.stopWatching();
+    ctx.store.close();
+    if (ctx.handle) ctx.handle.close();
     if (ctx.server) ctx.server.close();
 });
 
@@ -274,16 +282,18 @@ test('导出 JSON', async function () {
 });
 
 test('外部改数据库触发热更新', async function () {
-    // 模拟外部拿 sqlite3 命令行改数据：另开一条连接把接口写进库
-    var handle = db.openDatabase(ctx.store.filePath);
-    var doc = db.readAll(handle);
-    doc.routes.push({
-        id: 'r_from_db', name: '外部接口', enabled: true, method: 'GET', path: '/api/from-db',
-        status: 200, delay: 0, cors: false, headers: [], query: [], body: [],
-        responseType: 'json', response: '{"from":"db"}'
+    // 模拟外部改库：另开一个 handle 把接口写进同一个库文件。
+    // 注意要连示例一起写 —— 按门面的规则 enabled = mockEnabled && 有示例，
+    // 光有接口没有示例的话这条路由不会被挂出去。
+    var other = dbModule.open(ctx.handle.file);
+    var external = apisRepo.insert(other, ctx.store.projectId, {
+        name: '外部接口', method: 'GET', url: '/api/from-db', mockPath: '/api/from-db'
     });
-    db.writeAll(handle, doc);
-    db.close(handle);
+    var externalExample = examplesRepo.insert(other, external.id, {
+        name: '默认', status: 200, body: '{"from":"db"}', responseType: 'json'
+    });
+    apisRepo.update(other, external.id, { mockExampleId: externalExample.id });
+    other.close();
 
     var deadline = Date.now() + 5000;
     var ok = false;
@@ -430,10 +440,8 @@ test('分组排序接口', async function () {
     assert.ok(after.indexOf('排序乙') < after.indexOf('排序甲'));
 
     // 顺序要真的落盘
-    var handle = db.openDatabase(ctx.store.filePath);
-    var stored = db.readAll(handle);
-    db.close(handle);
-    assert.ok(stored.groups.indexOf('排序丙') < stored.groups.indexOf('排序甲'), '分组顺序应写进数据库');
+    var stored = foldersRepo.list(ctx.handle, ctx.store.projectId).map(function (folder) { return folder.name; });
+    assert.ok(stored.indexOf('排序丙') < stored.indexOf('排序甲'), '分组顺序应写进数据库');
 
     // 非法输入
     var bad = await ctx.api('POST', '/groups/reorder', { names: ['查无此组'] });
