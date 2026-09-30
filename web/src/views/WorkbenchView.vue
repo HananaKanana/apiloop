@@ -278,7 +278,7 @@ onBeforeUnmount(function () {
 
 .splitter:hover,
 .splitter.active {
-  background: var(--n-primary-color, #2080f0);
+  background: var(--apiloop-primary);
 }
 
 .right {
@@ -319,7 +319,7 @@ onBeforeUnmount(function () {
 
 .tab-item.active {
   background: var(--n-color, #fff);
-  box-shadow: inset 0 -2px 0 var(--n-primary-color, #2080f0);
+  box-shadow: inset 0 -2px 0 var(--apiloop-primary);
 }
 
 .tab-title {

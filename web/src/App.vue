@@ -14,6 +14,31 @@ import {
 // 跟随系统的亮色 / 暗色
 const osTheme = useOsTheme();
 const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null));
+
+/**
+ * 主色用 Postman 橙（用户 2026-09-30 选定），替换 naive-ui 默认的绿色。
+ * 选中的页签、勾选框、按钮、目录树的选中行都从主色派生，所以只改这一处。
+ * 暗色主题下用亮一档的橙，否则在深底上发闷。
+ */
+const LIGHT_OVERRIDES = {
+  common: {
+    primaryColor: '#ff6c37',
+    primaryColorHover: '#ff8559',
+    primaryColorPressed: '#e5562a',
+    primaryColorSuppl: '#ff8559'
+  }
+};
+
+const DARK_OVERRIDES = {
+  common: {
+    primaryColor: '#ff7a4d',
+    primaryColorHover: '#ff9470',
+    primaryColorPressed: '#e5623a',
+    primaryColorSuppl: '#ff9470'
+  }
+};
+
+const themeOverrides = computed(() => (osTheme.value === 'dark' ? DARK_OVERRIDES : LIGHT_OVERRIDES));
 </script>
 
 <template>
@@ -21,7 +46,13 @@ const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null));
     abstract：不渲染外层的包裹 div。那个 div 没有高度，会把 html → body → #app → 页面
     这条 height: 100% 链截断，工作台就被目录树撑高、整页一起滚动，右半边跟着滚没了。
   -->
-  <n-config-provider abstract :theme="theme" :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider
+    abstract
+    :theme="theme"
+    :theme-overrides="themeOverrides"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+  >
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -33,6 +64,21 @@ const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null));
 </template>
 
 <style>
+/*
+ * 组件外面的自定义样式（顶部标签页下划线、分栏拖动条、输入框聚焦边框等）拿不到
+ * naive-ui 的 --n-primary-color —— 那个变量只在它自己的组件里有 —— 所以这里另外
+ * 定义一份，和上面 themeOverrides 的主色保持一致。
+ */
+:root {
+  --apiloop-primary: #ff6c37;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --apiloop-primary: #ff7a4d;
+  }
+}
+
 html,
 body,
 #app {
