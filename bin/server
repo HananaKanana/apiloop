@@ -1,29 +1,41 @@
 #!/usr/bin/env node
 
-
-
 /**
  * Handle cli input
  */
-if (!module.parent) {
-    var chalk  = require("chalk")
-    var yargs = require("yargs")
-    var argv    = yargs.argv
-    var name = argv['$0']
-    var command = argv._[0]
-    var valid   = ["start", "init", "open"]
 
-    yargs.command(chalk.green(name + " open"), "Start a web server and open html file in your browser, if any")
-        .command(chalk.green(name + " start"), "Start a web server")
-        .command(chalk.green(name + " init"), "Create the sample file router.js")
-        .epilogue("For more use, enter " + chalk.green(name + " <command> --help") + "\nFor example: " + chalk.green(name + " start --help"));
+var path = require('path');
+var chalk = require('chalk');
+var yargs = require('yargs/yargs');
+var hideBin = require('yargs/helpers').hideBin;
 
-    if (valid.indexOf(command) > -1) {
-        handleIncoming(command, yargs.reset());
-    } else {
-        yargs.showHelp();
-    }
-}
+var VALID_COMMANDS = ['start', 'init', 'open'];
+
+var COMMANDS = {
+    open: 'Start a web server and open html file in your browser, if any',
+    start: 'Start a web server',
+    init: 'Create the sample file router.js'
+};
+
+/**
+ * 每个命令的示例。yargs 17 移除了 .reset()，所以这里不再复用单例，
+ * 而是按命令用工厂函数新建实例，参数与帮助信息互不污染。
+ */
+var EXAMPLES = {
+    start: [
+        ['--port=3000', 'set server port, default 8080'],
+        ['--public=public', 'set the static file path, the default is the current folder'],
+        ['--views=views', 'set the template path, the default is the current folder'],
+        ['--tpl=ejs', 'set the template type, support ejs, pug, default ejs']
+    ],
+    open: [
+        ['--port=3000', 'set server port, default 8080'],
+        ['--public=public', 'set the static file path, the default is the current folder'],
+        ['--views=views', 'set the template path, the default is the current folder'],
+        ['--tpl=ejs', 'set the template type, support ejs, pug']
+    ],
+    init: []
+};
 
 /**
  * @param {{cli: object, [whitelist]: array, [cb]: function}} opts
@@ -36,42 +48,67 @@ function handleCli(opts) {
 module.exports = handleCli;
 
 /**
- * @param {string} command
- * @param {object} yargs
+ * 用户可能通过 server / mock / server-mock 任一 bin 名调用，帮助信息里显示实际用的那个
+ * @returns {string}
  */
-function handleIncoming(command, yargs) {
-    var out;
-    if (command === "open") {
-        out = yargs
-            .usage("Usage: " + chalk.green("mock open [options]"))
-            .example(chalk.green("mock open --port=3000"), "set server port, default 8080")
-            .example(chalk.green("mock open --public=public"), "set the static file path, the default is the current folder")
-            .example(chalk.green("mock open --views=views"), "set the template path, the default is the current folder")
-            .example(chalk.green("mock open --tpl=ejs"), "set the template type, support ejs, pug")
-            // .help()
-            .argv;
-    }
-    if (command === "start") {
-        out = yargs
-            .usage("Usage: " + chalk.green("mock start [options]"))
-            .example(chalk.green("mock start --port=3000"), "set server port, default 8080")
-            .example(chalk.green("mock start --public=public"), "set the static file path, the default is the current folder")
-            .example(chalk.green("mock start --views=views"), "set the template path, the default is the current folder")
-            .example(chalk.green("mock start --tpl=ejs"), "set the template type, support ejs, pug, default ejs")
-            // .help()
-            .argv;
-    }
-    if (command === "init") {
-        out = yargs
-            .usage("Usage: " + chalk.green("mock init"))
-            .example(chalk.green("mock init"), "create usage examples, include index.html and router.js")
-            .argv;
+function getScriptName() {
+    return path.basename(process.argv[1] || 'mock');
+}
+
+/**
+ * @param {string} name
+ */
+function showRootHelp(name) {
+    var parser = yargs([])
+        .scriptName(name)
+        .usage('Usage: ' + chalk.green(name + ' <command> [options]'));
+
+    Object.keys(COMMANDS).forEach(function (command) {
+        parser.command(command, COMMANDS[command]);
+    });
+
+    parser
+        .epilogue('For more use, enter ' + chalk.green(name + ' <command> --help') +
+            '\nFor example: ' + chalk.green(name + ' start --help'))
+        .showHelp();
+}
+
+/**
+ * @param {string} command
+ * @param {string} name
+ * @returns {object} 解析后的 argv，形如 { _: ['start'], port: 3000, ... }
+ */
+function parseCommand(command, name) {
+    var parser = yargs(hideBin(process.argv))
+        .scriptName(name)
+        .usage('Usage: ' + chalk.green(name + ' ' + command + ' [options]'));
+
+    EXAMPLES[command].forEach(function (item) {
+        parser.example(chalk.green(name + ' ' + command + ' ' + item[0]), item[1]);
+    });
+
+    // --help 交给 yargs 处理：打印用法后自行退出
+    return parser.help().parse();
+}
+
+/**
+ * @param {string} command
+ * @param {string} name
+ */
+function handleIncoming(command, name) {
+    var args = parseCommand(command, name);
+    handleCli({ command: args._[0], args: args });
+}
+
+if (require.main === module) {
+    var name = getScriptName();
+    var command = hideBin(process.argv)[0];
+
+    if (VALID_COMMANDS.indexOf(command) === -1) {
+        showRootHelp(name);
+        // 没给命令属于用法展示，给了非法命令才算错误
+        process.exit(command && command.charAt(0) !== '-' ? 1 : 0);
     }
 
-
-    if (out&&out.help) {
-        return yargs.showHelp();
-    }
-
-    handleCli({command: out._[0], args:yargs.argv})
+    handleIncoming(command, name);
 }
