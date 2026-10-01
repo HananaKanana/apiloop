@@ -61,7 +61,7 @@ case "$CMD" in
       docker image rm "$OLD_IMAGE" >/dev/null 2>&1 || true
     fi
     PORT_SHOWN="${PORT:-$(grep -s '^PORT=' .env | cut -d= -f2)}"
-    echo "服务已启动：http://localhost:${PORT_SHOWN:-8080}"
+    echo "服务已启动：http://localhost:${PORT_SHOWN:-8765}"
     echo "首次启动时 admin 的随机密码在日志里：./deploy.sh logs | grep 初始密码（在 .env 设了 ADMIN_PASSWORD 则用它）"
     ;;
   logs) compose logs -f --tail=200 ;;

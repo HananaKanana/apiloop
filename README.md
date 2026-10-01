@@ -45,7 +45,7 @@ cp .env.example .env        # 可选：改端口、指定 admin 初始密码
 ./deploy.sh logs            # 首次启动时，admin 的随机密码会在日志里（搜「初始密码」）
 ```
 
-启动后打开 <http://localhost:8080>。细节见下面的[「Docker 部署」](#docker-部署)。
+启动后打开 <http://localhost:8765>（对外端口默认 8765，在 .env 的 PORT 里改）。细节见下面的[「Docker 部署」](#docker-部署)。
 
 ## 核心工作流
 

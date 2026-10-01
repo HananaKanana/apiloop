@@ -21,7 +21,8 @@ services:
     # user: "1000:1000"
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      # 对外端口 8765 → 容器里的 8080（线上 http://leonaz.top:8765）。改端口在 .env 里设 PORT
+      - "${PORT:-8765}:8080"
     environment:
       TZ: Asia/Shanghai
       # 云端页面也能发送请求（默认 1，2026-10-01 用户决定保留）：直接打开云端页面时，
