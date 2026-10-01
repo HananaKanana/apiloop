@@ -461,6 +461,9 @@ function renderTokens(tokens, indent) {
       } else {
         // 行尾注释：本来欠的换行不动，留给下一个词
         pendingSpace = true;
+        // `//` 一直注释到行尾：后面的词必须换行，否则会被吞进注释里
+        //（`"a": // 说明⏎ 1` 会变成 `"a": // 说明 1`，值就没了 —— 2026-10-01 审阅 B1）
+        if (token.text.indexOf('//') === 0) pendingBreak = true;
       }
       continue;
     }
