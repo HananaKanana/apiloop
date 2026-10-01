@@ -58,7 +58,7 @@ function select(id) {
 
 /** 内置 Mock 环境：本机模式下用不了（mock 服务在云端） */
 function selectMock() {
-  if (gateway.isLocal) return;
+  if (!gateway.mockAvailable) return;
   envs.select(MOCK_ENV_ID);
 }
 
@@ -103,14 +103,14 @@ function manage() {
         <!-- 内置的 Mock 环境：不存库，固定在这里；本机模式下用不了 -->
         <div
           class="item"
-          :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: gateway.isLocal }"
-          :title="gateway.isLocal ? 'mock 服务在云端，登录后可用' : ''"
+          :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: !gateway.mockAvailable }"
+          :title="!gateway.mockAvailable ? '登录后可用' : ''"
           @click="selectMock"
         >
           <span class="tick">
             <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
           </span>
-          <span class="item-name">{{ gateway.isLocal ? 'Mock（登录后可用）' : 'Mock' }}</span>
+          <span class="item-name">{{ !gateway.mockAvailable ? 'Mock（登录后可用）' : 'Mock' }}</span>
           <span class="tag">内置</span>
         </div>
 

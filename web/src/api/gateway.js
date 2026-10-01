@@ -46,8 +46,8 @@ async function requestGateway(method, path, body) {
  * 只看状态码会被那个 200 的 HTML 骗过去。
  *
  * @returns {Promise<{isGateway: boolean, version?: string, cloudUrl?: string,
- *                    cloudReachable?: boolean, mode?: string}>}
- *          `mode` 取 `'local'` 或 `'cloud'`，网关没给时当 `'cloud'`
+ *                    cloudReachable?: boolean, space?: {state: string, user: object|null},
+ *                    sync?: object}>}
  */
 export async function getStatus() {
   let res;
@@ -81,17 +81,17 @@ export async function getStatus() {
     version: data.version,
     cloudUrl: data.cloudUrl || '',
     cloudReachable: Boolean(data.cloudReachable),
-    mode: data.mode === 'local' ? 'local' : 'cloud'
+    space: data.space || null,
+    sync: data.sync || null
   };
 }
 
 /**
- * 进入本机模式（L1）：网关打开本机空间、发一个本机用户的会话 Cookie，
- * 并把 `mode` 记成 `'local'`。
+ * 删掉当前空间的本机数据（设计稿 4.4）。
  *
- * 返回之后**要整页刷新** —— 所有 store 里现在装的还是云端（或本机）的数据，
- * 只有重新加载才会按新的模式取数。
+ * 网关会关库、删目录，再换成一个新的空的未绑定空间。删完要**整页刷新** ——
+ * 页面里所有 store 装的都是刚被删掉的那份数据。
  */
-export function enterLocal() {
-  return requestGateway('POST', '/local/enter');
+export function deleteSpace() {
+  return requestGateway('POST', '/space/delete', {});
 }

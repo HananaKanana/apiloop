@@ -37,8 +37,8 @@ let timer = null;
 
 async function pollMockLog() {
   const pid = projects.currentId;
-  // 本机模式没有 mock 服务（它在云端），也就没有 mock 日志
-  if (!pid || gateway.isLocal || ui.mockLogVisible || document.hidden) return;
+  // mock 日志存在云端，没登录就没有（本机库里没有这张表）
+  if (!pid || !gateway.cloudFeaturesAvailable || ui.mockLogVisible || document.hidden) return;
 
   try {
     const data = await mockLogApi.listMockLog(pid, { after: seenSeq, limit: 1 });
@@ -141,7 +141,7 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="group right">
-      <n-tooltip v-if="!gateway.isLocal" trigger="hover">
+      <n-tooltip v-if="gateway.cloudFeaturesAvailable" trigger="hover">
         <template #trigger>
           <button class="icon-button" @click="openMockLog">
             <n-icon size="18" :component="Activity" />

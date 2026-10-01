@@ -7,20 +7,25 @@ import { useSessionStore } from '@/stores/session';
  * 「这个页面是从哪儿打开的」以及网关的状态。
  *
  * 三种形态，界面上的表现完全不同：
- * - **网关上**（从本机 apiloop 打开）：请求从这台电脑发出，能访问本机和内网地址；
  * - **直接打开云端**：请求从云端服务器发出，访问不了用户电脑和内网的地址；
- * - **直接打开云端、而且云端不发送请求**（`serverSend` 为 false）：连发送都不给发。
+ * - **网关、未绑定 / 已退出**：数据只在本机，不同步，但功能照常可用；
+ * - **网关、已登录**：双向同步，只有云端有的功能才可用。
+ *
+ * 判据统一收在这里，别在各组件里自己拼：
+ * - `mockAvailable`：mock 服务在**本机**（网关自己起），所以只要空间不是「未绑定」就能用；
+ * - `cloudFeaturesAvailable`：改密码、用户管理、成员管理、mock 日志、安装包列表
+ *   这些数据在云端，必须登录才能用。
  */
 
-/** 「云端连得上吗」每 30 秒重新探一次 —— 它随时会变，用户也可能刚把云端地址改对 */
-const REFRESH_MS = 30000;
+/** 网关上的状态每 3 秒问一次（设计稿第 7 节）：同步进度和「N 项待同步」要跟得上 */
+const REFRESH_MS = 3000;
 
 export const useGatewayStore = defineStore('gateway', function () {
   /** 页面是不是从网关上打开的 */
   const isGateway = ref(false);
-  /** `{ version, cloudUrl, cloudReachable, mode }`，不是网关时为 null */
+  /** `{ version, cloudUrl, cloudReachable, space, sync }`，不是网关时为 null */
   const status = ref(null);
-  /** 探测过一次了没有（没探测完之前不要先闪一个「云端发送」出来） */
+  /** 探测过一次了没有（没探完之前不要先闪一个状态出来） */
   const loaded = ref(false);
 
   let timer = null;
@@ -47,21 +52,44 @@ export const useGatewayStore = defineStore('gateway', function () {
   });
 
   /**
-   * 网关当前的模式：`'local'` 或 `'cloud'`（L1）。
-   * 不是网关时为空串 —— 直接打开云端没有「模式」这一说。
+   * 空间状态：`'unbound'`（还没登录过）、`'signedIn'`、`'signedOut'`。
+   * 不是网关时是空串 —— 直接打开云端没有「空间」这一说。
    */
-  const mode = computed(function () {
-    return (status.value && status.value.mode) || '';
+  const spaceState = computed(function () {
+    return (status.value && status.value.space && status.value.space.state) || '';
+  });
+
+  /** 登录着（而且云端会话没过期）—— 双向同步在跑 */
+  const signedIn = computed(function () {
+    return spaceState.value === 'signedIn';
   });
 
   /**
-   * 本机模式：页面读写的是**本机库**，数据不出这台电脑。
-   *
-   * 这个模式下要藏起来的东西：mock 地址（mock 服务在云端）、成员管理、用户管理、
-   * 退出登录 —— 本机没有「登录」这回事，本机用户是自动的。
+   * 同步状态：`{ running, online, pending, conflicts, lastSyncAt, lastError, expired }`。
+   * 网关还没实现同步引擎时是 null，界面按「没有同步信息」处理。
    */
-  const isLocal = computed(function () {
-    return isGateway.value && mode.value === 'local';
+  const sync = computed(function () {
+    return (status.value && status.value.sync) || null;
+  });
+
+  /**
+   * 「只有云端有的功能」能不能用：改密码、用户管理、成员管理、mock 日志、安装包列表。
+   * 这些数据不同步到本机，没登录就没有。
+   */
+  const cloudFeaturesAvailable = computed(function () {
+    if (!isGateway.value) return true;
+    return signedIn.value;
+  });
+
+  /**
+   * mock 能不能用。
+   *
+   * mock 服务跑在**网关本机**（不是云端），所以只要空间不是「未绑定」就能用 ——
+   * 退出登录之后数据都在本机，mock 照常跑。
+   */
+  const mockAvailable = computed(function () {
+    if (!isGateway.value) return true;
+    return spaceState.value !== '' && spaceState.value !== 'unbound';
   });
 
   /**
@@ -94,33 +122,32 @@ export const useGatewayStore = defineStore('gateway', function () {
   async function load() {
     const result = await gatewayApi.getStatus();
     isGateway.value = result.isGateway;
-    status.value = result.isGateway
-      ? {
-          version: result.version,
-          cloudUrl: result.cloudUrl,
-          cloudReachable: result.cloudReachable,
-          mode: result.mode
-        }
-      : null;
+    status.value = result.isGateway ? pick(result) : null;
     loaded.value = true;
     return result;
   }
 
-  /** 只刷「云端连得上吗」和模式。失败就沿用上一次的结果，不要因此把圆点变成红的 */
+  /** 只刷状态。失败就沿用上一次的结果，不要因此把圆点变成红的 */
   async function refresh() {
     if (!isGateway.value) return;
     try {
       const result = await gatewayApi.getStatus();
       if (!result.isGateway) return;
-      status.value = {
-        version: result.version,
-        cloudUrl: result.cloudUrl,
-        cloudReachable: result.cloudReachable,
-        mode: result.mode
-      };
+      status.value = pick(result);
     } catch (err) {
       // 探测失败不打扰用户，下个周期自己会重试
     }
+  }
+
+  /** 只留界面要用的几个字段 */
+  function pick(result) {
+    return {
+      version: result.version,
+      cloudUrl: result.cloudUrl,
+      cloudReachable: result.cloudReachable,
+      space: result.space,
+      sync: result.sync
+    };
   }
 
   function start() {
@@ -142,8 +169,11 @@ export const useGatewayStore = defineStore('gateway', function () {
     loaded: loaded,
     showIndicator: showIndicator,
     cloudUrl: cloudUrl,
-    mode: mode,
-    isLocal: isLocal,
+    spaceState: spaceState,
+    signedIn: signedIn,
+    sync: sync,
+    cloudFeaturesAvailable: cloudFeaturesAvailable,
+    mockAvailable: mockAvailable,
     versionMismatch: versionMismatch,
     cloudSendBlocked: cloudSendBlocked,
     load: load,

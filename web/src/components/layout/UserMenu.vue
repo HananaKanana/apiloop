@@ -9,9 +9,12 @@ import {
   NInput,
   NModal,
   NSpace,
+  useDialog,
   useMessage
 } from 'naive-ui';
-import { changePassword } from '@/api/auth';
+import { changePassword, logout as logoutApi } from '@/api/auth';
+import { isLoginRequired } from '@/api/client';
+import * as gatewayApi from '@/api/gateway';
 import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
 import { useGatewayStore } from '@/stores/gateway';
@@ -23,6 +26,7 @@ const session = useSessionStore();
 const tabs = useTabsStore();
 const gateway = useGatewayStore();
 const message = useMessage();
+const dialog = useDialog();
 
 const showPassword = ref(false);
 const saving = ref(false);
@@ -34,10 +38,23 @@ const avatarText = computed(function () {
   return name ? name.charAt(0).toUpperCase() : '?';
 });
 
+/**
+ * 账号菜单（设计稿第 7 节）。网关上按空间状态分三种，直接打开云端时和以前一样。
+ *
+ * 未绑定：还没登录过，只能去登录；
+ * 已登录：改密码 / 用户管理 / 退出登录 / 退出并删除本机数据；
+ * 已退出：数据还在本机、照常能用，所以给的是「登录」和「删除本机数据」。
+ */
 const options = computed(function () {
-  // 本机模式下没有「登录」这回事：本机用户是自动进去的，
-  // 所以改密码、用户管理、退出登录都没有意义，只留「登录以同步到云端」和「关于」。
-  if (gateway.isLocal) {
+  if (gateway.isGateway && !gateway.signedIn) {
+    if (gateway.spaceState === 'signedOut') {
+      return [
+        { label: '登录', key: 'login' },
+        { label: '关于', key: 'about' },
+        { type: 'divider', key: 'd1' },
+        { label: '删除本机数据', key: 'delete' }
+      ];
+    }
     return [
       { label: '登录以同步到云端', key: 'login' },
       { label: '关于', key: 'about' }
@@ -52,8 +69,65 @@ const options = computed(function () {
   if (session.isAdmin) items.push({ label: '用户管理', key: 'users' });
   items.push({ type: 'divider', key: 'd1' });
   items.push({ label: '退出登录', key: 'logout' });
+  if (gateway.isGateway) items.push({ label: '退出并删除本机数据', key: 'logout-delete' });
   return items;
 });
+
+/** 删本机数据前问一句；还有没同步的改动时要写明会丢 */
+function confirmDelete(title, withLogout) {
+  const pending = (gateway.sync && gateway.sync.pending) || 0;
+  const base = withLogout
+    ? '退出登录并删掉这台电脑上的全部数据（项目、历史、Cookie）。'
+    : '删掉这台电脑上的全部数据（项目、历史、Cookie），之后会回到「仅本机」。';
+
+  return new Promise(function (resolve) {
+    dialog.warning({
+      title: title,
+      content: pending > 0
+        ? base + '还有 ' + pending + ' 项没同步，删除后会丢失。'
+        : base,
+      positiveText: '删除',
+      negativeText: '取消',
+      onPositiveClick: function () { resolve(true); },
+      onNegativeClick: function () { resolve(false); },
+      onClose: function () { resolve(false); },
+      onMaskClick: function () { resolve(false); }
+    });
+  });
+}
+
+/**
+ * 退出登录（网关上）：只表示「不同步了」——**不跳登录页**，本机的会话和数据的都留着，
+ * 页面照常能用。
+ *
+ * 所以这里**不能**用 `session.logout()`：那会把前端的 user / meta 清掉，
+ * 之后随便点一下就撞上路由守卫、被弹回登录页。网关的退出本来就不动浏览器那份会话
+ * （见 `lib/gateway/account.js` 的 logout），直接调接口再刷新状态就对了。
+ */
+async function signOut() {
+  tabs.closeAll();
+  try {
+    await logoutApi();
+  } catch (err) {
+    message.error(err.message);
+  }
+  await gateway.refresh();
+}
+
+/** 删本机数据（可选先退出登录），删完整页刷新 —— 页面里装的都是刚被删掉的那份数据 */
+async function deleteLocal(withLogout) {
+  if (!(await confirmDelete(withLogout ? '退出并删除本机数据' : '删除本机数据', withLogout))) return;
+
+  tabs.closeAll();
+  try {
+    // 先退出：顺手通知云端注销（本机的会话一会儿跟着空间一起删掉，不用管）
+    if (withLogout) await logoutApi().catch(function () {});
+    await gatewayApi.deleteSpace();
+    window.location.reload();
+  } catch (err) {
+    message.error(err.message);
+  }
+}
 
 function openPassword() {
   form.value = { oldPassword: '', newPassword: '', confirm: '' };
@@ -76,7 +150,9 @@ async function submitPassword() {
     showPassword.value = false;
     message.success('密码已修改，其他设备上的登录已失效');
   } catch (err) {
-    message.error(err.message);
+    // 改密码是「只有云端有的功能」，没登录时返回 409 —— 那是要先登录，不是出错
+    if (isLoginRequired(err)) message.warning(err.message);
+    else message.error(err.message);
   } finally {
     saving.value = false;
   }
@@ -87,10 +163,15 @@ async function onSelect(key) {
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
   if (key === 'about') return emit('about');
+  if (key === 'delete') return deleteLocal(false);
+  if (key === 'logout-delete') return deleteLocal(true);
+
   if (key === 'logout') {
     // 标签页里揣着这个用户正在编辑的请求和上一次的响应（很可能带 token），
     // 不清掉的话，换个人在同一个浏览器登录还能看见。
     // closeAll 顺带会 abort 在飞的请求、销毁服务端的 WebSocket 会话。
+    if (gateway.isGateway) return signOut();
+
     tabs.closeAll();
     await session.logout();
     router.replace('/login');

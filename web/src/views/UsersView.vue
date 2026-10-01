@@ -16,12 +16,22 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
+import { isLoginRequired } from '@/api/client';
 import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 
 const router = useRouter();
 const session = useSessionStore();
 const message = useMessage();
+
+/**
+ * 这些接口都是「只有云端有的功能」：没登录时网关返回 409 + LOGIN_REQUIRED。
+ * 那是「要先登录」，不是出错，所以用提示语气，也别跳登录页（客户端只在 401 时跳）。
+ */
+function showError(err) {
+  if (isLoginRequired(err)) message.warning(err.message);
+  else showError(err);
+}
 const dialog = useDialog();
 
 const users = ref([]);
@@ -50,7 +60,7 @@ async function load() {
     const data = await usersApi.listUsers();
     users.value = data.users || [];
   } catch (err) {
-    message.error(err.message);
+    showError(err);
   } finally {
     loading.value = false;
   }
@@ -101,7 +111,7 @@ async function save() {
     await load();
   } catch (err) {
     // 服务端的 400 文案（比如「不能对自己做…」）原样给用户看
-    message.error(err.message);
+    showError(err);
   } finally {
     saving.value = false;
   }
@@ -113,7 +123,7 @@ async function toggleDisabled(row, disabled) {
     message.success(disabled ? '已禁用' : '已启用');
     await load();
   } catch (err) {
-    message.error(err.message);
+    showError(err);
     await load();
   }
 }
@@ -130,7 +140,7 @@ async function resetPassword(row) {
         issuedPassword.value = { username: row.username, password: data.password };
         await load();
       } catch (err) {
-        message.error(err.message);
+        showError(err);
       }
     }
   });
@@ -148,7 +158,7 @@ function removeUser(row) {
         message.success('已删除');
         await load();
       } catch (err) {
-        message.error(err.message);
+        showError(err);
       }
     }
   });

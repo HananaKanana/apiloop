@@ -10,6 +10,7 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
+import { isLoginRequired } from '@/api/client';
 import * as mockLogApi from '@/api/mockLog';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
@@ -36,6 +37,15 @@ const projects = useProjectStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
+
+/**
+ * 这些接口都是「只有云端有的功能」：没登录时网关返回 409 + LOGIN_REQUIRED。
+ * 那是「要先登录」，不是出错，所以用提示语气，也别跳登录页（客户端只在 401 时跳）。
+ */
+function showError(err) {
+  if (isLoginRequired(err)) message.warning(err.message);
+  else showError(err);
+}
 const dialog = useDialog();
 
 /** 新的在最上面，所以内部是倒序存的 */
@@ -213,7 +223,7 @@ async function openApi(item) {
     await tabs.openApi(apiId);
     visible.value = false;
   } catch (err) {
-    message.error(err.message);
+    showError(err);
   }
 }
 
@@ -229,7 +239,7 @@ function clearAll() {
         reset();
         message.success('已清空');
       } catch (err) {
-        message.error(err.message);
+        showError(err);
       }
     }
   });

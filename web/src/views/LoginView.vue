@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useDialog } from 'naive-ui';
-import * as gatewayApi from '@/api/gateway';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
 import { useTabsStore } from '@/stores/tabs';
@@ -17,7 +16,6 @@ const dialog = useDialog();
 const username = ref('');
 const password = ref('');
 const loading = ref(false);
-const skipping = ref(false);
 const errorText = ref('');
 
 /** 只接受 #/ 开头的 next，其余一律回首页 */
@@ -30,8 +28,8 @@ function targetAfterLogin() {
 /**
  * 整页刷新到某个 hash 路由。
  *
- * 网关上「登录」和「跳过登录」之后都要走这一条：所有 store 里装的还是切换前那个库的
- * 数据（本机的或云端的），只有重新加载才会按新模式重新取数。
+ * 网关上登录之后要走这一条：所有 store 里装的还是登录前那个空间的数据，
+ * 只有重新加载才会按新空间重新取数。
  */
 function reloadTo(path) {
   // 用 replaceState 改地址，**不要**直接赋 location.hash：那会先触发一次路由跳转，
@@ -42,8 +40,8 @@ function reloadTo(path) {
 }
 
 /**
- * 切换空间（登录云端 / 跳过登录）会整页刷新，没保存的标签页就没了 ——
- * 先问一句，用页面自己的对话框，而不是让浏览器弹那个看不懂的「确定离开此页面吗」。
+ * 登录会切空间、整页刷新，没保存的标签页就没了 —— 先问一句，
+ * 用页面自己的对话框，而不是让浏览器弹那个看不懂的「确定离开此页面吗」。
  *
  * @returns {Promise<boolean>} 用户同意继续
  */
@@ -52,7 +50,7 @@ function confirmDiscardDirty() {
   return new Promise(function (resolve) {
     dialog.warning({
       title: '有没保存的修改',
-      content: '切换之后，没保存的标签页会关闭，里面的修改会丢失。要继续吗？',
+      content: '登录之后，没保存的标签页会关闭，里面的修改会丢失。要继续吗？',
       positiveText: '继续',
       negativeText: '取消',
       onPositiveClick: function () { resolve(true); },
@@ -63,36 +61,26 @@ function confirmDiscardDirty() {
   });
 }
 
-/**
- * 网关上、连不上云端：直接说清楚，并指一条能走的路（跳过登录在本机用）。
- * 本机模式下从菜单进来的不提示 —— 那是用户自己想去登录。
- */
+/** 网关上连不上云端：登录必须联网，先说清楚，再给一条能走的路 */
 const cloudDown = computed(function () {
-  return gateway.isGateway && !gateway.isLocal && Boolean(gateway.status) &&
-    !gateway.status.cloudReachable;
+  return gateway.isGateway && Boolean(gateway.status) && !gateway.status.cloudReachable;
 });
 
-// 直接落到登录页时（比如云端停了、/meta 拿不到），工作台还没来得及探测「是不是在网关上」，
-// 「跳过登录」按钮就不会出现。这里自己探一次（2026-10-01 用户遇到）
+/** 还没登录过（未绑定空间）：本机现在的项目登录后都会同步过去 */
+const unbound = computed(function () {
+  return gateway.isGateway && gateway.spaceState === 'unbound';
+});
+
+// 直接落到登录页时（比如云端停了、/meta 拿不到），工作台还没来得及探测网关状态，
+// 提示就不会出现。这里自己探一次（2026-10-01 用户遇到）
 onMounted(function () {
   if (!gateway.loaded) gateway.load().catch(function () {});
 });
 
-/**
- * 跳过登录，先在本机用（L1）。网关打开本机空间并记住 mode = local，
- * 之后页面读写的都是本机库。
- */
-async function skipLogin() {
-  errorText.value = '';
+/** 「不登录，继续在本机使用」：回工作台就行，不用调接口（本机空间本来就是打开的） */
+async function continueLocal() {
   if (!(await confirmDiscardDirty())) return;
-  skipping.value = true;
-  try {
-    await gatewayApi.enterLocal();
-    reloadTo('/workbench');
-  } catch (err) {
-    errorText.value = err.message;
-    skipping.value = false;
-  }
+  router.replace('/workbench');
 }
 
 async function submit() {
@@ -103,7 +91,7 @@ async function submit() {
     return;
   }
 
-  // 登录成功网关就切到云端模式了，所以要在登录**之前**问
+  // 登录成功网关就切空间了，所以要在登录**之前**问
   if (!(await confirmDiscardDirty())) return;
 
   loading.value = true;
@@ -133,11 +121,11 @@ async function submit() {
 
       <!-- 已经在本机模式、又从菜单进到登录页：先说清楚登录之后会看到什么 -->
       <n-alert v-if="cloudDown" type="warning" :show-icon="false" class="alert">
-        连不上云端（{{ gateway.cloudUrl }}）。可以先点下面的「跳过登录」，在本机使用，数据只保存在这台电脑上。
+        连不上云端，登录需要联网。不登录也可以继续在本机使用。
       </n-alert>
 
-      <p v-if="gateway.isLocal" class="local-note">
-        登录后看到的是云端的项目。本机的项目会留在这台电脑上，同步功能上线后会自动上传。
+      <p v-if="unbound" class="local-note">
+        登录后，本机的项目会自动同步到这个账号。
       </p>
 
       <n-form @submit.prevent="submit">
@@ -164,16 +152,15 @@ async function submit() {
         登录
       </n-button>
 
-      <!-- 网关上才给这条路：直接进本机空间，不用账号 -->
+      <!-- 网关上才给这条路：回工作台，数据都在本机，不登录也能用 -->
       <n-button
         v-if="gateway.isGateway"
         class="skip"
         block
         quaternary
-        :loading="skipping"
-        @click="skipLogin"
+        @click="continueLocal"
       >
-        跳过登录，先在本机用
+        不登录，继续在本机使用
       </n-button>
 
       <p class="hint">

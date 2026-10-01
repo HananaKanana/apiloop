@@ -37,11 +37,11 @@ const message = useMessage();
 const dialog = useDialog();
 
 /**
- * 本机模式下没有成员管理：本机空间只有一个本机用户，也就没有「谁在这个项目里」这回事。
- * 这个 tab 整块不渲染，不是禁用。
+ * 成员管理的数据在云端（成员不同步到本机），没登录就没有这个页签。
+ * 整块不渲染，不是禁用。
  */
 const showMembers = computed(function () {
-  return !gateway.isLocal;
+  return gateway.cloudFeaturesAvailable;
 });
 
 const loading = ref(true);
