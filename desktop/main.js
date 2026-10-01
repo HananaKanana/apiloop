@@ -25,7 +25,7 @@ var path = require('path');
 var http = require('http');
 var https = require('https');
 
-var { app, BrowserWindow } = require('electron');
+var { app, BrowserWindow, dialog } = require('electron');
 
 var SELF_CHECK = process.argv.indexOf('--self-check') > -1;
 
@@ -106,6 +106,24 @@ function createWindow(port) {
             contextIsolation: true,
             nodeIntegration: false
         }
+    });
+
+    /*
+     * 页面上有没保存的修改时，前端会在 beforeunload 里拦一下（浏览器会弹「确定离开吗」）。
+     * Electron 不弹这个框，而是**悄悄取消关闭** —— 表现就是关窗口、⌘Q 都没反应，程序关不掉。
+     * 这里接住 will-prevent-unload，自己弹一个系统对话框；选「仍然退出」就放行。
+     */
+    win.webContents.on('will-prevent-unload', function (event) {
+        var choice = dialog.showMessageBoxSync(win, {
+            type: 'warning',
+            buttons: ['仍然退出', '取消'],
+            defaultId: 1,
+            cancelId: 1,
+            title: 'apiloop',
+            message: '有没保存的修改',
+            detail: '有标签页里的修改还没保存，退出后这些修改会丢失。确定要退出吗？'
+        });
+        if (choice === 0) event.preventDefault();
     });
 
     win.loadURL('http://127.0.0.1:' + port + '/');
