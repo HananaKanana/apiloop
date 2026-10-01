@@ -564,6 +564,34 @@ export const useTabsStore = defineStore('tabs', function () {
     removed.forEach(function (tab) { close(tab.key); });
   }
 
+  /**
+   * 接口或目录改了名（双击改名、目录树右键重命名）之后，让打开着的标签页跟上。
+   *
+   * **只动名字**：标签页里别的没保存的修改原样留着，dirty 也不会因此变化 ——
+   * 接口的名字不在 spec 里（所以只换标题和 `tab.api.name`）；目录的名字在 spec 里，
+   * 要连保存快照里的那一份一起换，不然改完名会凭空多出一个「未保存」。
+   */
+  function applyRename(kind, id, name) {
+    tabs.value.forEach(function (tab) {
+      if (kind === 'api' && tab.apiId === id && (tab.kind === 'api' || tab.kind === 'ws')) {
+        tab.title = name;
+        if (tab.api) tab.api = Object.assign({}, tab.api, { name: name });
+        return;
+      }
+
+      if (kind === 'folder' && tab.kind === 'folder' && tab.folderId === id) {
+        tab.title = name;
+        if (tab.savedSnapshot) {
+          const saved = JSON.parse(tab.savedSnapshot);
+          saved.name = name;
+          tab.savedSnapshot = JSON.stringify(saved);
+        }
+        tab.spec.name = name;
+        touch(tab);
+      }
+    });
+  }
+
   function markSaved(tab, api) {
     // WS 接口存下来之后要换成 WebSocket 的样子：spec 形状和普通接口不一样
     if (api.method === 'WS') {
@@ -767,6 +795,7 @@ export const useTabsStore = defineStore('tabs', function () {
     syncWithFolders: syncWithFolders,
     markSaved: markSaved,
     markFolderSaved: markFolderSaved,
+    applyRename: applyRename,
     touch: touch,
     touchActive: touchActive,
     sendRequest: sendRequest,

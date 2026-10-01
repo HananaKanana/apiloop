@@ -5,6 +5,7 @@ import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useGatewayStore } from '@/stores/gateway';
+import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
@@ -16,6 +17,7 @@ const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import'])
 const projects = useProjectStore();
 const tree = useTreeStore();
 const gateway = useGatewayStore();
+const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
 const prompt = usePrompt();
@@ -356,8 +358,11 @@ async function rename(node) {
   if (name === null || !String(name).trim()) return;
 
   try {
-    if (node.kind === 'folder') await tree.renameFolder(node.id, String(name).trim());
-    else await tree.renameApi(node.id, String(name).trim());
+    const trimmed = String(name).trim();
+    if (node.kind === 'folder') await tree.renameFolder(node.id, trimmed);
+    else await tree.renameApi(node.id, trimmed);
+    // 打开着的标签页标题跟着变（只动名字，别的没保存的修改不受影响）
+    tabs.applyRename(node.kind === 'folder' ? 'folder' : 'api', node.id, trimmed);
     message.success('已重命名');
   } catch (err) {
     message.error(err.message);

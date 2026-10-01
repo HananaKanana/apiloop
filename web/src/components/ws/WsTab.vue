@@ -27,6 +27,8 @@ import { useGatewayStore } from '@/stores/gateway';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import VarInput from '@/components/common/VarInput.vue';
+import InlineRename from '@/components/common/InlineRename.vue';
+import { folderChain } from '@/utils/tree';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import WsMessageLog from './WsMessageLog.vue';
@@ -275,7 +277,8 @@ async function onConnect() {
 
   if (ok) {
     saveRecent(projects.currentId, url);
-    if (!bound.value) props.tab.title = titleFromUrl(url);
+    // 双击改过名的就别拿地址覆盖了
+    if (!bound.value && !props.tab.customTitle) props.tab.title = titleFromUrl(url);
   }
 }
 
@@ -343,9 +346,42 @@ function folderOptions() {
   return list;
 }
 
+/** 项目 › 目录… › 名字，和普通接口标签页的面包屑一样 */
+const crumbs = computed(function () {
+  const list = [];
+  if (projects.current) list.push(projects.current.name);
+  folderChain(tree.folders, props.tab.folderId).forEach(function (folder) {
+    list.push(folder.name);
+  });
+  list.push(props.tab.title || 'WebSocket');
+  return list;
+});
+
+/**
+ * 面包屑上双击改名（和 RequestTab 的 renameTitle 一样）：
+ * 已保存的接口只改名字、立刻存；还没保存的只改标题，保存时默认用它。
+ */
+async function renameTitle(name) {
+  if (!props.tab.apiId) {
+    props.tab.title = name;
+    props.tab.customTitle = true;
+    return;
+  }
+
+  try {
+    await tree.renameApi(props.tab.apiId, name);
+    tabs.applyRename('api', props.tab.apiId, name);
+    message.success('已重命名');
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
 function openSaveDialog() {
   saveForm.value = {
-    name: props.tab.spec.url ? titleFromUrl(props.tab.spec.url) : 'WebSocket',
+    name: props.tab.customTitle
+      ? props.tab.title
+      : (props.tab.spec.url ? titleFromUrl(props.tab.spec.url) : 'WebSocket'),
     folderId: null
   };
   showSaveDialog.value = true;
@@ -473,6 +509,17 @@ watch(
     <div v-if="conflicted" class="conflict-bar">
       <span class="conflict-text">这个接口和云端有冲突</span>
       <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+    </div>
+
+    <!-- 面包屑：项目 › 目录… › 名字（最后一级双击改名） -->
+    <div class="crumbs">
+      <template v-for="(part, index) in crumbs" :key="index">
+        <span v-if="index" class="sep">›</span>
+        <span v-if="index < crumbs.length - 1" class="crumb">{{ part }}</span>
+        <span v-else class="crumb last">
+          <inline-rename :value="part" :editable="projects.canEdit" @commit="renameTitle" />
+        </span>
+      </template>
     </div>
 
     <div class="head">
@@ -672,6 +719,37 @@ watch(
   flex-direction: column;
   padding: 12px 16px;
   gap: 8px;
+}
+
+/* 面包屑：和 RequestTab 的同款 */
+.crumbs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.crumb {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.55;
+}
+
+.crumb.last {
+  opacity: 1;
+  font-weight: 600;
+  max-width: 320px;
+}
+
+.sep {
+  flex: none;
+  opacity: 0.35;
 }
 
 /* 冲突提示条：和普通接口标签页那条一致（RequestTab 里的同款） */
