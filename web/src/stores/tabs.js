@@ -130,18 +130,26 @@ function withQueryInUrl(url, rows) {
 
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
 export function specFromApi(api) {
-  const query = (api.params && api.params.query) || [];
+  /*
+   * **全部深拷贝**，编辑区不能和 tab.api（服务端那份原件）共用对象。
+   * 以前只拷了 scripts，body / auth 是同一个对象：在编辑区改请求体（含 JSON 美化）会把原件
+   * 一起改掉，保存时 changedFields 拿两边比永远相等，提示「没有改动」，改动存不进去
+   * （P2 起就有，2026-10-01 用户美化后保存时发现）。
+   */
+  const copy = function (value) { return JSON.parse(JSON.stringify(value)); };
+  const params = api.params || {};
+  const query = copy(params.query || []);
   return {
     method: api.method || 'GET',
     url: withQueryInUrl(api.url || '', query),
     params: {
-      path: (api.params && api.params.path) || [],
+      path: copy(params.path || []),
       query: query,
-      headers: (api.params && api.params.headers) || []
+      headers: copy(params.headers || [])
     },
-    body: api.body || { mode: 'none' },
-    auth: api.auth === undefined ? null : api.auth,
-    scripts: JSON.parse(JSON.stringify(api.scripts || []))
+    body: copy(api.body || { mode: 'none' }),
+    auth: api.auth === undefined || api.auth === null ? null : copy(api.auth),
+    scripts: copy(api.scripts || [])
   };
 }
 
