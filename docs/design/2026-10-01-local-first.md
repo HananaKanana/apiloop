@@ -45,12 +45,12 @@
 ~/.apiloop/spaces/local/data.db                  未登录
 ~/.apiloop/spaces/<云端主机>~<端口>~<账号ID>/      每个登录过的账号一个目录
     data.db          同步的数据 + 只存本机的历史、Cookie
-    files/           上传的文件
     session.json     云端会话（权限 0600）和离线校验用的密码摘要
 ~/.apiloop/gateway.json                           当前空间（以及开发时手动覆盖的云端地址）
 ```
 
 - 目录名里带云端地址，连不同的云端（测试环境、正式环境）不会混。
+- 上传的文件不按空间分目录，仍然放在 `~/.apiloop/files/<项目ID>/`。项目 ID 全局唯一，不会混。
 - 同一时间只打开一个空间的库。切换空间要先关掉当前的库，再打开另一个，然后让页面整页刷新。
 
 ### 3.2 未登录空间
@@ -116,17 +116,17 @@
 
 ### 5.1 云端（迁移 v7，`lib/sync/`；v6 已用于「登录后必须先改密码」）
 
-- **版本号和删除标记：** `projects`、`folders`、`apis`、`examples`、`mock_expectations`、`environments` 各加两列：
-  - `rev INTEGER NOT NULL DEFAULT 1`：每改一次加一；
-  - `deleted INTEGER NOT NULL DEFAULT 0`：删除只打标记。
-- **变更记录：** 新表 `changes(seq INTEGER PRIMARY KEY AUTOINCREMENT, project_id, entity, entity_id, rev, at)`，每次增删改记一条。
-- **改在仓储层统一做：** 所有写这些表的地方都经过 `lib/db/repos/`，在那里统一加 `rev`、写 `changes`。这样云端网页上的修改也自动带上。
-- **读的地方：** 所有现有查询都要加 `deleted = 0`。审阅时逐个核对。
-- **删除标记的清理：** 30 天后真正删除。超过 30 天没同步的设备，下次只能全量重新下载（见 5.3）。
+- **版本号：** `projects`、`folders`、`apis`、`examples`、`mock_expectations`、`environments` 各加一列 `rev INTEGER NOT NULL DEFAULT 1`。
+- **变更记录：** 新表 `changes(seq INTEGER PRIMARY KEY AUTOINCREMENT, project_id, entity, entity_id, rev, deleted, at)`。
+- **用 SQLite 触发器维护，不改仓储层**（计划阶段的调整，取代原来「删除打标记」的做法）：
+  - 每张表三个触发器：插入、修改时写一条记录；修改时顺带把 `rev` 加一；删除时写一条 `deleted = 1` 的记录；
+  - **行照常真删**，所以现有查询一个都不用改，没有「漏加 `deleted = 0`」的风险；
+  - 不管从哪条路径写入，包括外键级联删掉的子行，都会留下记录。云端网页上的修改自然也包括在内。
+- **变更记录的清理：** 30 天前的记录定期删掉。超过 30 天没同步的设备，下次只能全量重新下载（见 5.3）。
 - **接口**（都要求登录，挂在 `requireLogin` 之后）：
   - `GET /__admin/api/sync/state`：返回这个用户能访问的项目 `[{ id, role }]`，以及当前最大的 `seq`；
   - `GET /__admin/api/sync/projects/:pid/snapshot`：返回一个项目的全部行（不含已删除的）和当前 `seq`，用于第一次下载，或者新加入一个项目时；
-  - `GET /__admin/api/sync/changes?since=<seq>&limit=500`：返回 `since` 之后、这个用户能访问的项目里变化过的**完整行**（包括已删除标记），以及 `nextSeq`、`hasMore`；
+  - `GET /__admin/api/sync/changes?since=<seq>&limit=500`：返回 `since` 之后、这个用户能访问的项目里的变化，每条带这一行当前的完整内容（已删除的为 null），以及 `nextSeq`、`hasMore`；
   - `POST /__admin/api/sync/push`：请求体是 `{ items: [{ entity, id, baseRev, row, deleted }] }`，按顺序处理，每条返回：
     - `ok`：附新的 `rev`；
     - `conflict`：附云端当前那一行（`baseRev` 和云端的 `rev` 对不上）；
@@ -176,7 +176,7 @@
     - 「用云端的」：直接用云端的覆盖本机；
     - 「另存为副本」：只对接口有效。我的版本新建一个「原名（我的副本）」，原行用云端的版本。
 - **一边删了、一边改了：** 保留改了的那份（取消删除，或者在本机重新建出来），提示一下。
-- **很久没同步，删除标记已经被清理了**（`since` 早于云端保留的最早 `seq`）：云端返回 `410`。网关把还没同步的改动先另存出来，然后全量重新下载，再把这些改动按「新建」重新推上去，最后提示用户。
+- **很久没同步，变更记录已经被清理了**（`since` 早于云端保留的最早 `seq`）：云端返回 `410`。网关把还没同步的改动先另存出来，然后全量重新下载，再把这些改动按「新建」重新推上去，最后提示用户。
 
 ## 6. mock 地址
 
@@ -231,9 +231,8 @@
 
 ## 10. 风险和审阅重点
 
-- **仓储层有没有漏掉的写入：** 只要有一处直接写表、绕过了仓储层，云端那一行就不会进变更记录，本机那一行也不会进待同步列表，这一行就永远不会同步。审阅时要 grep 所有 `INSERT`、`UPDATE`、`DELETE`。
-- **`deleted = 0` 有没有漏：** 漏一处，已删除的东西就会重新出现在页面上。
-- **`lib/admin.js` 能不能换库：** 现在的代码可能在启动时就固定了库（比如 `project-stores.js`）。L1 的计划要先查清楚，切换空间时怎么换库。
+- **触发器：** 外键级联删掉的子行有没有删除记录；给 `rev` 加一的那条 UPDATE 会不会再次触发自己；推送时显式写入的 `rev` 会不会被加两次。实施计划里要求实测这三点。
+- **`lib/admin.js` 能不能换库：** 已查清楚：`createAdmin` 以参数接收 `handle`，网关可以为本机库另建一份（见 L1 计划 Task 3）。
 - **同步正确性：** 审阅时专门推演这些情况，并用一次性脚本，起两个网关加一个云端实际跑一遍：
   - 断网期间两边都改了同一行；
   - 推送到一半断网；
