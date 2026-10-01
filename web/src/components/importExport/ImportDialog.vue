@@ -16,15 +16,21 @@ import {
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
+import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { parseCurl } from '@/utils/curl';
+import { methodColor } from '@/utils/method';
 import { readFileAsText } from '@/utils/download';
 
 /**
- * 导入弹窗：Postman / cURL / OpenAPI 三个页签。
- * Postman 先预览（不写库）再确认导入；cURL 和 OpenAPI 先解析出 routes 再落进当前项目。
+ * 导入弹窗：Postman / cURL / OpenAPI / HAR 四个页签。
+ *
+ * cURL 是**前端自己解析**的（`utils/curl.js`）—— 服务端那个 `/import/curl` 是给
+ * 「造 mock 路由」写的，会丢请求头、丢主机端口、把 JSON 拆散，不能用来还原一次请求。
  */
 const projects = useProjectStore();
 const tree = useTreeStore();
+const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
 
@@ -139,28 +145,128 @@ async function runPostmanImport() {
   }
 }
 
-/* ---------------- cURL / OpenAPI ---------------- */
+/* ---------------- cURL ---------------- */
+
+/** 停止输入 300ms 后自动解析 */
+const CURL_PARSE_DELAY = 300;
 
 const curlText = ref('');
-const curlRoutes = ref(null);
-const curlBusy = ref(false);
+const curlResult = ref(null);
+const curlError = ref('');
+const curlOpening = ref(false);
+
+let curlTimer = null;
+
+const BODY_LABELS = {
+  none: '无',
+  urlencoded: '表单',
+  formdata: '表单',
+  binary: '文件',
+  graphql: 'GraphQL'
+};
+
+const curlBodyLabel = computed(function () {
+  const result = curlResult.value;
+  if (!result) return '';
+  const body = result.body || {};
+
+  if (body.mode === 'raw') {
+    if (body.language === 'json') return 'JSON';
+    if (body.language === 'xml') return 'XML';
+    return '文本';
+  }
+  return BODY_LABELS[body.mode] || '无';
+});
+
+const curlAuthLabel = computed(function () {
+  const result = curlResult.value;
+  if (!result || !result.auth) return '无';
+  return result.auth.type === 'basic' ? 'Basic' : String(result.auth.type);
+});
+
+function runCurlParse(text) {
+  try {
+    curlResult.value = parseCurl(text);
+    curlError.value = '';
+  } catch (err) {
+    // 解析失败只在这里说，不弹全局报错 —— 用户还在打字，弹窗是噪音
+    curlResult.value = null;
+    curlError.value = err.message;
+  }
+}
+
+watch(curlText, function (value) {
+  if (curlTimer) clearTimeout(curlTimer);
+  curlResult.value = null;
+  curlError.value = '';
+
+  const text = String(value || '').trim();
+  if (!text) return;
+  curlTimer = setTimeout(function () { runCurlParse(text); }, CURL_PARSE_DELAY);
+});
+
+/** 解析结果 → RequestSpec */
+function curlSpec(result) {
+  return {
+    method: result.method,
+    url: result.url,
+    params: result.params,
+    body: result.body,
+    auth: result.auth,
+    scripts: []
+  };
+}
+
+function resetCurl() {
+  curlText.value = '';
+  curlResult.value = null;
+  curlError.value = '';
+}
+
+/** 在新标签页打开：只填内容，不写库，用户自己决定要不要保存 */
+function openCurlInTab() {
+  const result = curlResult.value;
+  if (!result) return;
+
+  const tab = tabs.openDraft(tree.selectedFolderId, curlSpec(result));
+  if (tab) tab.title = result.name;
+
+  visible.value = false;
+  resetCurl();
+}
+
+/** 导入到当前目录：直接建成接口，然后打开它 */
+async function importCurlToFolder() {
+  const result = curlResult.value;
+  if (!result) return;
+  if (!projects.currentId) {
+    message.warning('先选一个项目');
+    return;
+  }
+
+  curlOpening.value = true;
+  try {
+    const api = await tree.createApi(Object.assign(curlSpec(result), {
+      name: result.name,
+      folderId: tree.selectedFolderId
+    }));
+
+    visible.value = false;
+    resetCurl();
+    await tabs.openApi(api.id);
+    message.success('已导入到' + (tree.selectedFolderId ? '选中的目录' : '根目录'));
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    curlOpening.value = false;
+  }
+}
+
+/* ---------------- OpenAPI ---------------- */
 
 const openapiText = ref('');
 const openapiRoutes = ref(null);
 const openapiBusy = ref(false);
-
-async function parseCurl() {
-  curlBusy.value = true;
-  try {
-    const data = await importExportApi.parseCurl(curlText.value);
-    curlRoutes.value = data.routes || [];
-  } catch (err) {
-    curlRoutes.value = null;
-    message.error(err.message);
-  } finally {
-    curlBusy.value = false;
-  }
-}
 
 async function parseOpenapi() {
   openapiBusy.value = true;
@@ -190,9 +296,7 @@ async function importParsed(routes) {
     await tree.refresh();
     message.success('已导入 ' + ((data.apis && data.apis.length) || 0) + ' 个接口');
     visible.value = false;
-    curlRoutes.value = null;
     openapiRoutes.value = null;
-    curlText.value = '';
     openapiText.value = '';
   } catch (err) {
     message.error(err.message);
@@ -424,35 +528,45 @@ function routeLabel(route) {
             v-model:value="curlText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="把浏览器的 Copy as cURL 粘到这里"
-            @update:value="curlRoutes = null"
+            placeholder="把浏览器的 Copy as cURL 粘到这里，粘完自动解析"
           />
 
-          <n-space align="center" :size="8">
-            <n-button size="small" secondary :loading="curlBusy" @click="parseCurl">解析</n-button>
-            <span v-if="tree.selectedFolderId" class="hint">会导入到目录树里选中的目录</span>
-            <span v-else class="hint">没有选中目录，会按分组建顶层目录</span>
-          </n-space>
+          <!-- 解析失败只在这里说一句，不弹全局报错：用户可能还在打字 -->
+          <p v-if="curlError" class="curl-error">{{ curlError }}</p>
 
-          <template v-if="curlRoutes">
-            <n-alert type="info" :show-icon="false" class="notice">
-              解析出 {{ curlRoutes.length }} 个接口
-            </n-alert>
-            <div class="routes">
-              <div v-for="(route, index) in curlRoutes" :key="index" class="route">
-                {{ routeLabel(route) }}
-              </div>
+          <template v-if="curlResult">
+            <div class="curl-line">
+              <span class="curl-method" :style="{ color: methodColor(curlResult.method) }">
+                {{ curlResult.method }}
+              </span>
+              <span class="curl-url">{{ curlResult.url }}</span>
             </div>
+
+            <p class="hint">
+              请求头 {{ curlResult.params.headers.length }} 个 ·
+              查询参数 {{ curlResult.params.query.length }} 个 ·
+              请求体：{{ curlBodyLabel }} ·
+              鉴权：{{ curlAuthLabel }}
+            </p>
+
+            <div v-if="curlResult.warnings.length" class="warnings">
+              <div v-for="(warning, index) in curlResult.warnings" :key="index">{{ warning }}</div>
+            </div>
+
             <n-space justify="end" align="center">
+              <span class="hint">
+                {{ tree.selectedFolderId ? '会落到目录树里选中的目录' : '没有选中目录，会落到根目录' }}
+              </span>
+              <n-button size="small" @click="openCurlInTab">在新标签页打开</n-button>
               <n-button
                 v-if="canEdit"
                 size="small"
                 type="primary"
-                @click="importParsed(curlRoutes)"
+                :loading="curlOpening"
+                @click="importCurlToFolder"
               >
-                导入
+                导入到当前目录
               </n-button>
-              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
             </n-space>
           </template>
         </div>
@@ -604,6 +718,43 @@ function routeLabel(route) {
 
 .notice {
   font-size: 12px;
+}
+
+/* cURL 预览：方法带色 + 完整地址，和地址栏一个观感 */
+.curl-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.curl-method {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.curl-url {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 解析失败：一行红字，不打断输入 */
+.curl-error {
+  margin: 0;
+  font-size: 12px;
+  color: #d03050;
+}
+
+/* 跳过的参数：灰色小字，说明一下就好，别抢眼 */
+.warnings {
+  font-size: 12px;
+  opacity: 0.55;
+  line-height: 1.7;
 }
 
 .routes {
