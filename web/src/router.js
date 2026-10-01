@@ -42,11 +42,12 @@ router.beforeEach(async function (to) {
     // next 统一用 #/ 开头的形式，登录页只接受这种值
     return { name: 'login', query: { next: '#' + to.fullPath } };
   }
-  // 本机 apiloop 第一次打开：还没登录过、也没选过「不登录」，先去登录页（见 utils/firstRun.js）
+  // 本机 apiloop 没登录（从没登录过 / 退出了 / 登录过期）：这次打开先去登录页，
+  // 选过「不登录」就不再拦（见 utils/firstRun.js）
   if (!hasChosen()) {
     const gateway = useGatewayStore();
     if (!gateway.loaded) await gateway.load().catch(function () {});
-    if (gateway.isGateway && gateway.spaceState === 'unbound') {
+    if (gateway.isGateway && gateway.spaceState !== 'signedIn') {
       return { name: 'login', query: { next: '#' + to.fullPath } };
     }
   }
