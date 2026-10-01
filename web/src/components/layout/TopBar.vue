@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
 import { useUiStore } from '@/stores/ui';
+import { useGatewayStore } from '@/stores/gateway';
 import * as mockLogApi from '@/api/mockLog';
 import ConnectionStatus from './ConnectionStatus.vue';
 import UserMenu from './UserMenu.vue';
@@ -22,6 +23,7 @@ const router = useRouter();
 const session = useSessionStore();
 const projects = useProjectStore();
 const ui = useUiStore();
+const gateway = useGatewayStore();
 
 /* ---------------- Mock 日志的新记录小红点 ---------------- */
 
@@ -35,7 +37,8 @@ let timer = null;
 
 async function pollMockLog() {
   const pid = projects.currentId;
-  if (!pid || ui.mockLogVisible || document.hidden) return;
+  // 本机模式没有 mock 服务（它在云端），也就没有 mock 日志
+  if (!pid || gateway.isLocal || ui.mockLogVisible || document.hidden) return;
 
   try {
     const data = await mockLogApi.listMockLog(pid, { after: seenSeq, limit: 1 });
@@ -138,7 +141,7 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="group right">
-      <n-tooltip trigger="hover">
+      <n-tooltip v-if="!gateway.isLocal" trigger="hover">
         <template #trigger>
           <button class="icon-button" @click="openMockLog">
             <n-icon size="18" :component="Activity" />

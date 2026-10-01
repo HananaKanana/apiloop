@@ -1,15 +1,18 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui';
+import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useDialog } from 'naive-ui';
 import * as gatewayApi from '@/api/gateway';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
+import { useTabsStore } from '@/stores/tabs';
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 const gateway = useGatewayStore();
+const tabs = useTabsStore();
+const dialog = useDialog();
 
 const username = ref('');
 const password = ref('');
@@ -31,9 +34,49 @@ function targetAfterLogin() {
  * 数据（本机的或云端的），只有重新加载才会按新模式重新取数。
  */
 function reloadTo(path) {
-  window.location.hash = '#' + path;
+  // 用 replaceState 改地址，**不要**直接赋 location.hash：那会先触发一次路由跳转，
+  // 工作台挂载、装上「有没保存的修改，确定离开吗」的拦截，接着刷新就弹浏览器的确认框
+  //（2026-10-01 用户遇到）。replaceState 不触发路由，刷新之后才按新地址进页面。
+  window.history.replaceState(window.history.state, '', '#' + path);
   window.location.reload();
 }
+
+/**
+ * 切换空间（登录云端 / 跳过登录）会整页刷新，没保存的标签页就没了 ——
+ * 先问一句，用页面自己的对话框，而不是让浏览器弹那个看不懂的「确定离开此页面吗」。
+ *
+ * @returns {Promise<boolean>} 用户同意继续
+ */
+function confirmDiscardDirty() {
+  if (!gateway.isGateway || !tabs.hasDirty) return Promise.resolve(true);
+  return new Promise(function (resolve) {
+    dialog.warning({
+      title: '有没保存的修改',
+      content: '切换之后，没保存的标签页会关闭，里面的修改会丢失。要继续吗？',
+      positiveText: '继续',
+      negativeText: '取消',
+      onPositiveClick: function () { resolve(true); },
+      onNegativeClick: function () { resolve(false); },
+      onClose: function () { resolve(false); },
+      onMaskClick: function () { resolve(false); }
+    });
+  });
+}
+
+/**
+ * 网关上、连不上云端：直接说清楚，并指一条能走的路（跳过登录在本机用）。
+ * 本机模式下从菜单进来的不提示 —— 那是用户自己想去登录。
+ */
+const cloudDown = computed(function () {
+  return gateway.isGateway && !gateway.isLocal && Boolean(gateway.status) &&
+    !gateway.status.cloudReachable;
+});
+
+// 直接落到登录页时（比如云端停了、/meta 拿不到），工作台还没来得及探测「是不是在网关上」，
+// 「跳过登录」按钮就不会出现。这里自己探一次（2026-10-01 用户遇到）
+onMounted(function () {
+  if (!gateway.loaded) gateway.load().catch(function () {});
+});
 
 /**
  * 跳过登录，先在本机用（L1）。网关打开本机空间并记住 mode = local，
@@ -41,6 +84,7 @@ function reloadTo(path) {
  */
 async function skipLogin() {
   errorText.value = '';
+  if (!(await confirmDiscardDirty())) return;
   skipping.value = true;
   try {
     await gatewayApi.enterLocal();
@@ -58,6 +102,9 @@ async function submit() {
     errorText.value = '请填写用户名和密码';
     return;
   }
+
+  // 登录成功网关就切到云端模式了，所以要在登录**之前**问
+  if (!(await confirmDiscardDirty())) return;
 
   loading.value = true;
   try {
@@ -85,6 +132,10 @@ async function submit() {
       </n-alert>
 
       <!-- 已经在本机模式、又从菜单进到登录页：先说清楚登录之后会看到什么 -->
+      <n-alert v-if="cloudDown" type="warning" :show-icon="false" class="alert">
+        连不上云端（{{ gateway.cloudUrl }}）。可以先点下面的「跳过登录」，在本机使用，数据只保存在这台电脑上。
+      </n-alert>
+
       <p v-if="gateway.isLocal" class="local-note">
         登录后看到的是云端的项目。本机的项目会留在这台电脑上，同步功能上线后会自动上传。
       </p>
