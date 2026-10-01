@@ -297,11 +297,50 @@ namespace Apiloop
             }
         }
 
-        private void RetryNow()
+        private bool retrying;
+
+        /// <summary>
+        /// 重试：**先探端口通不通，通了才加载**。
+        ///
+        /// 和 Mac 的 WKWebView 不一样，WebView2 加载失败时会把 Edge 自己的「无法访问此页面」
+        /// 换上来 —— 直接 Navigate 去试的话，第一次重试之后那页中文说明就没了。
+        /// </summary>
+        private async void RetryNow()
         {
-            port = Paths.ReadPort();   // 网关重启可能换了端口
-            Gateway.EnsureRunning();
-            web.CoreWebView2?.Navigate(GatewayUrl);
+            if (retrying || web.CoreWebView2 == null) return;
+            retrying = true;
+            try
+            {
+                port = Paths.ReadPort();   // 网关重启可能换了端口
+                if (await PortOpenAsync(port))
+                {
+                    web.CoreWebView2.Navigate(GatewayUrl);
+                }
+                else
+                {
+                    Gateway.EnsureRunning();
+                }
+            }
+            finally
+            {
+                retrying = false;
+            }
+        }
+
+        private static async Task<bool> PortOpenAsync(int value)
+        {
+            using (var client = new System.Net.Sockets.TcpClient())
+            {
+                try
+                {
+                    var connect = client.ConnectAsync("127.0.0.1", value);
+                    return await Task.WhenAny(connect, Task.Delay(1000)) == connect && client.Connected;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         /// <summary>已经显示着就不再加载，否则每 2 秒整页闪一下</summary>
@@ -494,6 +533,9 @@ namespace Apiloop
             Installation.StopRunning(dir);
             Installation.Unregister();
 
+            // **先提示、再安排删目录**：提示框开着的时候 apiloop.exe 还在运行，删不掉
+            if (!quiet) MessageBox.Show("apiloop 已卸载。", "apiloop", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
             // 自己正在运行，删不掉自己：交给一个隐藏的 cmd，等这个进程退出后再删整个目录
             try
             {
@@ -507,8 +549,6 @@ namespace Apiloop
             catch
             {
             }
-
-            if (!quiet) MessageBox.Show("apiloop 已卸载。", "apiloop", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
     }
