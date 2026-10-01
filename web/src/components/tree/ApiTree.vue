@@ -5,6 +5,7 @@ import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useGatewayStore } from '@/stores/gateway';
+import { useUiStore } from '@/stores/ui';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
@@ -15,6 +16,7 @@ const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import'])
 const projects = useProjectStore();
 const tree = useTreeStore();
 const gateway = useGatewayStore();
+const ui = useUiStore();
 const message = useMessage();
 const prompt = usePrompt();
 
@@ -151,7 +153,8 @@ function renderLabel(info) {
 
 /**
  * 名字后面的小标记（设计稿第 7 节）：
- * - 和云端有冲突 → 红色感叹号（比「待同步」严重，两个都占时只显示它）；
+ * - 和云端有冲突 → 红色感叹号，**点它直接开冲突对话框**（目录也能点，
+ *   不然目录的冲突只能从顶栏进 —— 审阅第 11 轮 N7）；
  * - 还没同步到云端 → 灰色小圆点；
  * - mock 开着 → 原来那个绿点，照旧。
  */
@@ -162,7 +165,12 @@ function renderSuffix(info) {
   if (gateway.isConflicted(node.kind, node.id)) {
     marks.push(h('span', {
       class: 'sync-mark conflict',
-      title: '和云端有冲突，打开这个接口处理'
+      title: '和云端有冲突，点这里处理',
+      onClick: function (event) {
+        // 别把点击透给节点本身：否则还会顺带展开目录 / 打开接口
+        event.stopPropagation();
+        ui.openConflict(node.kind, node.id);
+      }
     }, '!'));
   } else if (gateway.isPending(node.kind, node.id)) {
     marks.push(h('span', { class: 'sync-mark pending', title: '还没同步到云端' }));
@@ -712,7 +720,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   vertical-align: middle;
 }
 
-/* 冲突：红色感叹号 —— 这个是真的需要人去处理 */
+/* 冲突：红色感叹号 —— 这个是真的需要人去处理，点了直接开对话框 */
 :deep(.sync-mark.conflict) {
   display: inline-block;
   width: 13px;
@@ -726,5 +734,10 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   line-height: 13px;
   text-align: center;
   vertical-align: middle;
+  cursor: pointer;
+}
+
+:deep(.sync-mark.conflict:hover) {
+  background: #c81a0f;
 }
 </style>

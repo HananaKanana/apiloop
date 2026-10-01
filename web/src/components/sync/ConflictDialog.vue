@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NModal, NSpace, NSpin, useMessage } from 'naive-ui';
+import { NButton, NModal, NSpace, NSpin, useDialog, useMessage } from 'naive-ui';
+import * as apisApi from '@/api/apis';
 import * as gatewayApi from '@/api/gateway';
 import { useGatewayStore } from '@/stores/gateway';
 import { useTabsStore } from '@/stores/tabs';
@@ -21,6 +22,7 @@ const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
 const message = useMessage();
+const dialog = useDialog();
 
 const saving = ref(false);
 
@@ -84,24 +86,64 @@ const rows = computed(function () {
   });
 });
 
+/** 打开着的、属于这条冲突的标签页（普通接口和 WebSocket 都算，按 `apiId` 认） */
+function findTab() {
+  const conflict = ui.conflictTarget;
+  if (!conflict || conflict.entity !== 'api') return null;
+  return tabs.tabs.find(function (tab) { return tab.apiId === conflict.id; }) || null;
+}
+
 /**
- * 处理完之后把打开的那个接口标签页换成库里的新样子。
+ * 「用云端的」「另存为副本」会把这个接口的标签页换成库里的新样子，
+ * 标签页里没保存的修改就没了 —— 先问一句。
  *
- * 复用 `tabs.markSaved`：它会把 spec 换成新行的，并重算快照（`dirty` 自然就消了）。
- * 只有接口要刷新 —— 目录、期望这些不在标签页里。
+ * 「用我的」不会碰标签页，不用问。
  */
-function reloadTabs(entity, id) {
-  if (entity !== 'api') return;
-  const api = tree.apiById.get(id);
-  if (!api) return;
+function confirmDiscard() {
+  const tab = findTab();
+  if (!tab || !tab.dirty) return Promise.resolve(true);
+
+  return new Promise(function (resolve) {
+    dialog.warning({
+      title: '标签页里有没保存的修改',
+      content: '标签页里还有没保存的修改，选这一项会丢掉它们。要继续吗？',
+      positiveText: '继续',
+      negativeText: '取消',
+      onPositiveClick: function () { resolve(true); },
+      onNegativeClick: function () { resolve(false); },
+      onClose: function () { resolve(false); },
+      onMaskClick: function () { resolve(false); }
+    });
+  });
+}
+
+/**
+ * 处理完之后把打开的标签页换成库里的新样子。
+ *
+ * **必须用 `apisApi.getApi` 拿完整接口，不能用 `tree.apiById`** ——
+ * 目录树里的接口是 `dto.toApiSummary` 摘要，只有 id / 目录 / 名字 / 方法 / 地址 /
+ * 位置 / mock 开关，**没有 params / body / auth / scripts**。拿它去 `markSaved`，
+ * 标签页会被刷成空的那几项，用户再一保存就写进库里、还会被推到云端，
+ * 两边的数据都没了（审阅第 11 轮 B11）。`getApi` 就是打开标签页用的那个。
+ *
+ * 「用我的」本机那一行根本没变，**不动标签页** —— 免得把用户没保存的修改丢掉。
+ */
+async function reloadTabs(entity, id, choice) {
+  if (entity !== 'api' || choice === 'mine') return;
+
+  const data = await apisApi.getApi(id);
   tabs.tabs.forEach(function (tab) {
-    if (tab.kind === 'api' && tab.apiId === id) tabs.markSaved(tab, api);
+    // 按 apiId 判断：普通接口标签页和 WebSocket 标签页都要刷（审阅第 11 轮 N6）
+    if (tab.apiId === id) tabs.markSaved(tab, data.api);
   });
 }
 
 async function resolve(choice) {
   const conflict = ui.conflictTarget;
   if (!conflict) return;
+
+  // 会刷新标签页的那两项，先确认没保存的修改可以被丢掉
+  if (choice !== 'mine' && !(await confirmDiscard())) return;
 
   saving.value = true;
   try {
@@ -111,7 +153,7 @@ async function resolve(choice) {
     // 清单变了，先重新拉一次；目录树的小点 / 感叹号都靠它
     await gateway.refreshSyncDetails();
     await tree.refresh();
-    reloadTabs(conflict.entity, conflict.id);
+    await reloadTabs(conflict.entity, conflict.id, choice);
 
     if (choice === 'copy' && data.copyId) {
       message.success('已经另存为副本');
