@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    apiloop 本地网关的后台服务。
+
+    为什么必须是「官方 Node 直接跑」：macOS 15 之后，没有苹果签名的程序访问同网段地址会被
+    系统直接拒绝，而且不弹授权框。而 nodejs.org 的官方构建带 Node.js 基金会的签名
+    （TeamIdentifier=HX7739G8FX），由 launchd 直接启动时它就是「负责进程」，系统会正常
+    弹「允许 node 访问本地网络」。所以这里的第一段必须是 node 的绝对路径，
+    而且**安装包里那份 node 不能被重新签名**。
+
+    用 `/Applications/apiloop.app` 当入口是不够的 —— 它只负责打开浏览器，不发请求。
+
+    RunAtLoad：登录即启动；KeepAlive：崩了就拉起来。用户级 LaunchAgent，不写系统域，
+    也就不需要在 /Library/LaunchDaemons 里放东西（那里没有图形会话，拿不到本地网络授权）。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.apiloop.gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Application Support/apiloop/node/bin/node</string>
+        <string>/Library/Application Support/apiloop/app/bin/server</string>
+        <string>gateway</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- launchd 的默认工作目录是 /，日志里的相对路径会落到根目录上，钉死一个 -->
+    <key>WorkingDirectory</key>
+    <string>/tmp</string>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/apiloop-gateway.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/apiloop-gateway.log</string>
+
+    <!-- 只在有人登录的图形会话里跑：多用户的电脑上每个用户各自一个网关 -->
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+</dict>
+</plist>
