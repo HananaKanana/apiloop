@@ -1,0 +1,16 @@
+{
+  "name": "apiloop",
+  "version": "2.0.0",
+  "description": "apiloop 桌面版外壳（Electron，D0 技术验证）",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "stage": "node scripts/stage.js",
+    "self-check": "node scripts/stage.js && node scripts/run-electron.js --self-check",
+    "dev": "node scripts/stage.js && node scripts/run-electron.js"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  }
+}
