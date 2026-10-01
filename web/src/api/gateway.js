@@ -81,6 +81,8 @@ export async function getStatus() {
     version: data.version,
     cloudUrl: data.cloudUrl || '',
     cloudReachable: Boolean(data.cloudReachable),
+    // 云端版本：网关探云端时从响应头读到的（连不上、云端太老时为空）
+    cloudVersion: typeof data.cloudVersion === 'string' ? data.cloudVersion : '',
     space: data.space || null,
     sync: data.sync || null
   };

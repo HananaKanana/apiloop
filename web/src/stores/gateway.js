@@ -172,8 +172,10 @@ export const useGatewayStore = defineStore('gateway', function () {
   const versionMismatch = computed(function () {
     if (!isGateway.value || !status.value) return null;
 
+    // 云端版本**必须**从网关状态里拿：页面的 /meta 是本机网关自己答的，那里的版本就是
+    // 本机版本，拿它比永远一样，「有新版本」永远不会出现（2026-10-01 用户问起才发现）
     const gatewayVersion = status.value.version || '';
-    const cloudVersion = (useSessionStore().meta && useSessionStore().meta.version) || '';
+    const cloudVersion = status.value.cloudVersion || '';
     if (!gatewayVersion || !cloudVersion || gatewayVersion === cloudVersion) return null;
 
     return { gatewayVersion: gatewayVersion, cloudVersion: cloudVersion };
@@ -216,6 +218,7 @@ export const useGatewayStore = defineStore('gateway', function () {
       version: result.version,
       cloudUrl: result.cloudUrl,
       cloudReachable: result.cloudReachable,
+      cloudVersion: result.cloudVersion,
       space: result.space,
       sync: result.sync
     };
