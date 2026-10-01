@@ -13,14 +13,19 @@ import {
 } from 'naive-ui';
 import * as gatewayApi from '@/api/gateway';
 import { useGatewayStore } from '@/stores/gateway';
+import InstallDialog from './InstallDialog.vue';
 
 /**
- * 顶栏右侧的连接状态：一个小圆点 + 一句话，点开可以改云端地址。
+ * 顶栏右侧的连接状态：一个小圆点 + 一句话。
  *
- * 三种形态（契约「依赖的服务端接口」）：
+ * 三种形态：
  * - 网关上、云端连得上 → 绿点「本机发送」；
  * - 网关上、云端连不上 → 红点「云端连不上」；
  * - 直接打开云端 → 灰点「云端发送」。
+ *
+ * 点它的行为分两种：
+ * - 在网关上 → 下拉菜单（「安装新版本…」有新版时才出现，加原来的「云端地址…」）；
+ * - 直接打开云端 → 没有云端地址可改，直接开「安装本机 apiloop」对话框。
  *
  * 直接打开云端、而且云端不发送请求（`serverSend` 为 false）时整块不显示 ——
  * 那种情况下发送按钮已经变灰并给了说明，这里再说一遍是噪音。
@@ -29,8 +34,20 @@ const gateway = useGatewayStore();
 const message = useMessage();
 
 const showDialog = ref(false);
+const showInstall = ref(false);
 const cloudUrlInput = ref('');
 const saving = ref(false);
+
+/** 网关版本和云端不一致 —— 顶栏挂个「有新版本」，点开就能下载 */
+const hasNewVersion = computed(function () {
+  return Boolean(gateway.versionMismatch);
+});
+
+const versionHint = computed(function () {
+  const mismatch = gateway.versionMismatch;
+  if (!mismatch) return '';
+  return '本机 apiloop 是 ' + mismatch.gatewayVersion + '，云端是 ' + mismatch.cloudVersion;
+});
 
 const indicator = computed(function () {
   if (gateway.isGateway) {
@@ -58,11 +75,25 @@ const indicator = computed(function () {
   };
 });
 
-/** 只有一个菜单项。以后要加「重新连接」之类的再往这里放 */
-const menuOptions = [{ label: '云端地址…', key: 'cloud-url' }];
+/** 网关上才有菜单；直接打开云端时下拉是禁用的，点击直接开安装对话框 */
+const menuOptions = computed(function () {
+  const list = [];
+  if (hasNewVersion.value) list.push({ label: '安装新版本…', key: 'install' });
+  list.push({ label: '云端地址…', key: 'cloud-url' });
+  return list;
+});
 
 function onMenuSelect(key) {
+  if (key === 'install') {
+    showInstall.value = true;
+    return;
+  }
   if (key === 'cloud-url') openDialog();
+}
+
+function onIndicatorClick() {
+  // 网关上的点击归下拉菜单管；直接打开云端时没有菜单，点了就开安装对话框
+  if (!gateway.isGateway) showInstall.value = true;
 }
 
 function openDialog() {
@@ -93,14 +124,23 @@ async function save() {
   >
     <n-tooltip trigger="hover">
       <template #trigger>
-        <button class="conn" :class="{ clickable: gateway.isGateway }" type="button">
+        <button class="conn clickable" type="button" @click="onIndicatorClick">
           <span class="dot" :style="{ background: indicator.color }" />
           <span class="text">{{ indicator.text }}</span>
+          <span v-if="hasNewVersion" class="new-version">有新版本</span>
         </button>
       </template>
-      {{ indicator.hint }}
+      <!-- 原来那句提示照旧；版本不一致时再补一行说明，不替换掉它 -->
+      <div>{{ indicator.hint }}</div>
+      <div v-if="hasNewVersion">{{ versionHint }}</div>
     </n-tooltip>
   </n-dropdown>
+
+  <install-dialog
+    v-model:show="showInstall"
+    :is-gateway="gateway.isGateway"
+    :cloud-url="gateway.cloudUrl"
+  />
 
   <n-modal
     v-model:show="showDialog"
@@ -163,6 +203,17 @@ async function save() {
 
 .text {
   opacity: 0.85;
+}
+
+/* 「有新版本」：黄色小胶囊，紧跟在状态文字后面 */
+.new-version {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #a06a00;
+  background: rgba(240, 160, 32, 0.18);
 }
 
 .hint {

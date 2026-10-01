@@ -21,7 +21,6 @@ import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { useEnvStore } from '@/stores/env';
-import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
 import { methodColor } from '@/utils/method';
 
@@ -35,7 +34,6 @@ const tree = useTreeStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const envs = useEnvStore();
-const session = useSessionStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
@@ -95,8 +93,8 @@ function onBeforeUnload(event) {
 /* ---------------- 版本不一致的横幅 ---------------- */
 
 /**
- * 网关版本和云端版本不一样时提示去下新的安装包。
- * 关掉之后**这个版本组合**在本次会话里不再出现（sessionStorage）——
+ * 版本不一致的横幅。判断本身在 gateway store 里（顶栏的「有新版本」用的是同一个），
+ * 这里只多管一件事：**这个版本组合**被关掉过就不再出现（sessionStorage）。
  * 换个版本组合（升级了一边）还会再提示一次。
  */
 const VERSION_DISMISS_KEY = 'apiloop.versionMismatch.dismissed';
@@ -112,15 +110,12 @@ function readDismissedVersion() {
 const dismissedVersion = ref(readDismissedVersion());
 
 const versionMismatch = computed(function () {
-  if (!gateway.isGateway || !gateway.status) return null;
+  const mismatch = gateway.versionMismatch;
+  if (!mismatch) return null;
 
-  const gatewayVersion = gateway.status.version || '';
-  const cloudVersion = (session.meta && session.meta.version) || '';
-  if (!gatewayVersion || !cloudVersion || gatewayVersion === cloudVersion) return null;
-
-  const key = gatewayVersion + '|' + cloudVersion;
+  const key = mismatch.gatewayVersion + '|' + mismatch.cloudVersion;
   if (dismissedVersion.value === key) return null;
-  return { gatewayVersion: gatewayVersion, cloudVersion: cloudVersion, key: key };
+  return { gatewayVersion: mismatch.gatewayVersion, cloudVersion: mismatch.cloudVersion, key: key };
 });
 
 function dismissVersionBanner() {
