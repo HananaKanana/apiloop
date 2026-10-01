@@ -26,8 +26,15 @@ case "$CONSOLE_USER" in
     *) CONSOLE_UID=$(id -u "$CONSOLE_USER" 2>/dev/null || echo "") ;;
 esac
 
+# 网关的日志在**用户自己的家目录**里（N4：不再写 /tmp，多用户才不会打架），
+# 所以卸的时候也得从那儿删 —— 这个脚本是 root，$HOME 是 root 的，不能用。
+HOME_DIR=""
+if [ -n "$CONSOLE_USER" ]; then
+    HOME_DIR=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+fi
+
 if [ -n "$CONSOLE_UID" ]; then
-    echo "停止后台服务（gui/$CONSOLE_UID）…"
+    echo "停止后台服务（gui/${CONSOLE_UID}）…"
     launchctl bootout "gui/$CONSOLE_UID/com.apiloop.gateway" 2>/dev/null || true
 else
     echo "当前没有图形会话，跳过停服务这一步。"
@@ -41,6 +48,11 @@ rm -rf "$APP_SUPPORT"
 
 echo "删除 $LAUNCHER_APP"
 rm -rf "$LAUNCHER_APP"
+
+if [ -n "$HOME_DIR" ] && [ -d "$HOME_DIR/Library/Logs/apiloop" ]; then
+    echo "删除网关日志 $HOME_DIR/Library/Logs/apiloop"
+    rm -rf "$HOME_DIR/Library/Logs/apiloop"
+fi
 
 echo
 echo "apiloop 已卸载。"

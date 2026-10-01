@@ -69,7 +69,8 @@ var EXAMPLES = {
     ],
     gateway: [
         ['--cloud=http://localhost:8080', 'cloud address; overrides and rewrites <data dir>/gateway.json'],
-        ['--port=47321', 'listen port on 127.0.0.1, default 47321 (falls back to 47322-47329 when busy)']
+        ['--port=47321', 'listen port on 127.0.0.1, default 47321 (falls back to 47322-47329 when busy)'],
+        ['--log-file=~/Library/Logs/apiloop/gateway.log', 'log file; - prints to the terminal (macOS default: ~/Library/Logs/apiloop/gateway.log)']
     ]
 };
 

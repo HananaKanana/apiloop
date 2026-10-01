@@ -36,10 +36,17 @@
     <key>WorkingDirectory</key>
     <string>/tmp</string>
 
-    <key>StandardOutPath</key>
-    <string>/tmp/apiloop-gateway.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/apiloop-gateway.log</string>
+    <!--
+        刻意**不设** StandardOutPath / StandardErrorPath（G0 审阅 N4）。
+
+        原来两个都指向 /tmp/apiloop-gateway.log —— 这是个全局路径。多用户的电脑上，
+        第一个登录的用户的 launchd 以自己的身份建了这个文件（属主是那个用户），
+        第二个用户登录时它的 launchd 打不开这个文件，**网关根本起不来**。
+
+        所以日志改由网关自己写，落到每个用户自己的 ~/Library/Logs/apiloop/gateway.log
+        （见 lib/gateway/index.js 的 installGatewayLog）。这里什么都不设：
+        launchd 会把 stdout/stderr 接到 /dev/null，正好。
+    -->
 
     <!-- 只在有人登录的图形会话里跑：多用户的电脑上每个用户各自一个网关 -->
     <key>LimitLoadToSessionType</key>

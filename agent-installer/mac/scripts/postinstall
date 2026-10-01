@@ -82,7 +82,13 @@ log "端口文件：$PORT_FILE → $(cat "$PORT_FILE" 2>/dev/null || echo '（�
 
 if [ -d "$LAUNCHER_APP" ]; then
     log "以 $CONSOLE_USER 的身份打开 $LAUNCHER_APP"
-    sudo -u "$CONSOLE_USER" open "$LAUNCHER_APP" >>"$LOG" 2>&1 || \
+    # **启动器要开在这个用户的图形会话里**（G0 审阅 N2）。
+    #
+    # 这个脚本是 root 跑的，直接 `sudo -u someone open …` 会让 LaunchServices 到
+    # root 的会话（或者根本没有 GUI 会话可用）里去找目标，表现是「装完了什么都没打开」。
+    # `launchctl asuser <uid>` 先切进该用户的 GUI 会话，再由 sudo 降权执行 open，
+    # 两步都不可少。
+    launchctl asuser "$CONSOLE_UID" sudo -u "$CONSOLE_USER" open "$LAUNCHER_APP" >>"$LOG" 2>&1 || \
         log "打开启动器失败，用户可以自己从「应用程序」里点 apiloop"
 fi
 
