@@ -199,9 +199,19 @@ const overflowText = computed(function () {
   position: sticky;
   top: 0;
   z-index: 1;
-  opacity: 0.65;
   border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  background: var(--n-color, #fff);
+  /*
+   * 吸顶的表头必须是**不透明**的底，否则滚动时下面的行会透上来、文字叠在一起。
+   * 底色是页面底 + 和其它表格表头一样的浅灰；不用 var(--n-color)，它会继承到主色橙。
+   */
+  background:
+    linear-gradient(rgba(128, 128, 128, 0.08), rgba(128, 128, 128, 0.08)),
+    var(--apiloop-surface);
+}
+
+/* 表头只把文字调淡，不动整行的透明度（那样连底色一起变半透明） */
+.head.row > * {
+  opacity: 0.6;
 }
 
 .line {
