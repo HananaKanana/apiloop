@@ -15,10 +15,13 @@
 # 只用系统自带的 pkgbuild / productbuild / osacompile / pkgutil，仓库根目录的
 # package.json 一个依赖都不加。
 #
-# 用法：bash agent-installer/mac/build.sh              （arm64）
-#       NODE_ARCH=x64 bash agent-installer/mac/build.sh （Intel）
-#       bash agent-installer/mac/build-all.sh         （两个都打）
+# 用法：APILOOP_CLOUD_URL=http://your-cloud:8080 bash agent-installer/mac/build.sh   （arm64）
+#       NODE_ARCH=x64 APILOOP_CLOUD_URL=http://your-cloud:8080 bash …/build.sh      （Intel）
+#       APILOOP_CLOUD_URL=http://your-cloud:8080 bash agent-installer/mac/build-all.sh（两个都打）
 # 产物：agent-installer/dist/apiloop-gateway-<版本>-<架构>.pkg（不入库）
+#
+# **必须给 APILOOP_CLOUD_URL**，不给就拒绝打包（L1 起）。云端地址在打包时写死进
+# `app/cloud.json`，装完之后用户界面上没有任何地方能改它 —— 换地址就是发一个新版本。
 #
 # **依赖里没有原生模块**（quickjs 是 wasm、sqlite 用 Node 自带的 node:sqlite），
 # 所以 `npm ci` 的结果两种架构通用，不用为 x64 单独装一遍依赖。
@@ -77,11 +80,28 @@ fi
 VERSION="$(node -p "require('$REPO/package.json').version")"
 [ -n "$VERSION" ] || die "读不出仓库 package.json 里的版本号"
 
+# ---------------------------------------------------------------- 0. 云端地址
+
+# **打包时必须给云端地址**（L1 起）。它会写进安装包里的 `app/cloud.json`，网关照它转发和登录；
+# 用户界面上没有任何地方能改，所以漏了这一步打出来的包是废的 —— 宁可在打包时就报错。
+#
+# 校验用的是网关运行时那同一份代码（`lib/gateway/cloud.js`）——云端地址的规则只此一处，
+# 别在这儿再写一遍正则：两边不一致的话，打包时通过、运行时解析不了，最难查。
+CLOUD_URL="$(
+    APILOOP_CLOUD_URL="${APILOOP_CLOUD_URL:-}" node -e '
+        var cloud = require(process.argv[1]);
+        var url = cloud.normalizeCloudUrl(process.env.APILOOP_CLOUD_URL || "");
+        if (!url || !cloud.parseCloudUrl(url)) process.exit(1);
+        process.stdout.write(url);
+    ' "$REPO/lib/gateway/cloud.js" || true
+)"
+[ -n "$CLOUD_URL" ] || die "请用 APILOOP_CLOUD_URL=<云端地址> 指定云端地址"
+
 mkdir -p "$WORK/cache" "$DIST"
 
 log "目标"
-printf '  版本      %s\n  架构      %s（node 二进制：%s）\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
-    "$VERSION" "$NODE_ARCH" "$PKG_ARCH" "$NODE_VERSION" "$NODE_MIRROR" "$WORK"
+printf '  版本      %s\n  架构      %s（node 二进制：%s）\n  云端地址  %s\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
+    "$VERSION" "$NODE_ARCH" "$PKG_ARCH" "$CLOUD_URL" "$NODE_VERSION" "$NODE_MIRROR" "$WORK"
 
 # ---------------------------------------------------------------- 1. 官方 node
 
@@ -160,6 +180,12 @@ else
 fi
 # 生产依赖里不该出现 devDependencies 的东西
 [ -d "$APP/lib/web" ] || die "lib/web 不存在：先跑 npm run build:web"
+
+# 云端地址写死进安装包（L1）。位置就是 app 根目录下的 cloud.json ——
+# 网关从 `lib/gateway/cloud.js` 往上两层找它（`<安装目录>/app/cloud.json`）。
+# 内容只有这一个键；用户改不了它，换地址就是发新版本。
+printf '{\n  "cloudUrl": "%s"\n}\n' "$CLOUD_URL" > "$APP/cloud.json"
+printf '  已写入 app/cloud.json：%s\n' "$(cat "$APP/cloud.json" | tr -d '\n')"
 
 # ---------------------------------------------------------------- 3. 载荷
 
@@ -380,6 +406,18 @@ case "$DIST_CONTENT" in
     *"$WRONG_MSG"*) printf '  ✓ 提示文字：%s\n' "$WRONG_MSG" ;;
     *) die "Distribution 里没有那句中文提示" ;;
 esac
+
+log "核对安装包里写死的云端地址（L1）"
+PACKED_CLOUD_JSON="$(find "$VERIFY/expanded" -type f -path '*/apiloop/app/cloud.json' | head -1)"
+[ -n "$PACKED_CLOUD_JSON" ] || die "安装包里没有 app/cloud.json：网关装完不知道该连哪个云端"
+PACKED_CLOUD_URL="$(node -e '
+    var fs = require("fs");
+    var parsed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(String(parsed.cloudUrl || ""));
+' "$PACKED_CLOUD_JSON")"
+printf '  包里的  %s\n  期望的  %s\n' "$PACKED_CLOUD_URL" "$CLOUD_URL"
+[ "$PACKED_CLOUD_URL" = "$CLOUD_URL" ] || die "安装包里的 cloud.json 和 APILOOP_CLOUD_URL 对不上"
+echo "  ✓ app/cloud.json 是 $CLOUD_URL"
 
 log "核对覆盖安装的两道防线（N3）"
 PKGINFO_PATH="$(find "$VERIFY/expanded" -type f -name 'PackageInfo' | head -1)"
