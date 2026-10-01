@@ -33,3 +33,24 @@
   - N1：自签名证书被打进了安装包；
   - stage.js 改成「原地覆盖」之后，上游删掉的文件会残留在暂存目录里。
 - 打包前要清掉 `ELECTRON_RUN_AS_NODE` 和 `NODE_OPTIONS`，这是本机 IDE 环境注入的，不是代码问题。`dist.js` 里已经写明。
+
+## 第 3 轮：用户实测——Mac 版发往局域网的请求被系统拦截（审阅方排查）
+
+用户装好 arm64 的安装包后，发 `http://192.168.17.3:8080` 报 `EHOSTUNREACH`，**不弹「本地网络」授权框**，「系统设置 → 本地网络」里也没有 apiloop。同一台机器上用 curl 访问这个地址是通的。
+
+已经做的修复（都已推送）：
+- a29d93a：Info.plist 加 `NSLocalNetworkUsageDescription`；
+- 11fad49：签名改成 ad-hoc（`identity: '-'`）。之前 `identity: null` 时，electron-builder 改了 Info.plist 却没有重新签名，签名是坏的，标识还是 `Electron`；
+- b7df95f：有未保存修改时程序关不掉，原因是 `will-prevent-unload` 没处理，已经修好。
+
+修完之后仍然不行。审阅方加了一个临时的探测模式（没有提交），实测结果如下：
+
+| 启动方式 | 签名 | Node `net` | Electron `net` | 弹不弹授权框 |
+|---|---|---|---|---|
+| 从终端直接运行二进制（借用终端的权限） | ad-hoc | 能连上 | 200 | — |
+| 当作独立程序启动（`open`，和双击一样） | ad-hoc | EHOSTUNREACH | ERR_ADDRESS_UNREACHABLE | **不弹** |
+| 当作独立程序启动 | 自己生成的代码签名证书 | EHOSTUNREACH | ERR_ADDRESS_UNREACHABLE | **不弹** |
+
+**结论：** 在 macOS 15 及以后的版本上，没有苹果签发的签名，系统就不会为这个程序弹「本地网络」授权框，而是直接拒绝它访问局域网。这和发请求的方式无关：Node 和 Chromium 两条路都被拦了。这是**桌面版在 Mac 上成立的前提条件**。Windows 没有这项限制。
+
+可选的办法见对用户的回复：Developer ID 签名加公证（每年 99 美元）、免费的 Apple Development 证书（待验证）、或者绕过的办法。
