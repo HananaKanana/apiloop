@@ -1,13 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import {
-  NAlert,
   NButton,
   NEmpty,
-  NFormItem,
   NInput,
   NInputNumber,
-  NSpace,
   NSwitch,
   NTag,
   useDialog,
@@ -35,6 +32,9 @@ const props = defineProps({
   tab: { type: Object, required: true }
 });
 
+/** 「用最近一次响应生成」：交给父组件走它现成的「保存为示例」弹窗（不在这里再写一套） */
+const emit = defineEmits(['save-response']);
+
 const projects = useProjectStore();
 const gateway = useGatewayStore();
 const session = useSessionStore();
@@ -52,6 +52,11 @@ const expectationErrors = ref({});
 /** 期望列表拖拽排序时的两个下标 */
 const dragIndex = ref(-1);
 const overIndex = ref(-1);
+
+/** 「更多设置」（路径 / 延迟 / 跨域）默认收起 */
+const showMore = ref(false);
+/** 「按条件返回（高级）」默认收起；这个接口已经有期望时默认展开 */
+const showRules = ref(false);
 
 /** 示例编辑器实例，用来问它「有没有没保存的修改」 */
 const exampleEditorRef = ref(null);
@@ -82,6 +87,38 @@ const examples = computed(function () {
 
 const expectations = computed(function () {
   return (api.value && api.value.expectations) || [];
+});
+
+/** mock 现在默认返回的那条示例（没指定就是第一条，和服务端 routes-store 的规则一样） */
+const defaultExample = computed(function () {
+  const list = examples.value;
+  if (!list.length) return null;
+  return list.find(function (item) { return item.id === mock.value.exampleId; }) || list[0];
+});
+
+/**
+ * 「用最近一次响应生成」能不能点：和响应区「保存为示例」的条件一致 ——
+ * 有响应、是文本（二进制存不了）、不是 SSE（SSE 走事件视图里那个按钮）、不是 WS。
+ */
+const canGenerate = computed(function () {
+  const response = props.tab.result && props.tab.result.response;
+  return canEdit.value && !isWs.value && !props.tab.sseEvents &&
+    Boolean(response && response.bodyEncoding === 'utf8');
+});
+
+/** 第 ② 步旁边那句「现在是什么效果」 */
+const mockStatus = computed(function () {
+  if (!mock.value.enabled) {
+    return examples.value.length
+      ? '未开启：请求 mock 地址会返回 404'
+      : '先完成第 ① 步，才能打开';
+  }
+  if (!defaultExample.value) return '已开启，但还没有示例';
+  let text = '已开启：会返回示例「' + defaultExample.value.name + '」';
+  if (!isWs.value && expectations.value.some(function (item) { return item.enabled; })) {
+    text += '；满足条件时按「按条件返回」里的规则';
+  }
+  return text;
 });
 
 const selectedExample = computed(function () {
@@ -123,6 +160,7 @@ watch(
   function () {
     expectationErrors.value = {};
     selectedExpectationId.value = '';
+    showRules.value = expectations.value.length > 0;
 
     const list = examples.value;
     if (!list.length) {
@@ -469,75 +507,113 @@ async function onDrop() {
     />
 
     <template v-else>
-      <div class="config">
-        <n-space align="center" :size="10" :wrap="false">
-          <n-form-item label="启用 mock" :show-feedback="false" class="inline">
+      <!-- 一句话说明：用户反馈「完全不知道 mock 页是干嘛的」（2026-10-01） -->
+      <p class="intro">
+        Mock 就是「假接口」：后端还没写好时，先请求下面的 mock 地址，拿到你在这里设定的假数据。
+        <template v-if="isWs">WebSocket 接口用默认示例回放：连接后按示例里的 onOpen 推送，收到消息后按规则回复。</template>
+      </p>
+
+      <!-- 三步：每步做完换成绿色的勾 -->
+      <div class="steps">
+        <div class="step">
+          <span class="step-no" :class="{ done: examples.length > 0 }">{{ examples.length ? '✓' : '1' }}</span>
+          <span class="step-title">准备返回的数据</span>
+          <div class="step-body">
+            <span v-if="examples.length" class="step-text">
+              已有 {{ examples.length }} 个示例，默认返回「{{ defaultExample && defaultExample.name }}」
+            </span>
+            <template v-else>
+              <span v-if="!canEdit" class="step-text">还没有示例</span>
+              <n-button v-if="canEdit" size="tiny" type="primary" secondary @click="createExample">新建示例</n-button>
+              <n-button v-if="canGenerate" size="tiny" secondary @click="emit('save-response')">
+                用最近一次响应生成
+              </n-button>
+              <span v-else-if="canEdit && !isWs" class="step-text">也可以先发一次请求，再从响应生成</span>
+            </template>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-no" :class="{ done: mock.enabled }">{{ mock.enabled ? '✓' : '2' }}</span>
+          <span class="step-title">打开 mock</span>
+          <div class="step-body">
             <n-switch
               size="small"
               :value="mock.enabled"
-              :disabled="!canEdit"
+              :disabled="!canEdit || (!mock.enabled && !examples.length)"
               @update:value="(v) => patchMock({ enabled: v })"
             />
-          </n-form-item>
+            <span class="step-text">{{ mockStatus }}</span>
+          </div>
+        </div>
 
-          <n-form-item label="路径" :show-feedback="false" class="path">
+        <div class="step">
+          <span class="step-no">3</span>
+          <span class="step-title">调用 mock 地址</span>
+          <div class="step-body column">
+            <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
+            <span v-if="!gateway.mockAvailable" class="step-text">登录后可用</span>
+            <template v-else>
+              <div class="url-row">
+                <code class="url" :title="mockUrl">{{ mockUrl }}</code>
+                <n-button size="tiny" secondary @click="copyMockUrl">复制</n-button>
+              </div>
+              <span class="step-text">
+                或者在右上角环境里选「Mock」，直接点「{{ isWs ? '连接' : '发送' }}」
+              </span>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 更多设置：默认收起，大多数人用不到 -->
+      <div class="more">
+        <a class="more-toggle" @click="showMore = !showMore">{{ showMore ? '▾' : '▸' }} 更多设置</a>
+        <div v-if="showMore" class="more-body">
+          <div class="more-row">
+            <span class="more-label">路径</span>
             <n-input
               size="small"
+              class="more-input"
               :value="draftPath"
               :disabled="!canEdit"
               placeholder="/api/users"
               @update:value="(v) => { draftPath = v; }"
               @blur="canEdit && draftPath !== mock.path && patchMock({ path: draftPath })"
             />
-          </n-form-item>
-
-          <n-form-item v-if="!isWs" label="延迟(ms)" :show-feedback="false" class="delay">
+            <span class="more-hint">mock 地址最后那段，默认和接口路径一样</span>
+          </div>
+          <div v-if="!isWs" class="more-row">
+            <span class="more-label">延迟</span>
             <n-input-number
               size="small"
+              class="more-number"
               :value="mock.delay"
               :min="0"
               :max="60000"
               :disabled="!canEdit"
               @update:value="(v) => patchMock({ delay: v || 0 })"
             />
-          </n-form-item>
-
-          <n-form-item v-if="!isWs" label="CORS" :show-feedback="false" class="inline">
+            <span class="more-hint">模拟慢接口，单位毫秒</span>
+          </div>
+          <div v-if="!isWs" class="more-row">
+            <span class="more-label">跨域</span>
             <n-switch
               size="small"
               :value="mock.cors"
               :disabled="!canEdit"
               @update:value="(v) => patchMock({ cors: v })"
             />
-          </n-form-item>
-        </n-space>
-
-        <div class="url-row">
-          <span class="url-label">mock 地址</span>
-          <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
-          <span v-if="!gateway.mockAvailable" class="url-hint">登录后可用</span>
-          <template v-else>
-            <code class="url">{{ mockUrl }}</code>
-            <n-button size="tiny" quaternary @click="copyMockUrl">复制</n-button>
-          </template>
+            <span class="more-hint">浏览器里的网页直接调用 mock 地址时要打开</span>
+          </div>
         </div>
       </div>
-
-      <n-alert v-if="!isWs" type="info" :show-icon="false" class="notice">
-        期望从上到下依次检查，第一条满足全部条件的期望生效；都不满足时返回默认示例。响应头
-        <code>X-Apiloop-Mock</code> 会标明命中了哪一条。
-      </n-alert>
-
-      <n-alert v-else type="info" :show-icon="false" class="notice">
-        WebSocket 接口用默认示例回放：连接后按示例里的 onOpen 推送，收到消息后按规则回复。
-        这里不支持期望。
-      </n-alert>
 
       <div class="body">
         <aside class="list">
           <div class="section">
             <div class="list-head">
-              <span>示例</span>
+              <span>返回数据（示例）</span>
               <n-button
                 v-if="canEdit"
                 size="tiny"
@@ -588,11 +664,13 @@ async function onDrop() {
             </div>
           </div>
 
-          <div v-if="!isWs" class="section">
+          <div v-if="!isWs" class="section" :class="{ collapsed: !showRules }">
             <div class="list-head">
-              <span>期望</span>
+              <a class="rules-toggle" @click="showRules = !showRules">
+                {{ showRules ? '▾' : '▸' }} 按条件返回（高级）
+              </a>
               <n-button
-                v-if="canEdit"
+                v-if="canEdit && showRules"
                 size="tiny"
                 quaternary
                 type="primary"
@@ -602,7 +680,11 @@ async function onDrop() {
               </n-button>
             </div>
 
-            <div class="list-body">
+            <div v-if="showRules" class="list-body">
+              <p class="rules-intro">
+                按请求里的参数返回不同的示例，比如「参数 id=1 时返回示例 A，其他情况返回默认示例」。
+                从上到下检查，第一条满足的生效。
+              </p>
               <div
                 v-for="(item, index) in expectations"
                 :key="item.id"
@@ -654,7 +736,7 @@ async function onDrop() {
               <n-empty
                 v-if="!expectations.length"
                 size="small"
-                description="还没有期望，所有请求都返回默认示例"
+                description="还没有规则，所有请求都返回默认示例"
               />
             </div>
           </div>
@@ -681,7 +763,7 @@ async function onDrop() {
             :readonly="!canEdit"
             @saved="emitSaved"
           />
-          <n-empty v-else description="左边选一个示例或期望，或者新建一个" />
+          <n-empty v-else description="选一个示例来编辑，或者按上面的三步先把 mock 用起来" />
         </section>
       </div>
     </template>
@@ -704,36 +786,141 @@ async function onDrop() {
   justify-content: center;
 }
 
-.config {
+.intro {
+  flex: none;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.65;
+}
+
+/* 三步：左边圆圈序号，做完换成绿色的勾 */
+.steps {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  border-radius: 6px;
 }
 
-.inline {
-  width: auto;
+.step {
+  display: grid;
+  grid-template-columns: 22px 110px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
 }
 
-.path {
-  flex: 1;
-  min-width: 200px;
+.step-no {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(128, 128, 128, 0.18);
 }
 
-.delay {
-  width: 160px;
+.step-no.done {
+  background: #18a058;
+  color: #fff;
+}
+
+.step-title {
+  font-weight: 600;
+}
+
+.step-body {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.step-body.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.step-text {
+  font-size: 12px;
+  opacity: 0.65;
 }
 
 .url-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 12px;
 }
 
-.url-label {
-  opacity: 0.6;
+/* 更多设置 */
+.more {
   flex: none;
+  font-size: 12px;
+}
+
+.more-toggle,
+.rules-toggle {
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.8;
+}
+
+.more-toggle:hover,
+.rules-toggle:hover {
+  opacity: 1;
+}
+
+.more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-left: 14px;
+}
+
+.more-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.more-label {
+  flex: none;
+  width: 32px;
+  opacity: 0.7;
+}
+
+.more-input {
+  width: 260px;
+}
+
+.more-number {
+  width: 140px;
+}
+
+.more-hint {
+  opacity: 0.55;
+}
+
+/* 「按条件返回」收起时只剩标题那一行，把高度让给上面的示例列表 */
+.section.collapsed {
+  flex: none;
+}
+
+.rules-intro {
+  margin: 4px 6px 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.6;
 }
 
 .url {
@@ -744,18 +931,6 @@ async function onDrop() {
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   opacity: 0.85;
-}
-
-/* 本机模式下没有地址可显示，用一句灰字顶替 */
-.url-hint {
-  flex: 1;
-  min-width: 0;
-  opacity: 0.55;
-}
-
-.notice {
-  flex: none;
-  font-size: 12px;
 }
 
 .body {

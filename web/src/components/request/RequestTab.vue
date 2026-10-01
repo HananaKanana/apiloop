@@ -737,6 +737,8 @@ async function saveExample(body, isTemplate) {
     });
 
     props.tab.api = data.api;
+    // Mock 页签打开着（或下次打开）时直接选中刚存的这条
+    if (data.example) props.tab.focusExampleId = data.example.id;
     message.success(isTemplate ? '已存为模板示例' : '已存为示例');
   } catch (err) {
     message.error(err.message);
@@ -1005,7 +1007,7 @@ onBeforeUnmount(function () {
 
         <n-tab-pane name="mock" tab="Mock">
           <div class="pane">
-            <mock-panel :tab="tab" />
+            <mock-panel :tab="tab" @save-response="openSaveExample" />
           </div>
         </n-tab-pane>
       </n-tabs>
