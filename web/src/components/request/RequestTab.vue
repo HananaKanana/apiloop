@@ -37,6 +37,7 @@ import { clampReplayDelay } from '@/utils/replay';
 import { resolveScope, missingVariables } from '@/utils/variables';
 import { HEADER_NAMES } from '@/utils/suggestions';
 import { parseCurl } from '@/utils/curl';
+import { encodeQueryPart } from '@/utils/query';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
@@ -243,10 +244,6 @@ function decodePart(text) {
   }
 }
 
-function encodePart(text) {
-  return encodeURIComponent(String(text === null || text === undefined ? '' : text));
-}
-
 /** url 里的 :name 同步进路径参数表；url 里的查询串同步进 query 表 */
 function syncFromUrl(urlText) {
   const current = props.tab.spec;
@@ -312,7 +309,7 @@ function onQueryChange(rows) {
   const queryString = (rows || []).filter(function (row) {
     return row.enabled !== false && row.key;
   }).map(function (row) {
-    return encodePart(row.key) + '=' + encodePart(row.value);
+    return encodeQueryPart(row.key) + '=' + encodeQueryPart(row.value);
   }).join('&');
 
   props.tab.spec.url = queryString ? base + '?' + queryString : base;
