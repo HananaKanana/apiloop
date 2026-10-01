@@ -20,6 +20,18 @@ import { useSessionStore } from '@/stores/session';
 /** 网关上的状态每 3 秒问一次（设计稿第 7 节）：同步进度和「N 项待同步」要跟得上 */
 const REFRESH_MS = 3000;
 
+/** 三段数字的版本号，`a` 比 `b` 新吗（格式不对当「不新」） */
+function isNewerVersion(a, b) {
+  const pattern = /^\d+\.\d+\.\d+$/;
+  if (!pattern.test(a) || !pattern.test(b)) return false;
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (left[i] !== right[i]) return left[i] > right[i];
+  }
+  return false;
+}
+
 export const useGatewayStore = defineStore('gateway', function () {
   /** 页面是不是从网关上打开的 */
   const isGateway = ref(false);
@@ -169,6 +181,17 @@ export const useGatewayStore = defineStore('gateway', function () {
    *
    * @returns {{gatewayVersion: string, cloudVersion: string}|null}
    */
+  /** 一键更新的进度（网关状态里的 `update`），没有就是 null */
+  const update = computed(function () {
+    return (status.value && status.value.update) || null;
+  });
+
+  /** 点「立即更新」：网关开始下载；进度靠每 3 秒的状态刷新带回来，这里先手动刷一次 */
+  async function startUpdate() {
+    await gatewayApi.startUpdate();
+    await refresh();
+  }
+
   const versionMismatch = computed(function () {
     if (!isGateway.value || !status.value) return null;
 
@@ -176,7 +199,8 @@ export const useGatewayStore = defineStore('gateway', function () {
     // 本机版本，拿它比永远一样，「有新版本」永远不会出现（2026-10-01 用户问起才发现）
     const gatewayVersion = status.value.version || '';
     const cloudVersion = status.value.cloudVersion || '';
-    if (!gatewayVersion || !cloudVersion || gatewayVersion === cloudVersion) return null;
+    // 只有云端**更新**才提示：本机比云端新（比如开发中）时提示「更新」就成了降级
+    if (!gatewayVersion || !cloudVersion || !isNewerVersion(cloudVersion, gatewayVersion)) return null;
 
     return { gatewayVersion: gatewayVersion, cloudVersion: cloudVersion };
   });
@@ -219,6 +243,7 @@ export const useGatewayStore = defineStore('gateway', function () {
       cloudUrl: result.cloudUrl,
       cloudReachable: result.cloudReachable,
       cloudVersion: result.cloudVersion,
+      update: result.update,
       space: result.space,
       sync: result.sync
     };
@@ -255,6 +280,8 @@ export const useGatewayStore = defineStore('gateway', function () {
     cloudFeaturesAvailable: cloudFeaturesAvailable,
     mockAvailable: mockAvailable,
     versionMismatch: versionMismatch,
+    update: update,
+    startUpdate: startUpdate,
     cloudSendBlocked: cloudSendBlocked,
     load: load,
     refresh: refresh,

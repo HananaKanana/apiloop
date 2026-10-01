@@ -4,6 +4,7 @@ import { NAlert, NButton, NModal, NSpace, NSpin, NTag } from 'naive-ui';
 import * as downloadsApi from '@/api/downloads';
 import { useGatewayStore } from '@/stores/gateway';
 import { formatBytes } from '@/utils/bytes';
+import UpdateAction from './UpdateAction.vue';
 
 /**
  * 「安装本机 apiloop」对话框。
@@ -42,8 +43,9 @@ const title = computed(function () {
 
 /** 架构名要说人话，不能只写 arm64 / x64 */
 const ARCH_LABELS = {
-  arm64: 'Apple 芯片（M1、M2…）',
-  x64: 'Intel 芯片'
+  arm64: 'Mac · Apple 芯片（M1、M2…）',
+  x64: 'Mac · Intel 芯片',
+  'win-x64': 'Windows 10 / 11'
 };
 
 /**
@@ -52,14 +54,15 @@ const ARCH_LABELS = {
  */
 const steps = computed(function () {
   return [
-    '下载后双击安装。如果提示「无法打开，因为来自身份不明的开发者」：打开「系统设置 → 隐私与安全性」，在下方点「仍要打开」。',
-    '装完会自动用浏览器打开 127.0.0.1:47321；以后从「应用程序」里点 apiloop 打开。',
+    'Mac：下载后双击安装。如果提示「无法打开，因为来自身份不明的开发者」：打开「系统设置 → 隐私与安全性」，在下方点「仍要打开」。',
+    'Windows：下载后双击运行。如果提示「Windows 已保护你的电脑」，点「更多信息 → 仍要运行」；不需要管理员权限。',
+    '装完会自动打开 apiloop 窗口；以后从「应用程序」（Windows 是开始菜单或桌面）里打开。',
     props.isGateway
       ? '覆盖安装即可，数据不受影响。'
       // L1 起云端地址打包时写死（app/cloud.json），装完不用填任何地址；
       // 想用云端的项目就登录
       : '装完可以直接用；要使用云端的项目就登录。',
-    '第一次访问局域网地址时，系统会弹「允许 node 查找本地网络上的设备」，点允许。'
+    'Mac：第一次访问局域网地址时，系统会弹「允许 node 查找本地网络上的设备」，点允许。'
   ];
 });
 
@@ -124,6 +127,15 @@ function archLabel(arch) {
   >
     <n-spin :show="loading">
       <div class="install">
+        <!-- 网关上、云端有更新的版本：一键更新放最上面，下面的列表是手动下载的备用 -->
+        <div v-if="isGateway && gateway.versionMismatch" class="update-box">
+          <p class="update-title">
+            有新版本 {{ gateway.versionMismatch.cloudVersion }}（本机是 {{ gateway.versionMismatch.gatewayVersion }}）
+          </p>
+          <update-action />
+          <p class="update-hint">自动下载这台电脑对应的安装包并打开安装；数据不受影响。也可以在下面手动下载。</p>
+        </div>
+
         <n-alert v-if="loadError" type="error" :show-icon="false" class="notice">
           {{ loadError }}
         </n-alert>
@@ -177,6 +189,27 @@ function archLabel(arch) {
 
 .notice {
   font-size: 12px;
+}
+
+.update-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 6px;
+  background: rgba(255, 108, 55, 0.08);
+}
+
+.update-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.update-hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.65;
 }
 
 .file-row {
