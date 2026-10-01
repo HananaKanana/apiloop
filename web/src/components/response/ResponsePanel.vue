@@ -471,13 +471,35 @@ function requestBodyText() {
 
 <style scoped>
 .response-panel {
+  flex: 1;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/*
+ * n-spin 会在 .response-panel 和 .inner 之间插两层 div（.n-spin-container / .n-spin-content），
+ * 它们默认没有高度，.inner 的 height: 100% 就落空了 —— 整块按内容撑开，事件表格等
+ * 滚不动（用户反馈，修 pane-wrapper 那一层之后仍然不行，问题在这里）。两层都要撑满。
+ */
+.response-panel > :deep(.n-spin-container) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.response-panel > :deep(.n-spin-container > .n-spin-content) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .inner {
+  flex: 1;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -581,6 +603,8 @@ function requestBodyText() {
 }
 
 .tabs :deep(.n-tabs) {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
