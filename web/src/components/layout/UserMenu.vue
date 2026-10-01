@@ -37,10 +37,8 @@ const options = computed(function () {
     { label: '修改密码', key: 'password' },
     { label: '关于', key: 'about' }
   ];
-  if (session.isAdmin) {
-    items.push({ label: '用户管理', key: 'users' });
-    items.push({ label: '系统设置', key: 'settings' });
-  }
+  // 系统设置不放这里：顶栏已经有齿轮按钮直达，两处入口重复（2026-10-01 用户反馈）
+  if (session.isAdmin) items.push({ label: '用户管理', key: 'users' });
   items.push({ type: 'divider', key: 'd1' });
   items.push({ label: '退出登录', key: 'logout' });
   return items;
@@ -76,7 +74,6 @@ async function submitPassword() {
 async function onSelect(key) {
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
-  if (key === 'settings') return router.push('/settings');
   if (key === 'about') return emit('about');
   if (key === 'logout') {
     // 标签页里揣着这个用户正在编辑的请求和上一次的响应（很可能带 token），
