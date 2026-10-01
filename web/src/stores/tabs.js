@@ -460,10 +460,17 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const data = await historyApi.getHistory(historyId);
     const record = data.entry || {};
-    const spec = Object.assign({}, record.request || emptySpec());
-    const environmentId = spec.environmentId || '';
+    // 服务端存的是 `{ spec, environmentId }`（从第一版起就是这个形状，见 lib/api/send.js 的
+    // requesting）。以前这里把整个对象当成 spec 用，url、参数、请求头全取不到 ——
+    // 点历史打开的是一个空请求（2026-10-01 用户遇到）。也兼容万一直接存了 spec 的老数据
+    const stored = record.request || {};
+    const rawSpec = stored.spec && typeof stored.spec === 'object' ? stored.spec : stored;
+    const environmentId = stored.environmentId || rawSpec.environmentId || '';
+    // 缺的字段用空请求补齐：早期的历史里没有 scripts（P8 才加），参数表拿到 undefined 会整块不显示
+    const spec = Object.assign(emptySpec(), JSON.parse(JSON.stringify(rawSpec)));
     delete spec.environmentId;
-    // 早期写进历史的 spec 里没有 scripts（P8 才加），补一个空的，别让编辑器拿到 undefined
+    spec.params = Object.assign({ path: [], query: [], headers: [] }, spec.params || {});
+    if (!spec.body || typeof spec.body !== 'object') spec.body = { mode: 'none' };
     if (!Array.isArray(spec.scripts)) spec.scripts = [];
 
     const result = record.result || null;
