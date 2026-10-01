@@ -20,3 +20,16 @@
   - 在 `require` 服务端之前设置 `APILOOP_HOME`（`app-info` 在模块加载时读取它，顺序是对的）；
   - `chdir` 到一个空的静态目录，避免把整个磁盘当成静态目录挂出去；
   - 清掉 `ELECTRON_RUN_AS_NODE` 的处理很好。
+
+## 第 2 轮：752c64c（Task 2 打包，含 B1、B2）通过
+
+- **B1**：`APP_ROOT` 统一改成 `__dirname/app`。打包后自检 6/6 全部通过，`appRoot` 落在 `app.asar/app`，wasm 正常读到。
+- **B2**：库里还没有用户时，初始密码固定为 `apiloop`。session1 已经用打包后的程序验证：挪开 userData 重新首次启动，登录接口返回 200。
+- **`asarUnpack` 两个包都是必需的**：session1 做了对照实验，分别移走两个包，都会出现「找不到模块」。
+- **Mac 安装包**：arm64 的 dmg 有 125 MB，打包后自检通过。x64 的 dmg 已经产出，但这台机器没装 Rosetta，跑不了自检。
+- **Windows 安装包没生成**：electron-builder 下载的 makensis 是 x86_64 程序，这台 M2 没有 Rosetta，运行不了（错误 -86）。`win-unpacked/` 已经产出，只差拼成安装程序这一步。等用户决定是否安装 Rosetta。
+- **D1 要处理的**（都已经记下）：
+  - `command.js` 里两处 `process.exit`：开库失败、端口被占。这两种情况现在会直接把整个程序退出，用户看不到任何提示；
+  - N1：自签名证书被打进了安装包；
+  - stage.js 改成「原地覆盖」之后，上游删掉的文件会残留在暂存目录里。
+- 打包前要清掉 `ELECTRON_RUN_AS_NODE` 和 `NODE_OPTIONS`，这是本机 IDE 环境注入的，不是代码问题。`dist.js` 里已经写明。
