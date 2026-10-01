@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useDialog } from 'naive-ui';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
+import { markChosen } from '@/utils/firstRun';
 import { useTabsStore } from '@/stores/tabs';
 
 const route = useRoute();
@@ -80,6 +81,8 @@ onMounted(function () {
 /** 「不登录，继续在本机使用」：回工作台就行，不用调接口（本机空间本来就是打开的） */
 async function continueLocal() {
   if (!(await confirmDiscardDirty())) return;
+  // 记下「这台电脑选过了」，以后打开直接进工作台（utils/firstRun.js）
+  markChosen();
   router.replace('/workbench');
 }
 
@@ -97,6 +100,7 @@ async function submit() {
   loading.value = true;
   try {
     await session.login(username.value, password.value);
+    markChosen();
     if (gateway.isGateway) {
       reloadTo(targetAfterLogin());
       return;
