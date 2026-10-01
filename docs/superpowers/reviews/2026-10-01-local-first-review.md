@@ -183,3 +183,55 @@
 
 - `writeRow` 插入时，远端行里缺的列写成 null。表结构两边一致时没问题；但万一云端和本机版本不一样、缺了 `NOT NULL DEFAULT` 的列，会插入失败（有 B6 兜底，只会跳过这一行）。可以改成缺的列不进 INSERT，让默认值生效。
 - 页面每 3 秒问一次状态，`refreshCounts` 每次都把 6 张表全扫一遍算 `pendingKeys`。现在数据量小没关系，接口上千时再优化（比如缓存到下一次本机写入或同步结束）。
+
+## 第 10 轮：ea9bcc9（B4 / B5 / B6）、173de87（L3 Task 3 推送、合并、冲突）——ea9bcc9 通过；173de87 通过，B7–B10 必须在 Task 5 联调前修
+
+### ea9bcc9 确认没问题的
+
+- B4：slug 被本机**另一个 id** 占了才换 `uniqueSlug`；云端推送本来就不收 `slug` / `created_by`（`lib/sync/rows.js` 的 `serverColumns`），本机改了也不会带上去 ✓。
+- B5：`created_by` 在本机找不到就写 null ✓。
+- B6：每一行一个 `SAVEPOINT`，失败 `ROLLBACK TO` + `RELEASE`，记 `skipped`，整页照常应用、游标照常前进；`changes` 的清理仍在外层事务里按 marker 做 ✓。
+- 插入时缺的列不进 INSERT、更新时缺的列不动 ✓（第 9 轮小问题）。
+
+### 173de87 确认没问题的
+
+- 三方合并按列：两边一样 / 只有一边改 / 位置列用云端 / 其余冲突；`rev`、时间戳、`slug`、`created_by` 不比 ✓。
+- 合并依靠推送返回的 `conflict`（附云端当前行）；拉取时本机也改过的行当场走同一个 `resolveRow` ✓。
+- 有冲突的行暂停推送；`clearChanges` 只删 `seq <= marker` 的记录，推送途中本机再改的不会被误删 ✓。
+- 本机写入后 2 秒触发一轮，引擎自己写库不会触发死循环；切空间时监听跟着换 ✓。
+- 三个界面接口（`/sync/pending`、`/sync/conflicts`、`/sync/conflicts/resolve`）参数校验、503、处理后 `kick` ✓。
+
+### B7：游标从来没有对齐到云端的 seq —— 云端清过流水之后，新登录的设备每一轮都整库重下
+
+- 新空间的游标是 0（`readCursor` 默认），只在 `changes` 循环里被写。云端每次启动和每 24 小时会清掉 30 天前的流水（`lib/command.js` 的 `startChangePurge`），之后 `minSeq > 1`。
+- 于是：云端跑满 30 天后，任何**第一次登录**的设备 `changes?since=0` → 410 → `resetFromScratch` → 游标又写回 **0** → 下一轮还是 410 → 每 30 秒整库重下一次，永远停不下来。现在 Docker 里的云端还没满 30 天，所以探针测不出来，上线后一定会碰到。
+- **改法：**
+  - 第一次同步（游标为 0）时：在下载 snapshot **之前**记下 `state.seq`，snapshot 全部落完后把游标写成它。snapshot 是在 `state` 之后读的，中间的那点变更会再拉一遍，重复应用无害。
+  - `resetFromScratch` 同理：用它重新拿的那份 `state.seq`，下载完写进游标，不要写 0。
+
+### B8：推送成功后，基线记的是「本机现在的行」，不是「推上去的那行」 —— 会悄悄丢修改
+
+- `handleResult` 的 `ok` 分支用 `rows.get(...)`（回包时本机的行）当基线。推送请求在路上时用户又改了这一行（比如改了 `url`），基线里就有了**还没推上去的** `url`。
+- 下一轮拉取时如果同事也改了 `url`：本机的 `url` 等于基线，被当成「只有云端改了」，直接用云端的 —— 用户的修改没有任何提示就没了。
+- **改法：** 基线用这一批里推上去的那行（`item.row`），`rev` 换成 `result.rev`。`sendBatch` 里按 `entity:id` 留一份 item 传给 `handleResult` 即可。本机的 `rev` 照旧写成 `result.rev`。
+
+### B9：410 全量重下后，云端已经删掉、或者你已经被移出的项目会出问题
+
+- `resetFromScratch` 先清空了 `sync_base`，再按云端 `state` 重下。本机那些「云端已经不再列出」的项目没有了基线，在 `pendingKeys` 里就成了「本机新建」：
+  - 云端删掉的项目：被当成新项目推上去，又在云端建了出来；
+  - 你被移出成员的项目：推送回 `forbidden` → `overwriteFromCloud` 去拿 snapshot 拿到 403 → 整轮报错，以后每一轮都这样，**推送永远卡住**。
+- **改法：** 清基线之前记下有基线的项目 id；重下完以后，和 `syncState` 一样处理「云端不再列出的项目」（从本机删掉，有没同步的改动就提示一句）。另外 `resetFromScratch` 里每次 `await` 之后也要 `ensureCurrent()`，和正常拉取一样。
+
+### B10：拉取时「本机删了、云端改了」并没有恢复
+
+- `resolveRow` 的 `restore` 分支只返回 `{ action }`，没带 `theirs`。`mergePending` 拿 `outcome.theirs`（undefined）去 `applyRemote`，被当成删除：本机什么都没恢复，还把基线删了，日志却写「按云端的样子恢复了」。
+- 现在能走通，是靠下一步推送 `deleted, baseRev: 0` 撞了 `conflict`、推送那条路才真正恢复，所以提示会出现两次。
+- **改法：** `restore` 分支带上 `theirs`。
+
+### 小问题（顺手改）
+
+- **N1：** 一轮同步进行中（`applying`），用户自己保存的修改也被忽略，不会触发 2 秒后那一轮，最长要等 30 秒。引擎自己写库都是 `projectId: null`；可以在 `applying` 时，`projectId` 不为 null 的事件记一个标记，这一轮结束后排下一轮。
+- **N2：** 冲突选「用云端的」或「另存为副本」后，没有清掉这一行在 `changes` 里的记录，下一轮会把云端那行原样推回去，白白涨一次 `rev`，别的设备还要再拉一次。处理完调一次 `clearChanges`（不限 marker）。
+- **N3：** 另存的副本带着原接口的 `mock_enabled`，同一个路径上会有两个开着的 mock。副本建议关掉 mock（`mockEnabled: false`）。
+- **N4：** B4 在**更新**时也会重算 slug：本机已有这一行、slug 是 `demo-3`，云端每改一次项目，就可能在 `demo-2` / `demo-3` 之间来回换。本机已经有这一行时，保留本机的 slug。
+- **N5：** 410 重下时，本机还没推上去的**删除**会丢掉（删掉的行重下后又回来了）。提示里加一句「本机删掉但还没同步的内容已经恢复」，或者重下后把这些删除再做一遍。
