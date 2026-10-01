@@ -81,3 +81,20 @@ curl ^"https://example.com/api/x?a=1^&b=2^" -H ^"accept: application/json^" --da
 ## 推送
 
 G2 的三个提交和 b2fbfb7 **暂不推送**，等 B1–B5 修好后一起推。
+
+## 第 2 轮：7dad918（B1–B5、N1–N3）通过
+
+审阅方用第 1 轮的输入，加几个新输入复测（一次性脚本，已删）：
+
+- **B3 cmd 格式：** 单行、CRLF 续行两种写法都得到 `POST https://example.com/api/x?a=1&b=2`，请求头 `accept: application/json`，`body.raw` 是 `{"k":"v w"}` ✓。
+- **B2：** `-G -d` 得到 GET；`-G -X POST` 以显式的为准 ✓。
+- **B4：**
+  - `parseCurl` 的地址带查询串，`#片段` 去掉了；
+  - `specFromApi` 打开接口时，地址里没有 `?` 就把启用的查询行拼进去，编码规则和 `onQueryChange` 一致（都是 `encodeURIComponent`）；
+  - 打开时 `savedSnapshot` 按规整后的 spec 计算，不会凭空变成「未保存」 ✓。
+- **B5：** 美化改成只调整空白。`12345678901234567890`、`1.0`、`1E5`、`-0.50`、`中`、`\"` 都一字不改；空对象、空数组、嵌套空数组排版正确；出错时仍然给出行列号 ✓。
+- **N1** 占位误替换不再出现；**N2** 换行恢复；**N3** 快捷键一直挂着，按下时再判断语言 ✓。
+- **B1：** `sendErrorCode` 存在标签页上；`SERVER_SEND_DISABLED` 时显示黄色提示，红色的 `sendError` 被隐藏；`idle` 状态也把 `sendError` 算进去了，避免错误被空状态整块盖住 ✓。
+- 前端产物和源码一致（index-DWiY6_Sb.js），`npm test` 71/71。
+
+**记入待办（原来就有的问题，不是这次引入的）：** 查询参数表里写 `{{token}}`，地址栏里显示成 `%7B%7Btoken%7D%7D`，变量就不高亮了。原因是 `onQueryChange` 用 `encodeURIComponent` 拼地址。以后拼地址时让 `{{…}}` 保持原样不编码，发送时 `buildUrl` 在变量替换之后才编码，所以不受影响。
