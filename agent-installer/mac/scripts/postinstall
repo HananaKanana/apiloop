@@ -48,14 +48,32 @@ fi
 log "停掉可能存在的旧实例（覆盖安装）"
 launchctl bootout "gui/$CONSOLE_UID/com.apiloop.gateway" >>"$LOG" 2>&1 || true
 
-log "启动网关"
-launchctl bootstrap "gui/$CONSOLE_UID" "$LA_PLIST" >>"$LOG" 2>&1 || \
-    log "bootstrap 失败，细节见 $LOG"
+# bootout 是异步的：命令返回时旧服务可能还没卸下，这时立刻 bootstrap 会报
+# 「5: Input/output error」，网关就没起来（2026-10-01 覆盖安装时实际遇到）。
+# 所以等 launchctl print 查不到它了再继续，最多等 10 秒。
+for _ in $(seq 1 20); do
+    launchctl print "gui/$CONSOLE_UID/com.apiloop.gateway" >/dev/null 2>&1 || break
+    sleep 0.5
+done
+
+# 旧的端口文件删掉，下面等端口文件时才不会把上一次的当成「已经启动」
+PORT_FILE="$HOME_DIR/.apiloop/gateway.port"
+rm -f "$PORT_FILE"
 
 launchctl enable "gui/$CONSOLE_UID/com.apiloop.gateway" >>"$LOG" 2>&1 || true
 
+log "启动网关"
+STARTED=0
+for _ in 1 2 3 4 5; do
+    if launchctl bootstrap "gui/$CONSOLE_UID" "$LA_PLIST" >>"$LOG" 2>&1; then
+        STARTED=1
+        break
+    fi
+    sleep 1
+done
+[ "$STARTED" = 1 ] || log "bootstrap 失败，细节见 $LOG"
+
 # 等它把端口文件写出来再开浏览器，否则启动器只能退回默认端口
-PORT_FILE="$HOME_DIR/.apiloop/gateway.port"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
     [ -f "$PORT_FILE" ] && break
     sleep 0.5
