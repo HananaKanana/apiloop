@@ -104,6 +104,33 @@ const editorLanguage = computed(function () {
   return 'text';
 });
 
+/**
+ * 能不能美化：响应类型是 JSON、Content-Type 里带 json、或者内容看着就是个 JSON。
+ * 后一条是给「类型选了文本、但内容其实是 JSON」的示例留的。
+ */
+const canFormat = computed(function () {
+  if (!draft.value) return false;
+  if (editorLanguage.value === 'json') return true;
+
+  const contentType = (draft.value.headers || []).filter(function (row) {
+    return String(row.key).toLowerCase() === 'content-type';
+  }).map(function (row) {
+    return String(row.value).toLowerCase();
+  }).join(';');
+  if (contentType.indexOf('json') !== -1) return true;
+
+  const text = String(draft.value.body || '').trim();
+  return text.charAt(0) === '{' || text.charAt(0) === '[';
+});
+
+function formatBody() {
+  if (editorRef.value) editorRef.value.format();
+}
+
+function onFormatError(text) {
+  message.error(text);
+}
+
 function reset(source) {
   draft.value = {
     name: source.name || '',
@@ -315,6 +342,15 @@ async function runPreview() {
         <p class="label">{{ scenario ? scenario.title : '响应体' }}</p>
         <span class="spacer" />
         <n-button
+          v-if="canFormat && !readonly"
+          size="tiny"
+          quaternary
+          title="⇧⌥F。带 {{变量}} 也能美化，变量原样保留；数字会按标准格式输出（1.0 会变成 1）"
+          @click="formatBody"
+        >
+          美化
+        </n-button>
+        <n-button
           v-if="scenario && !readonly"
           size="tiny"
           quaternary
@@ -340,6 +376,7 @@ async function runPreview() {
         min-height="240px"
         :readonly="readonly"
         @update:model-value="(v) => { draft.body = v; scheduleSave(); }"
+        @format-error="onFormatError"
       />
     </div>
 

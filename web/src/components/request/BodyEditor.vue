@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NCheckbox, NIcon, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
+import { NButton, NCheckbox, NIcon, NInput, NSelect, NSpace, NTooltip, useMessage } from 'naive-ui';
 import { File, Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
 import CodeEditor from '@/components/common/CodeEditor.vue';
@@ -43,6 +43,19 @@ const LANGUAGE_OPTIONS = [
 const fileInput = ref(null);
 const pendingUpload = ref(null);
 const uploading = ref(false);
+/** 请求体的编辑器实例，美化按钮要调它的 format() */
+const editorRef = ref(null);
+
+/** 美化按钮的悬停说明。放在脚本里写，模板里直接写 {{变量}} 会被当成插值 */
+const FORMAT_HINT = '⇧⌥F。带 {{变量}} 也能美化，变量原样保留；数字会按标准格式输出（1.0 会变成 1）';
+
+function formatBody() {
+  if (editorRef.value) editorRef.value.format();
+}
+
+function onFormatError(text) {
+  message.error(text);
+}
 
 const body = computed(function () {
   if (!props.spec.body) props.spec.body = { mode: 'none' };
@@ -182,15 +195,24 @@ async function onFilePicked(event) {
         :options="LANGUAGE_OPTIONS"
         @update:value="(v) => { body.language = v; }"
       />
+      <!-- 美化：和编辑器里的 ⇧⌥F 走同一个函数（CodeEditor 的 format） -->
+      <n-tooltip v-if="mode === 'raw' && body.language === 'json'" trigger="hover">
+        <template #trigger>
+          <n-button size="small" quaternary @click="formatBody">美化</n-button>
+        </template>
+        {{ FORMAT_HINT }}
+      </n-tooltip>
     </n-space>
 
     <div class="content">
       <template v-if="mode === 'raw'">
         <code-editor
+          ref="editorRef"
           :model-value="body.raw || ''"
           :language="body.language || 'json'"
           min-height="220px"
           @update:model-value="(v) => { body.raw = v; }"
+          @format-error="onFormatError"
         />
       </template>
 

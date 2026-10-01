@@ -8,6 +8,7 @@ import { xml } from '@codemirror/lang-xml';
 import { javascript } from '@codemirror/lang-javascript';
 import { autocompletion } from '@codemirror/autocomplete';
 import { Decoration } from '@codemirror/view';
+import { formatJson } from '@/utils/jsonFormat';
 
 /**
  * CodeMirror 6 的薄封装。
@@ -27,7 +28,7 @@ const props = defineProps({
   placeholders: { type: Array, default: function () { return []; } }
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'format-error']);
 
 const host = ref(null);
 let view = null;
@@ -96,8 +97,52 @@ function placeholderSource(context) {
   return { from: from, options: matched, filter: false, validFor: /^[^{}]*$/ };
 }
 
-const theme = EditorView.theme({
-  '&': {
+/* ---------------- JSON 美化 ---------------- */
+
+/**
+ * 美化当前内容。按钮和快捷键都走这一个函数，行为保证一致。
+ * 失败时抛 `format-error` 事件让外面去提示，组件自己不弹窗 ——
+ * 同一个编辑器可能被放在不同上下文里，提示方式该由调用方决定。
+ */
+function applyFormat() {
+  if (!view || props.readonly) return;
+
+  const current = view.state.doc.toString();
+  const result = formatJson(current, 2);
+
+  if (!result.ok) {
+    emit('format-error', result.error);
+    return;
+  }
+  if (result.text === current) return;
+
+  applying = true;
+  view.dispatch({ changes: { from: 0, to: current.length, insert: result.text } });
+  applying = false;
+  emit('update:modelValue', result.text);
+}
+
+/**
+ * ⇧⌥F / Shift+Alt+F 触发美化（和 VS Code 一样）。
+ *
+ * 这里**不用 CodeMirror 的 keymap**，而是在 DOM 层听 keydown：
+ * CM 的键名是从 `event.key` 拼出来的，而 macOS 上 ⌥F 会组合成一个特殊字符
+ * （`event.key` 不再是 'f'），键名就对不上了。`event.code` 不受组合影响，
+ * 认 `KeyF` 才能在各种键盘布局和输入法下都稳。
+ */
+const formatKeyHandler = EditorView.domEventHandlers({
+  keydown: function (event) {
+    if (!event.shiftKey || !event.altKey) return false;
+    if (event.ctrlKey || event.metaKey) return false;
+    if (event.code !== 'KeyF' && String(event.key).toLowerCase() !== 'f') return false;
+
+    event.preventDefault();
+    applyFormat();
+    return true;
+  }
+});
+
+const theme = EditorView.theme({  '&': {
     fontSize: '13px',
     backgroundColor: 'transparent',
     color: 'inherit',
@@ -150,6 +195,9 @@ function createView() {
     extensions.push(placeholderDecorations);
     extensions.push(autocompletion({ override: [placeholderSource], activateOnTyping: true, icons: false }));
   }
+
+  // 只有 JSON 才谈得上美化（XML / JS 的美化规则不一样，先不做）
+  if (props.language === 'json') extensions.push(formatKeyHandler);
 
   view = new EditorView({
     parent: host.value,
@@ -217,7 +265,7 @@ function insertAtCursor(text) {
   view.focus();
 }
 
-defineExpose({ insertAtCursor: insertAtCursor });
+defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat });
 </script>
 
 <template>
