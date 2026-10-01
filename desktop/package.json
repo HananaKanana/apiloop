@@ -42,10 +42,11 @@
         }
       ],
       "category": "public.app-category.developer-tools",
-      "identity": null,
+      "identity": "-",
       "extendInfo": {
         "NSLocalNetworkUsageDescription": "apiloop 要从本机向局域网 / 内网里的接口地址发请求，需要访问本地网络。"
-      }
+      },
+      "hardenedRuntime": false
     },
     "win": {
       "target": [
