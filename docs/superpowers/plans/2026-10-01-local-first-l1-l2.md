@@ -310,3 +310,49 @@
 
 - L3（同步引擎、账号空间、登录时上传、离线登录）、L4（同步界面）。
 - Windows 安装包。
+
+---
+
+## 追加：内置 Mock 环境（2026-10-01 用户提议）
+
+用户：「每个项目默认环境里加一个 mock 环境，host 地址直接放进去」。做法参考 Apifox 自动生成的「云端 Mock」环境：**不存库、只读、地址自动算**。如果存成普通环境，以后云端上外网，地址就过期了；而且会被误改、误删，还要参与同步。变量名固定为 `host`（用户：「基本是叫 host」）。
+
+**后端已完成（d815c68，审阅方写的）：**
+- 发送（`/send`、`/send/stream`、`/send/prepare`）和 WebSocket（`POST /projects/:pid/ws`）的请求体里，`environmentId: 'mock'` 再加上 `mockBase: '<mock 地址>'`，服务端就临时拼出环境 `{ host: mockBase }`；
+- 缺少 `mockBase` 或格式不对，返回 400「Mock 环境缺少有效的 mock 地址（mockBase）」；
+- WebSocket 会自动把协议换成 `ws` / `wss`；
+- 脚本对这个环境的修改不落库，历史里记的 `environmentId` 仍是 `'mock'`。
+
+### Task 8（session2）：环境下拉里的「Mock」
+
+**文件：**
+- `web/src/utils/mock.js`
+- `web/src/stores/env.js`、`web/src/components/layout/EnvSwitcher.vue`
+- `web/src/stores/tabs.js`（发送）、`web/src/stores/ws.js` 或 `web/src/components/ws/WsTab.vue`（WebSocket 建会话）
+
+**接口：**
+- `mockBaseUrl(project) -> string`，放在 `utils/mock.js`：
+  - 网关上用 `gateway.cloudUrl`，直接打开云端时用 `window.location.origin`；
+  - 去掉末尾的 `/`，再接上 `mockPrefix(project)`；
+  - 根项目就是云端地址本身。
+- `env.js` 导出 `MOCK_ENV_ID = 'mock'`。`selectedId === 'mock'` 时，`selected` 返回一个虚拟环境：
+  ```js
+  { id: 'mock', name: 'Mock', builtin: true, variables: [{ key: 'host', value: mockBaseUrl(当前项目), enabled: true }] }
+  ```
+  - 变量高亮、悬停看值、缺失变量提示都走 `selected`，不用另外改；
+  - `load()` 恢复上次选中的环境时，要认得 `'mock'`；本机模式下恢复成「无环境」。
+
+**界面（EnvSwitcher）：**
+- 「无环境」下面固定一项「Mock」，后面一个小标签「内置」；
+- 选中后，下面的变量区显示 `host` 和它的值，**没有「编辑」**；
+- 本机模式（`gateway.isLocal`）下，这一项是灰的，显示「Mock（登录后可用）」，不能选；
+- 双击选中的行为和其他环境一样；
+- 「管理环境」页面里不列它。
+
+**发送：**
+- `tabs.js` 的 `sendRequest`，以及 WebSocket 建会话时：`environmentId === 'mock'` 就在请求体里加上 `mockBase: mockBaseUrl(当前项目)`；
+- 从历史里重放 `environmentId` 是 `'mock'` 的请求时，选中 Mock（本机模式下选「无环境」）。
+
+**回报：**
+- 一个地址写成 `{{host}}/xxx`、开了 mock 的接口，切到 Mock 环境发送，响应是 mock 数据，「请求」页里实际的地址是 `<云端>/mock-<项目ID>/xxx`；
+- 切回普通环境，发往真实地址。
