@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    apiloop 的 Windows 窗口程序（和 Mac 的 shell/main.swift 对应）。
+
+    目标框架是 .NET Framework 4.8：Windows 10 / 11 自带，用户不用另装运行库；
+    在 Mac 上用 dotnet SDK 就能编（EnableWindowsTargeting），不需要 Windows 机器。
+    版本号由 build.sh 用 -p:Version=... 传进来。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>apiloop</AssemblyName>
+    <RootNamespace>Apiloop</RootNamespace>
+    <ApplicationIcon>$(ApiloopIcon)</ApplicationIcon>
+    <ApplicationManifest>..\app.manifest</ApplicationManifest>
+    <Version>0.0.0</Version>
+    <Product>apiloop</Product>
+    <Company>apiloop</Company>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 和安装程序共用：退掉正在运行的 apiloop、登记 / 撤销自启动和卸载入口 -->
+    <Compile Include="..\Installation.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
