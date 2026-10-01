@@ -46,3 +46,12 @@
   - `prepare` 里 `environmentId` 为 null，脚本对环境的修改不落库；历史里记的是 `mock`；
   - WebSocket 自动换成 `ws://`。
 - 前端交给 session2（计划 Task 8）。
+
+## 第 3 轮：e77abb8（Task 3 本机空间和跳过登录）——通过
+
+- **本机模式下请求不会漏到云端（审阅重点 1）：** 调度器排在网关自己的发送、WebSocket、转发之前；本机管理台末尾有兜底的 404，不会 `next()` 到转发；本机库打不开时明确返回 503 ✓。
+- **只有 `POST /__admin/api/auth/login` 例外：** 用完整路径比较。大小写变体、末尾多 `/` 的会落到本机库，本机用户没有密码，必然失败，不会出安全问题 ✓。
+- **本机用户没有密码（审阅重点 2）：** `password_hash` 为空串，`verifyPassword` 第一行就返回 false ✓。
+- 登录云端返回 2xx 才切到 `cloud` 模式，并写回 `gateway.json` ✓。重启后如果是 `local` 模式，启动时就打开本机空间 ✓。
+- 不调用 `bootstrapAdmin`；同一个进程里只打开一次本机库 ✓。
+- 已经用 `APILOOP_CLOUD_URL=http://localhost:8080` 打了 arm64、x64 两个包（用户要求「先用本地地址调通，最后一起上云」），放进了 `agent-installer/dist/` 和云端的下载目录。
