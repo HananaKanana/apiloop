@@ -22,6 +22,7 @@ desktop/node_modules/
 desktop/app/
 desktop/dist/
 
-# 本地网关（G0）的安装包：中间产物与打好的 .pkg 都不入库
+# 本地网关（G0）的安装包：产物不入库。中间产物在 /tmp/apiloop-agent-build（见 build.sh），
+# 这里再留一条是防有人用 APILOOP_BUILD_WORK 指到仓库里
 agent-installer/.work/
 agent-installer/dist/

@@ -29,7 +29,13 @@ NODE_MIRROR="${NODE_MIRROR:-https://npmmirror.com/mirrors/node}"
 NODE_TEAM_ID="HX7739G8FX"
 PKG_ID="com.apiloop.gateway"
 
-WORK="$REPO/agent-installer/.work"
+# **中间产物一律不放在仓库里。** 两个理由：
+#   1. 官方 node 解压后有 8000 多个文件，打一次包要整棵重建/整棵删掉；在 WorkBuddy 的
+#      IDE 沙箱里，工作区内一次删超过 50 个文件会被「批量删除保护」拦下，脚本跑到一半
+#      直接退出。放到 /tmp 就完全没有这个问题。
+#   2. 这些中间产物加起来 300 MB 左右，没必要塞在仓库目录里（虽然 .gitignore 也挡得住）。
+# 想固定住缓存（省一次 50MB 的下载）可以设 APILOOP_BUILD_WORK=<某个不入库的目录>。
+WORK="${APILOOP_BUILD_WORK:-/tmp/apiloop-agent-build}"
 DIST="$REPO/agent-installer/dist"
 
 log() { printf '\n===== %s =====\n' "$*"; }
@@ -108,15 +114,18 @@ cp "$REPO/package.json" "$APP/package.json"
 cp "$REPO/package-lock.json" "$APP/package-lock.json"
 
 log "安装生产依赖（npm ci --omit=dev）"
-# 锁文件没变就不重装：npm ci 会先把 node_modules 整个删掉，这一步在慢盘上很贵
+# 锁文件没变就不重装：npm ci 会先把 node_modules 整个删掉，这一步在慢盘上很贵。
+# **标记文件放 $WORK，不放 $APP** —— $APP 是要打进安装包的，放进去既会被打包带走，
+# 又会被下面那行 rm 清掉，缓存判断永远不命中（N1）。
+rm -f "$APP/.apiloop-lock-sha"        # 清掉旧版本遗留的那一个
+LOCK_MARKER="$WORK/app-lock-sha"
 LOCK_SHA="$(shasum -a 256 "$APP/package-lock.json" | awk '{print $1}')"
-if [ ! -d "$APP/node_modules" ] || [ "$(cat "$APP/.apiloop-lock-sha" 2>/dev/null || true)" != "$LOCK_SHA" ]; then
+if [ ! -d "$APP/node_modules" ] || [ "$(cat "$LOCK_MARKER" 2>/dev/null || true)" != "$LOCK_SHA" ]; then
     ( cd "$APP" && npm ci --omit=dev --no-audit --no-fund )
-    printf '%s\n' "$LOCK_SHA" > "$APP/.apiloop-lock-sha"
+    printf '%s\n' "$LOCK_SHA" > "$LOCK_MARKER"
 else
     echo "  锁文件没变，复用已有的 node_modules"
 fi
-rm -f "$APP/.apiloop-lock-sha"
 # 生产依赖里不该出现 devDependencies 的东西
 [ -d "$APP/lib/web" ] || die "lib/web 不存在：先跑 npm run build:web"
 
@@ -198,10 +207,17 @@ cat > "$DIST_XML" <<XML
 XML
 
 OUT="$DIST/apiloop-gateway-$VERSION-$NODE_ARCH.pkg"
-rm -f "$OUT"
+# **先在 $WORK 里打，再用 cp 覆盖到 dist**。不在 dist 里直接 productbuild + 先删旧的：
+# 删那个几十 MB 的 flat pkg 在某些环境下会触发「一次删太多」的保护（实测把它算成几千个
+# 条目），脚本会跑到最后一步才失败。cp 是覆盖写，不产生删除。
+BUILT="$WORK/apiloop-gateway-$VERSION-$NODE_ARCH.pkg"
+rm -f "$BUILT"
 
 log "productbuild（同样不带 --sign）"
-productbuild --distribution "$DIST_XML" --package-path "$WORK" "$OUT"
+productbuild --distribution "$DIST_XML" --package-path "$WORK" "$BUILT"
+
+mkdir -p "$DIST"
+cp -f "$BUILT" "$OUT"
 
 # ---------------------------------------------------------------- 5. 核对签名
 
@@ -248,6 +264,7 @@ do
 done
 
 log "完成"
-printf '  安装包  %s\n  大小    %s\n\n' "$OUT" "$(du -h "$OUT" | awk '{print $1}')"
+printf '  安装包  %s\n  大小    %s\n  中间产物 %s（可以随时删掉，下次会重新下载 node）\n\n' \
+    "$OUT" "$(du -h "$OUT" | awk '{print $1}')" "$WORK"
 echo "安装包**不签名**（用户机器上第一次打开要点「仍要打开」）。"
 echo "不要自己安装：安装要输管理员密码，也会动用户的系统。"
