@@ -5,6 +5,7 @@ import WorkbenchView from '@/views/WorkbenchView.vue';
 import UsersView from '@/views/UsersView.vue';
 import ProjectSettingsView from '@/views/ProjectSettingsView.vue';
 import SettingsView from '@/views/SettingsView.vue';
+import ChangePasswordView from '@/views/ChangePasswordView.vue';
 
 /**
  * 用 hash 路由，后端的静态文件服务就不用为前端路由做任何特殊处理。
@@ -12,6 +13,7 @@ import SettingsView from '@/views/SettingsView.vue';
 const routes = [
   { path: '/', redirect: '/workbench' },
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
+  { path: '/change-password', name: 'change-password', component: ChangePasswordView },
   { path: '/workbench', name: 'workbench', component: WorkbenchView },
   { path: '/users', name: 'users', component: UsersView, meta: { admin: true } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { admin: true } },
@@ -37,6 +39,17 @@ router.beforeEach(async function (to) {
   if (!session.user) {
     // next 统一用 #/ 开头的形式，登录页只接受这种值
     return { name: 'login', query: { next: '#' + to.fullPath } };
+  }
+  // 密码是管理员重置或设置的：改掉之前哪儿都不能去（服务端也会拦）
+  if (session.user.mustChangePassword) {
+    return to.name === 'change-password' ? true : { name: 'change-password' };
+  }
+  if (to.name === 'change-password') {
+    // 接口返回「请先修改密码」时会直接跳到这里，本地的 user 可能还是旧的：先重新拉一次再判断，
+    // 否则会在这里和工作台之间来回跳
+    await session.refreshMeta();
+    if (session.user && session.user.mustChangePassword) return true;
+    return { name: 'workbench' };
   }
   if (to.meta.admin && !session.isAdmin) {
     return { name: 'workbench' };
