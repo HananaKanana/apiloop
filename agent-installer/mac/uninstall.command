@@ -2,7 +2,7 @@
 #
 # apiloop 卸载。双击运行即可。
 #
-# 删掉的东西：后台服务、LaunchAgent、安装目录（含官方 Node）、启动器 .app。
+# 删掉的东西：后台服务、LaunchAgent、安装目录（含官方 Node）、apiloop.app（原生壳）。
 # **不删 ~/.apiloop** —— 那是用户数据（云端地址、端口文件，以后还有本地库）。
 #
 # LaunchAgent 装在 /Library 下，所以需要管理员权限；这里自己 sudo 一把，

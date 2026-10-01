@@ -12,7 +12,7 @@
 #   3. 打完包把安装包展开，用 codesign -dv 核对里面的 node，TeamIdentifier 必须是 HX7739G8FX，
 #      并且和下载下来那份逐字节相同（比 sha256）。
 #
-# 只用系统自带的 pkgbuild / productbuild / osacompile / pkgutil，仓库根目录的
+# 只用系统自带的 pkgbuild / productbuild / swiftc / pkgutil，仓库根目录的
 # package.json 一个依赖都不加。
 #
 # 用法：APILOOP_CLOUD_URL=http://your-cloud:8080 bash agent-installer/mac/build.sh   （arm64）
@@ -40,6 +40,9 @@ NODE_ARCH="${NODE_ARCH:-arm64}"
 NODE_MIRROR="${NODE_MIRROR:-https://npmmirror.com/mirrors/node}"
 NODE_TEAM_ID="HX7739G8FX"
 PKG_ID="com.apiloop.gateway"
+# 壳子（/Applications/apiloop.app）的最低系统版本。`swiftc -target` 和 Info.plist 里
+# 的 LSMinimumSystemVersion 用同一个值，两处不一致会在老系统上装完了打不开。
+MIN_MACOS="12.0"
 
 case "$NODE_ARCH" in
     arm64|x64) ;;
@@ -69,12 +72,12 @@ DIST="$REPO/agent-installer/dist"
 log() { printf '\n===== %s =====\n' "$*"; }
 die() { printf 'build.sh: %s\n' "$*" >&2; exit 1; }
 
-for tool in curl tar shasum awk pkgbuild productbuild pkgutil codesign osacompile ditto node npm; do
+for tool in curl tar shasum awk pkgbuild productbuild pkgutil codesign swiftc sips iconutil lipo ditto node npm; do
     command -v "$tool" >/dev/null 2>&1 || die "缺少工具：$tool"
 done
 
 if [ "$(uname -s)" != "Darwin" ]; then
-    die "这个脚本只能在 macOS 上跑（要用 pkgbuild / productbuild / osacompile）"
+    die "这个脚本只能在 macOS 上跑（要用 pkgbuild / productbuild / swiftc）"
 fi
 
 VERSION="$(node -p "require('$REPO/package.json').version")"
@@ -205,25 +208,111 @@ cp "$HERE/com.apiloop.gateway.plist" "$ROOT/Library/LaunchAgents/com.apiloop.gat
 cp "$HERE/uninstall.command" "$APILOOP_DIR/卸载 apiloop.command"
 chmod 755 "$APILOOP_DIR/卸载 apiloop.command"
 
-# 启动器。osacompile 出来就是 ad-hoc 签名的（arm64 上没签名的 Mach-O 根本起不来）。
-log "编译启动器 /Applications/apiloop.app"
+# 原生壳（L4）：一个很小的 Swift 程序（AppKit + WKWebView），换掉原来 osacompile
+# 出来的那个启动器。**位置和 bundle id 都不变**（/Applications/apiloop.app、
+# com.apiloop.launcher），所以覆盖安装那两道防线（BundleIsRelocatable=false 与
+# preinstall）一个字都不用改。
+log "编译原生壳 /Applications/apiloop.app"
 LAUNCHER_APP="$ROOT/Applications/apiloop.app"
 LAUNCHER_PLIST="$LAUNCHER_APP/Contents/Info.plist"
-osacompile -o "$LAUNCHER_APP" "$HERE/launcher.applescript"
+mkdir -p "$LAUNCHER_APP/Contents/MacOS" "$LAUNCHER_APP/Contents/Resources"
 
-# 补上 CFBundleIdentifier。**这一条是 N3 能不能生效的前提**：osacompile 生成的 applet
-# 里没有这个键，而 pkgbuild 判断「这是个 bundle 组件」靠的正是它 —— 缺了就会报
+# 架构用的是 Distribution 那一套名字（x64 → x86_64）
+if [ "$NODE_ARCH" = "x64" ]; then
+    SWIFT_TARGET="x86_64-apple-macos${MIN_MACOS}"
+else
+    SWIFT_TARGET="arm64-apple-macos${MIN_MACOS}"
+fi
+
+# `-disable-autolinking-runtime-compatibility` **不能省**。Swift 驱动在「部署目标 < 13
+# 的 x86_64」上会给每个目标文件塞一条 `-lswiftCompatibility56` / `-lswiftCompatibilityPacks`
+# 自动链接指令，而 CommandLineTools 里这两个静态库只有 arm64 切片，于是 ld 报
+#     Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56
+# 直接失败（这台机器上连 `print("hi")` 都编不过）。那两个库是「Swift 并发 / 参数包」
+# 回退到老系统的备份实现，这个壳两样都不用（没有 async、没有参数包）。
+# 实测关掉之后 arm64 与 x86_64 两个二进制的 `otool -L` 依赖清单一致，都只用
+# /usr/lib/swift 下那几个系统自带的 dylib，所以 macOS 12.0 的最低版本照样成立。
+swiftc -O -swift-version 5 \
+    -target "$SWIFT_TARGET" \
+    -Xfrontend -disable-autolinking-runtime-compatibility \
+    -framework AppKit -framework WebKit \
+    "$HERE/shell/main.swift" \
+    -o "$LAUNCHER_APP/Contents/MacOS/apiloop"
+
+# Info.plist 由脚本写出来。**CFBundleIdentifier 不能变**：pkgbuild 判断「这是个 bundle
+# 组件」靠的正是它，缺了或者换了就会报
 #   error: Path ".../Applications/apiloop.app" is not a valid bundle component
-# 然后直接退出，--component-plist 里那条 BundleIsRelocatable=false 根本轮不到生效。
-plutil -replace CFBundleIdentifier -string com.apiloop.launcher "$LAUNCHER_PLIST"
+# 然后直接退出，--component-plist 里那条 BundleIsRelocatable=false 根本轮不到生效；
+# 覆盖安装时 Installer 也是按它认「这个是同一个 app」。
+log "写壳子的 Info.plist"
+cat > "$LAUNCHER_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.apiloop.launcher</string>
+    <key>CFBundleExecutable</key>
+    <string>apiloop</string>
+    <key>CFBundleName</key>
+    <string>apiloop</string>
+    <key>CFBundleDisplayName</key>
+    <string>apiloop</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${VERSION}</string>
+    <key>CFBundleVersion</key>
+    <string>${VERSION}</string>
+    <key>CFBundleIconFile</key>
+    <string>apiloop</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>${MIN_MACOS}</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- 壳子只连 127.0.0.1，但 ATS 默认会拦明文 http。这条只放开本机网络，
+         不是 NSAllowsArbitraryLoads —— 别的地址照旧走系统浏览器，壳子也连不到。 -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+</dict>
+</plist>
+PLIST
+plutil -lint "$LAUNCHER_PLIST" >/dev/null || die "刚写出来的 Info.plist 不合法"
 
-# 改了 Info.plist，osacompile 那份 ad-hoc 签名就失效了，重新 ad-hoc 签一次
-# （`--sign -` 是免证书的自签名，不需要开发者账号）。
+# 图标：编一个小工具画 1024×1024 的 PNG，再出 iconset 的 10 个尺寸合成 .icns。
+# 图标工具按**本机架构**编（它是打包时跑一次的命令行程序，必须能在本机运行 ——
+# 打 x64 包时也不能编成 x86_64，这台 Apple 芯片的机器跑不了）。
+log "画图标 Resources/apiloop.icns"
+ICON_DIR="$WORK/icon"
+rm -rf "$ICON_DIR"
+mkdir -p "$ICON_DIR/apiloop.iconset"
+swiftc -O -swift-version 5 \
+    -target "$(uname -m)-apple-macos${MIN_MACOS}" \
+    -framework AppKit \
+    "$HERE/shell/make-icon.swift" \
+    -o "$ICON_DIR/make-icon"
+"$ICON_DIR/make-icon" "$ICON_DIR/icon-1024.png"
+for spec in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
+            128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
+            512:icon_512x512 1024:icon_512x512@2x; do
+    pixels="${spec%%:*}"; name="${spec##*:}"
+    sips -z "$pixels" "$pixels" "$ICON_DIR/icon-1024.png" \
+        --out "$ICON_DIR/apiloop.iconset/$name.png" >/dev/null
+done
+iconutil -c icns "$ICON_DIR/apiloop.iconset" -o "$LAUNCHER_APP/Contents/Resources/apiloop.icns"
+
+# ad-hoc 签名。arm64 上没有签名的 Mach-O 根本起不来；`--sign -` 是免证书的自签名，
+# 不需要开发者账号（壳子只连 127.0.0.1，不触发任何 TCC 授权，harden runtime 也不用开）。
 #
-# **动的只是这个几十 KB 的启动器**；安装包里那份官方 node 一个字节都没碰 ——
+# **动的只是这个几百 KB 的壳**；安装包里那份官方 node 一个字节都没碰 ——
 # 下面第 5 步还会拿 sha256 逐字节比对，并核对 TeamIdentifier。
 codesign --force --sign - "$LAUNCHER_APP"
-codesign -v "$LAUNCHER_APP" >/dev/null 2>&1 || echo "  提示：启动器的 ad-hoc 签名校验没过"
+codesign -v "$LAUNCHER_APP" >/dev/null 2>&1 || echo "  提示：壳子的 ad-hoc 签名校验没过"
 
 # 多用户的电脑上每个用户各跑一个网关，所以这些东西要对所有用户可读（目录可进）
 chmod -R a+rX "$ROOT"
@@ -428,8 +517,8 @@ case "$PKGINFO_CONTENT" in
     *) die "component-plist 没生效：PackageInfo 里没有 relocatable=\"false\"" ;;
 esac
 case "$PKGINFO_CONTENT" in
-    *'com.apiloop.launcher'*) echo "  ✓ 启动器被当成 bundle 组件（com.apiloop.launcher）" ;;
-    *) die "启动器没有被识别成 bundle：是不是 CFBundleIdentifier 没补上" ;;
+    *'com.apiloop.launcher'*) echo "  ✓ 壳子被当成 bundle 组件（com.apiloop.launcher）" ;;
+    *) die "壳子没有被识别成 bundle：是不是 Info.plist 里的 CFBundleIdentifier 丢了" ;;
 esac
 
 PREINSTALL_PATH="$(find "$VERIFY/expanded" -type f -path '*/Scripts/preinstall' | head -1)"
@@ -439,15 +528,42 @@ POSTINSTALL_PATH="$(find "$VERIFY/expanded" -type f -path '*/Scripts/postinstall
 echo "  ✓ Scripts/preinstall 与 Scripts/postinstall 都在包里"
 case "$(cat "$POSTINSTALL_PATH")" in
     *'launchctl asuser "$CONSOLE_UID" sudo -u "$CONSOLE_USER" open'*)
-        echo "  ✓ postinstall 用 launchctl asuser 打开启动器（N2）" ;;
+        echo "  ✓ postinstall 用 launchctl asuser 打开壳子（N2）" ;;
     *) die "postinstall 里没有 launchctl asuser（N2 没改到）" ;;
 esac
 
-log "核对启动器 .app（BundleIsRelocatable=false 要能看见）"
+log "核对壳子（架构 / Info.plist / 签名）"
 LAUNCHER_PATH="$(find "$VERIFY/expanded" -type d -name 'apiloop.app' | head -1)"
 [ -n "$LAUNCHER_PATH" ] || die "安装包里找不到 apiloop.app"
 echo "  ✓ $LAUNCHER_PATH"
-file "$LAUNCHER_PATH/Contents/MacOS/applet" | sed 's/^/  /'
+
+SHELL_BIN="$LAUNCHER_PATH/Contents/MacOS/apiloop"
+[ -f "$SHELL_BIN" ] || die "壳子里没有 Contents/MacOS/apiloop"
+file "$SHELL_BIN" | sed 's/^/  /'
+SHELL_ARCHS="$(lipo -archs "$SHELL_BIN")"
+printf '  lipo -archs → %s（期望 %s）\n' "$SHELL_ARCHS" "$PKG_ARCH"
+[ "$SHELL_ARCHS" = "$PKG_ARCH" ] || die "壳子的架构不对：$SHELL_ARCHS"
+
+SHELL_PLIST="$LAUNCHER_PATH/Contents/Info.plist"
+plutil -lint "$SHELL_PLIST" | sed 's/^/  /'
+SHELL_BUNDLE_ID="$(plutil -extract CFBundleIdentifier raw -o - "$SHELL_PLIST")"
+printf '  CFBundleIdentifier = %s\n' "$SHELL_BUNDLE_ID"
+# bundle id 变了，覆盖安装就会当成另一个 app：旧的那份留在 /Applications 里，
+# 用户点开看到的还是老壳子
+[ "$SHELL_BUNDLE_ID" = "com.apiloop.launcher" ] || die "壳子的 bundle id 变了：$SHELL_BUNDLE_ID"
+SHELL_MIN="$(plutil -extract LSMinimumSystemVersion raw -o - "$SHELL_PLIST")"
+[ "$SHELL_MIN" = "$MIN_MACOS" ] || die "壳子的 LSMinimumSystemVersion 不是 ${MIN_MACOS}：$SHELL_MIN"
+SHELL_EXEC="$(plutil -extract CFBundleExecutable raw -o - "$SHELL_PLIST")"
+[ "$SHELL_EXEC" = "apiloop" ] || die "CFBundleExecutable 不是 apiloop：$SHELL_EXEC"
+echo "  ✓ exec / 最低系统版本都对"
+[ -f "$LAUNCHER_PATH/Contents/Resources/apiloop.icns" ] || die "壳子里没有图标"
+echo "  ✓ 图标 apiloop.icns 在"
+
+if codesign -v "$LAUNCHER_PATH" >/dev/null 2>&1; then
+    echo "  ✓ codesign -v 通过（ad-hoc 自签名）"
+else
+    die "壳子的签名校验没过：codesign --force --sign - 那一步没生效"
+fi
 
 log "核对日志路径（N4：plist 里不该再有 StandardOutPath）"
 PLIST_PATH="$(find "$VERIFY/expanded" -type f -name 'com.apiloop.gateway.plist' | head -1)"
@@ -473,7 +589,9 @@ for probe in \
     "*/apiloop/app/node_modules/express/package.json" \
     "*/apiloop/app/node_modules/ws/package.json" \
     "*/LaunchAgents/com.apiloop.gateway.plist" \
-    "*/Applications/apiloop.app/Contents/MacOS/applet"
+    "*/Applications/apiloop.app/Contents/MacOS/apiloop" \
+    "*/Applications/apiloop.app/Contents/Resources/apiloop.icns" \
+    "*/Applications/apiloop.app/Contents/Info.plist"
 do
     found="$(find "$VERIFY/expanded" -path "$probe" | head -1)"
     if [ -n "$found" ]; then
