@@ -586,6 +586,18 @@ function requestBodyText() {
   flex-direction: column;
 }
 
+/*
+ * naive-ui 在页签和内容之间还有一层 .n-tabs-pane-wrapper，自带 overflow: hidden。
+ * 它不占满剩余高度的话会按内容撑开、超出部分被直接剪掉 —— 「事件」表格几十行时
+ * 下面的行看不到也滚不动（用户反馈）。这一层也得是「占满 + 可收缩」的弹性列。
+ */
+.tabs :deep(.n-tabs-pane-wrapper) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .tabs :deep(.n-tab-pane) {
   flex: 1;
   min-height: 0;
