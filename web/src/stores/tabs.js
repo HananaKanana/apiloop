@@ -4,6 +4,7 @@ import * as apisApi from '@/api/apis';
 import * as streamApi from '@/api/stream';
 import * as historyApi from '@/api/history';
 import { createSseParser } from '@/utils/sse';
+import { encodeQueryPart } from '@/utils/query';
 import { byteLength } from '@/utils/bytes';
 import { useWsStore } from '@/stores/ws';
 import { useTreeStore } from '@/stores/tree';
@@ -121,7 +122,7 @@ function withQueryInUrl(url, rows) {
     return row && row.enabled !== false && row.key;
   }).map(function (row) {
     const value = row.value === undefined || row.value === null ? '' : row.value;
-    return encodeURIComponent(row.key) + '=' + encodeURIComponent(value);
+    return encodeQueryPart(row.key) + '=' + encodeQueryPart(value);
   }).join('&');
 
   if (!queryString) return text;
