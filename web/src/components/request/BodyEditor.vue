@@ -196,7 +196,8 @@ async function onFilePicked(event) {
         @update:value="(v) => { body.language = v; }"
       />
       <!-- 美化：和编辑器里的 ⇧⌥F 走同一个函数（CodeEditor 的 format） -->
-      <n-tooltip v-if="mode === 'raw' && body.language === 'json'" trigger="hover">
+      <!-- 语言没设置时下拉框按 JSON 显示，这里也得按 JSON 算，否则下拉框写着 JSON 却没有按钮 -->
+      <n-tooltip v-if="mode === 'raw' && (body.language || 'json') === 'json'" trigger="hover">
         <template #trigger>
           <n-button size="small" quaternary @click="formatBody">美化</n-button>
         </template>
