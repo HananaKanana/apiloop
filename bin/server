@@ -13,12 +13,13 @@ var hideBin = require('yargs/helpers').hideBin;
 var appInfo = require('../lib/app-info');
 var pkg = require('../package.json');
 
-var VALID_COMMANDS = ['start', 'init', 'open', 'web', 'user'];
+var VALID_COMMANDS = ['start', 'init', 'open', 'web', 'user', 'gateway'];
 
 var COMMANDS = {
     open: 'Start a web server and open html file in your browser, if any',
     start: 'Start a web server',
     web: 'Start a web server with the visual mock console at /index.html',
+    gateway: 'Start the local gateway: the console runs on this machine, requests go out from here',
     init: 'Create the sample router.js and seed the sample project',
     user: 'Manage users: add / list / reset-password'
 };
@@ -65,6 +66,10 @@ var EXAMPLES = {
         ['add <username> --password hello123', 'create a user with a given password'],
         ['list', 'list users'],
         ['reset-password <username>', 'reset a user password']
+    ],
+    gateway: [
+        ['--cloud=http://localhost:8080', 'cloud address; overrides and rewrites <data dir>/gateway.json'],
+        ['--port=47321', 'listen port on 127.0.0.1, default 47321 (falls back to 47322-47329 when busy)']
     ]
 };
 

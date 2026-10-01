@@ -9,6 +9,15 @@
 
 export const API_PREFIX = '/__admin/api';
 
+/**
+ * 每个请求都带上的自定义头。
+ *
+ * 本地网关靠它把「别的网站借本机网关读数据 / 发请求」挡在外面：别的网站要带自定义头
+ * 就得先过跨域预检，而网关的预检（OPTIONS）是一刀切 403 的。直接访问云端时云端会忽略它。
+ * 见 `lib/gateway/index.js` 的 `createGuard`。
+ */
+export const CUSTOM_HEADERS = { 'X-Apiloop': '1' };
+
 /** 当前 hash 形式的路径，用来在登录后跳回来。不是 #/ 开头就退回首页 */
 export function currentHashPath() {
   const hash = window.location.hash;
@@ -65,7 +74,7 @@ export function request(method, path, body, options) {
   const opts = options || {};
   const init = {
     method: method,
-    headers: Object.assign({}, opts.headers),
+    headers: Object.assign({}, CUSTOM_HEADERS, opts.headers),
     credentials: 'same-origin'
   };
 
@@ -131,7 +140,11 @@ export function del(path) {
  * 这里直接拿原始响应，交给调用方生成 Blob。
  */
 export async function requestBlob(method, path) {
-  const res = await fetch(API_PREFIX + path, { method: method, credentials: 'same-origin' });
+  const res = await fetch(API_PREFIX + path, {
+    method: method,
+    headers: Object.assign({}, CUSTOM_HEADERS),
+    credentials: 'same-origin'
+  });
   if (res.status === 401) {
     redirectToLogin();
     return pendingForever();
