@@ -230,8 +230,61 @@ function scanPosix(text) {
   return words;
 }
 
-/** Windows cmd 的切词：`^` 转义一切，`"` 包字符串，行尾 `^` 续行 */
-function scanCmd(text) {
+/**
+ * cmd 格式是**两层**，必须分开处理：
+ *
+ * 1. cmd 自己先处理 `^` 转义（`^"` → `"`、`^&` → `&`、`^{` → `{`）和行尾 `^` 续行；
+ * 2. 程序再按 Windows 的规则拆参数：`"` 是字符串的开始和结束，`\"` 是字面上的引号。
+ *
+ * 合成一层做的话，`^"` 会被当成字面上的引号字符，引号就永远起不到「包字符串」的作用，
+ * 地址会变成 `http://"https//example.com/...` 这样（2026-10-01 审阅 B3）。
+ */
+
+/** 第一层：整段去掉 cmd 的 `^` 转义和行尾续行 */
+function unescapeCmd(text) {
+  let out = '';
+  let i = 0;
+
+  while (i < text.length) {
+    const ch = text[i];
+
+    if (ch !== '^') {
+      out += ch;
+      i += 1;
+      continue;
+    }
+
+    const next = text[i + 1];
+    if (next === undefined) {
+      // 结尾孤零零一个 ^，丢掉
+      i += 1;
+      continue;
+    }
+    if (next === '\n') {
+      i += 2;
+      continue;
+    }
+    if (next === '\r' && text[i + 2] === '\n') {
+      i += 3;
+      continue;
+    }
+
+    out += next;
+    i += 2;
+  }
+
+  return out;
+}
+
+/**
+ * 第二层：Windows 的拆参数规则（和 CommandLineToArgvW 一致）。
+ *
+ * 反斜杠只对**紧跟其后的引号**有意义：
+ * - 2n 个反斜杠 + `"` → n 个反斜杠，引号起作用（开关字符串）；
+ * - 2n+1 个反斜杠 + `"` → n 个反斜杠 + 一个字面上的引号。
+ * 后面不是引号时，反斜杠原样保留（Windows 上路径里的 `\` 不能吃掉）。
+ */
+function scanWindows(text) {
   const words = [];
   let current = null;
   let quoted = false;
@@ -255,38 +308,24 @@ function scanCmd(text) {
 
     if (current === null) current = '';
 
-    if (ch === '^' && text[i + 1] === '\n') {
-      i += 2;
-      continue;
-    }
-    if (ch === '^' && text[i + 1] === '\r' && text[i + 2] === '\n') {
-      i += 3;
-      continue;
-    }
+    if (ch === '\\') {
+      let count = 0;
+      while (text[i + count] === '\\') count += 1;
 
-    // ^ 转义一切：^" 就是引号本身，^{ 就是花括号
-    if (ch === '^' && text[i + 1] !== undefined) {
-      current += text[i + 1];
-      i += 2;
+      if (text[i + count] === '"') {
+        current += '\\'.repeat(Math.floor(count / 2));
+        if (count % 2 === 1) current += '"';
+        else quoted = !quoted;
+        i += count + 1;
+      } else {
+        current += '\\'.repeat(count);
+        i += count;
+      }
       continue;
     }
 
     if (ch === '"') {
-      if (!quoted) {
-        quoted = true;
-        i += 1;
-        continue;
-      }
-      // 收尾的引号：后面得是空白、续行符或者到头。
-      // Chrome 的 cmd 格式里，JSON 请求体内部的引号是写成 ^" 的，
-      // 靠这一条就不会把里面那个裸引号当成收尾，空格也就不会被切开
-      const next = text[i + 1];
-      if (next === undefined || /\s/.test(next) || next === '^') {
-        quoted = false;
-        i += 1;
-        continue;
-      }
-      current += '"';
+      quoted = !quoted;
       i += 1;
       continue;
     }
@@ -371,7 +410,9 @@ export function parseCurl(text) {
     throw new Error('这段内容不是 cURL 命令（应该以 curl 开头）');
   }
 
-  const words = isCmdStyle(source) ? scanCmd(source) : scanPosix(source);
+  const words = isCmdStyle(source)
+    ? scanWindows(unescapeCmd(source))
+    : scanPosix(source);
   if (words.length < 2) throw new Error('这段 cURL 里没有地址');
 
   const warnings = [];
@@ -566,8 +607,10 @@ export function parseCurl(text) {
     throw new Error('地址不合法：' + urlCandidates[0]);
   }
 
-  // 协议、主机、端口都要留着；路径原样，**不把数字段改成 :id**
-  const url = parsed.origin + parsed.pathname;
+  // 协议、主机、端口都要留着；路径原样，**不把数字段改成 :id**。
+  // 查询串也要带上（审阅 B4）：这个页面的地址栏和查询参数表是双向同步的，
+  // 地址里不带 ?a=1 的话，用户在地址栏改一个字就会把所有查询行清掉。
+  const url = parsed.origin + parsed.pathname + parsed.search;
 
   const query = [];
   parsed.searchParams.forEach(function (value, key) {
@@ -581,7 +624,9 @@ export function parseCurl(text) {
 
   let finalMethod = method;
   if (!finalMethod) {
+    // -G 把数据变成查询参数，请求本身是 GET（有 -I 时是 HEAD）—— 审阅 B2
     if (headOnly) finalMethod = 'HEAD';
+    else if (asQuery) finalMethod = 'GET';
     else if (hasForm || hasData) finalMethod = 'POST';
     else finalMethod = 'GET';
   }

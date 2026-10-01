@@ -345,7 +345,7 @@ async function runPreview() {
           v-if="canFormat && !readonly"
           size="tiny"
           quaternary
-          title="⇧⌥F。带 {{变量}} 也能美化，变量原样保留；数字会按标准格式输出（1.0 会变成 1）"
+          title="⇧⌥F。带 {{变量}} 也能美化；只调整空白，数字和字符串都一字不改"
           @click="formatBody"
         >
           美化

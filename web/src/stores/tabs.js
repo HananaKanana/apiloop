@@ -57,7 +57,13 @@ export function emptyLive() {
     receivedBytes: 0,
     sseEvents: null,
     sseDropped: 0,
-    cancelled: false
+    cancelled: false,
+    /**
+     * 发送**没能开始**时服务端给的错误码（比如直接打开云端时的 409
+     * `SERVER_SEND_DISABLED`）。这种错发生在 NDJSON 开始之前，进不了 `result.error`，
+     * 只存在 `tab.sendError` 的文案里，界面就没法按码区分（审阅 B1）。
+     */
+    sendErrorCode: ''
   };
 }
 
@@ -97,14 +103,40 @@ export function folderSpecFrom(folder) {
   };
 }
 
+/**
+ * 地址里没有 `?`、但查询参数表里有启用的行时，把它们拼进地址。
+ *
+ * 这个页面的地址栏和查询参数表是**双向同步**的（见 RequestTab 的 syncFromUrl /
+ * onQueryChange）：用户在地址栏里改任何一个字，查询表就按地址重新解析。
+ * 而 HAR / Postman 导入的老数据是「地址不带查询串、只有表格」——
+ * 打开时不拼一次的话，用户在地址栏里一编辑，那些参数就全没了（审阅 B4）。
+ *
+ * 只影响打开时的显示，不改库里的数据；编码规则和 RequestTab.onQueryChange 一致。
+ */
+function withQueryInUrl(url, rows) {
+  const text = String(url || '');
+  if (text.indexOf('?') !== -1) return text;
+
+  const queryString = (rows || []).filter(function (row) {
+    return row && row.enabled !== false && row.key;
+  }).map(function (row) {
+    const value = row.value === undefined || row.value === null ? '' : row.value;
+    return encodeURIComponent(row.key) + '=' + encodeURIComponent(value);
+  }).join('&');
+
+  if (!queryString) return text;
+  return text.split('#')[0] + '?' + queryString;
+}
+
 /** 服务端返回的 Api 里，和 RequestSpec 对应的那部分 */
 export function specFromApi(api) {
+  const query = (api.params && api.params.query) || [];
   return {
     method: api.method || 'GET',
-    url: api.url || '',
+    url: withQueryInUrl(api.url || '', query),
     params: {
       path: (api.params && api.params.path) || [],
-      query: (api.params && api.params.query) || [],
+      query: query,
       headers: (api.params && api.params.headers) || []
     },
     body: api.body || { mode: 'none' },
@@ -676,6 +708,8 @@ export const useTabsStore = defineStore('tabs', function () {
         tab.cancelled = true;
       } else {
         tab.sendError = err.message;
+        // stream.js 抛的是 toError 造出来的 Error，status / data 都在上面
+        tab.sendErrorCode = (err.data && err.data.code) || '';
       }
     } finally {
       tab.sending = false;
