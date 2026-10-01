@@ -250,3 +250,18 @@ slug 拼错时最需要看到的）、状态码与耗时。请求头里的 `Auth
 | `POST /preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
 | `POST /import/curl` | 解析 cURL |
 | `POST /import/openapi` | 解析 OpenAPI / Swagger |
+
+## 安装包下载（G3）
+
+安装包放在 **`<数据目录>/downloads/`**（Docker 下就是宿主机的 `./data/downloads/`，
+不进镜像）。文件名必须是 `apiloop-gateway-<三段版本号>-<arm64|x64>.pkg`，别的文件一律
+不列、也不能下；同一架构有多个版本时只列最新的。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /__admin/api/downloads` | 列出可下载的安装包（**要登录**）。`{ ok, version, files: [{ name, platform, arch, version, size }] }`，`version` 是服务端自己的版本；目录不存在时 `files` 是空数组 |
+| `GET /__admin/downloads/:name` | 下载（**不需要登录**，链接可以直接发给同事）。`Content-Disposition: attachment`；文件名不在列表里就 404，文案统一，不区分「不存在」与「不允许」 |
+
+> 下载挂在 `/__admin/downloads`（不是 `/__admin/api`）下面，因为 `/__admin/api/*`
+> 整体在 `requireLogin` 之后。网关**不转发**这条路径，在网关页面上打开时用的是云端的
+> 绝对地址。

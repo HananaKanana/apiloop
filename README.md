@@ -757,12 +757,58 @@ cookie 是 `HttpOnly` + `SameSite=Lax`；连续 5 次登录失败锁定该用户
 | --- | --- |
 | `data/data.db`（以及 `-wal`、`-shm` 两个辅助文件） | SQLite 数据库：用户、项目、接口、示例、环境、Cookie、历史 |
 | `data/files/` | 管理台上传的文件，发送 formdata 或 binary 请求时用 |
+| `data/downloads/` | 给同事下载的 Mac 客户端安装包（.pkg），见下面「放安装包」 |
 
 - 删除容器、重新构建镜像都不会丢数据；升级镜像后，启动时会自动迁移数据库结构。
 - **备份**：先 `./deploy.sh stop`，再打包 `data/` 目录，最后重新启动。不要在服务运行时直接复制 `data.db`，因为 WAL 模式下还有一部分数据暂存在 `-wal` 文件里，只复制 `data.db` 会不完整。
 - **目录权限**：容器以 uid 1000 运行。`./data` 必须能被 uid 1000 写入：
   - 如果启动前目录不存在，Docker 会以 root 身份创建它，容器就写不进去了。`deploy.sh` 会先执行 `mkdir -p data` 避免这个问题。
   - 如果宿主机用户的 uid 不是 1000，把 `docker-compose.yml` 里 `user:` 那一行的注释去掉，改成 `id -u`:`id -g` 的结果。
+
+### 放安装包（Mac 客户端下载）
+
+网页版发的请求从服务器出去，访问不到你电脑所在的网段；要在自己电脑上发请求，得装一个
+**本地网关**（`apiloop` 的 Mac 客户端，见 `docs/design/2026-10-01-local-agent.md`）。
+这个安装包由服务端直接发出去，不用另外搭文件服务。
+
+**怎么放：** 把打好的 `.pkg` 丢进 **`<数据目录>/downloads/`**。Docker 部署时数据目录挂的
+就是宿主机的 `./data`，所以：
+
+```bash
+# 打两个包（Apple 芯片 + Intel）
+bash agent-installer/mac/build-all.sh
+
+# 放到服务端（Docker 部署）
+mkdir -p data/downloads
+cp agent-installer/dist/apiloop-gateway-*.pkg data/downloads/
+```
+
+放完**不用重启、不用重建镜像** —— 列表是每次请求现读目录的。
+
+**文件名必须是这样**，别的名字（包括别的 pkg）既不列出来、也不允许下载：
+
+```
+apiloop-gateway-<版本>-<架构>.pkg      例：apiloop-gateway-2.0.0-arm64.pkg
+```
+
+版本号必须是三段数字（`2.0.0` 可以，`2.0` 不行），架构只能是 `arm64` 或 `x64`。
+**同一个架构放了多个版本时只显示最新的那一个**，旧的可以留着不管。
+
+**怎么下载：**
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /__admin/api/downloads` | 列出可下载的包（**要登录**）。返回 `{ ok, version, files: [{ name, platform, arch, version, size }] }`，`version` 是服务端自己的版本 |
+| `GET /__admin/downloads/<文件名>` | 直接下载（**不需要登录** —— 链接可以直接发给同事） |
+
+在管理台上点右下角的状态点，选「安装本机 apiloop」就能看到下载入口（在网关上打开时，
+它还会在网关版本和服务端版本不一致时提示有新版本）。
+
+- 目录不存在、或者里面没有符合命名的文件时，列表返回空数组，不报错。
+- 下载接口只认「列表里有的那一个」：文件名里带 `../`、带编码过的斜杠、或者不在列表里的，
+  一律 404。
+- **安装包没有苹果签名**（我们不做开发者签名），用户第一次打开时系统会拦一下：到
+  「系统设置 → 隐私与安全性」里点「仍要打开」。下载页面里写了这一步。
 
 ### 沿用老的 server-mock 项目
 
