@@ -4,14 +4,29 @@ import * as projectsApi from '@/api/projects';
 
 const STORAGE_KEY = 'apiloop.project';
 
+function readSavedId() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) || '';
+  } catch (err) {
+    return '';
+  }
+}
+
 /**
  * 项目列表 + 当前项目。
  * 当前项目 id 存在 localStorage 里；存的那个项目可能已经被删掉了，所以要兜一下，
  * 退回列表里的第一个，不能白屏。
+ *
+ * **列表加载完之前 `currentId` 是空的**，记住的那个 id 只在 `ensureCurrent` 里用。
+ * 目录树、环境、Mock 日志都 watch 着 `currentId`（还带 immediate），如果一开始就把
+ * 记住的 id 放进去，它们会拿一个可能已经不存在的项目去请求 —— 网关上从云端切到本机库时，
+ * 记住的是云端的项目，本机库里没有，页面一打开就弹「项目不存在」（2026-10-01 用户遇到）。
  */
 export const useProjectStore = defineStore('project', function () {
   const projects = ref([]);
-  const currentId = ref(localStorage.getItem(STORAGE_KEY) || '');
+  /** 上次选中的项目。只在列表回来以后拿来挑当前项目，见文件头 */
+  const savedId = readSavedId();
+  const currentId = ref('');
   const loading = ref(false);
 
   const current = computed(function () {
@@ -50,8 +65,9 @@ export const useProjectStore = defineStore('project', function () {
       setCurrent('');
       return;
     }
-    const exists = projects.value.some(function (item) { return item.id === currentId.value; });
-    if (!exists) setCurrent(projects.value[0].id);
+    const wanted = currentId.value || savedId;
+    const exists = projects.value.some(function (item) { return item.id === wanted; });
+    setCurrent(exists ? wanted : projects.value[0].id);
   }
 
   async function load() {
