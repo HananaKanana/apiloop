@@ -1,42 +1,31 @@
 <script setup>
 import { computed, ref } from 'vue';
-import {
-  NButton,
-  NDropdown,
-  NForm,
-  NFormItem,
-  NInput,
-  NModal,
-  NSpace,
-  NTooltip,
-  useMessage
-} from 'naive-ui';
-import * as gatewayApi from '@/api/gateway';
+import { useRouter } from 'vue-router';
+import { NDropdown, NTooltip } from 'naive-ui';
 import { useGatewayStore } from '@/stores/gateway';
 import InstallDialog from './InstallDialog.vue';
 
 /**
  * 顶栏右侧的连接状态：一个小圆点 + 一句话。
  *
- * 三种形态：
- * - 网关上、云端连得上 → 绿点「本机发送」；
- * - 网关上、云端连不上 → 红点「云端连不上」；
+ * 四种形态：
+ * - 网关上、**本机模式** → 灰点「仅本机」，点了去登录页（L1）；
+ * - 网关上、云端模式、云端连得上 → 绿点「本机发送」；
+ * - 网关上、云端模式、云端连不上 → 红点「云端连不上」；
  * - 直接打开云端 → 灰点「云端发送」。
  *
- * 点它的行为分两种：
- * - 在网关上 → 下拉菜单（「安装新版本…」有新版时才出现，加原来的「云端地址…」）；
- * - 直接打开云端 → 没有云端地址可改，直接开「安装本机 apiloop」对话框。
+ * 点它的行为：
+ * - 本机模式 → 去登录页（想用云端的项目就去登录）；
+ * - 网关上、有新版本 → 下拉菜单「安装新版本…」；
+ * - 直接打开云端 → 直接开「安装本机 apiloop」对话框。
  *
- * 直接打开云端、而且云端不发送请求（`serverSend` 为 false）时整块不显示 ——
- * 那种情况下发送按钮已经变灰并给了说明，这里再说一遍是噪音。
+ * L1 起**不再有「云端地址…」**：地址在打包时写死，界面上不给改
+ * （换地址 = 发一个新版本的安装包）。
  */
+const router = useRouter();
 const gateway = useGatewayStore();
-const message = useMessage();
 
-const showDialog = ref(false);
 const showInstall = ref(false);
-const cloudUrlInput = ref('');
-const saving = ref(false);
 
 /** 网关版本和云端不一致 —— 顶栏挂个「有新版本」，点开就能下载 */
 const hasNewVersion = computed(function () {
@@ -50,6 +39,14 @@ const versionHint = computed(function () {
 });
 
 const indicator = computed(function () {
+  if (gateway.isLocal) {
+    return {
+      color: '#6b7280',
+      text: '仅本机',
+      hint: '数据只保存在这台电脑上。登录后可以使用云端的项目'
+    };
+  }
+
   if (gateway.isGateway) {
     const reachable = Boolean(gateway.status && gateway.status.cloudReachable);
     if (reachable) {
@@ -62,9 +59,7 @@ const indicator = computed(function () {
     return {
       color: '#eb2013',
       text: '云端连不上',
-      hint: gateway.cloudUrl
-        ? '连不上 ' + gateway.cloudUrl + '。点这里改云端地址'
-        : '还没设置云端地址。点这里设置'
+      hint: gateway.cloudUrl ? '连不上 ' + gateway.cloudUrl : '还没设置云端地址'
     };
   }
 
@@ -75,42 +70,31 @@ const indicator = computed(function () {
   };
 });
 
-/** 网关上才有菜单；直接打开云端时下拉是禁用的，点击直接开安装对话框 */
+/** 本机模式下没有菜单（没有云端地址可改），点一下直接去登录页 */
+const menuEnabled = computed(function () {
+  return gateway.isGateway && !gateway.isLocal && hasNewVersion.value;
+});
+
 const menuOptions = computed(function () {
-  const list = [];
-  if (hasNewVersion.value) list.push({ label: '安装新版本…', key: 'install' });
-  list.push({ label: '云端地址…', key: 'cloud-url' });
-  return list;
+  return hasNewVersion.value ? [{ label: '安装新版本…', key: 'install' }] : [];
+});
+
+/** 光标要不要变成手型：点了有事发生才变 */
+const clickable = computed(function () {
+  return gateway.isLocal || !gateway.isGateway || hasNewVersion.value;
 });
 
 function onMenuSelect(key) {
-  if (key === 'install') {
-    showInstall.value = true;
-    return;
-  }
-  if (key === 'cloud-url') openDialog();
+  if (key === 'install') showInstall.value = true;
 }
 
 function onIndicatorClick() {
+  if (gateway.isLocal) {
+    router.push('/login');
+    return;
+  }
   // 网关上的点击归下拉菜单管；直接打开云端时没有菜单，点了就开安装对话框
   if (!gateway.isGateway) showInstall.value = true;
-}
-
-function openDialog() {
-  cloudUrlInput.value = gateway.cloudUrl;
-  showDialog.value = true;
-}
-
-async function save() {
-  saving.value = true;
-  try {
-    await gatewayApi.setup(cloudUrlInput.value.trim());
-    // 云端地址一改，网关后面的转发目标就全变了，整页刷新最干净
-    window.location.reload();
-  } catch (err) {
-    message.error(err.message);
-    saving.value = false;
-  }
 }
 </script>
 
@@ -119,12 +103,12 @@ async function save() {
     v-if="gateway.showIndicator"
     :options="menuOptions"
     trigger="click"
-    :disabled="!gateway.isGateway"
+    :disabled="!menuEnabled"
     @select="onMenuSelect"
   >
     <n-tooltip trigger="hover">
       <template #trigger>
-        <button class="conn clickable" type="button" @click="onIndicatorClick">
+        <button class="conn" :class="{ clickable: clickable }" type="button" @click="onIndicatorClick">
           <span class="dot" :style="{ background: indicator.color }" />
           <span class="text">{{ indicator.text }}</span>
           <span v-if="hasNewVersion" class="new-version">有新版本</span>
@@ -141,33 +125,6 @@ async function save() {
     :is-gateway="gateway.isGateway"
     :cloud-url="gateway.cloudUrl"
   />
-
-  <n-modal
-    v-model:show="showDialog"
-    preset="card"
-    title="云端地址"
-    style="width: 460px; max-width: 92vw"
-  >
-    <n-form>
-      <n-form-item label="云端地址" :show-feedback="false">
-        <n-input
-          v-model:value="cloudUrlInput"
-          placeholder="https://apiloop.example.com"
-          @keyup.enter="save"
-        />
-      </n-form-item>
-    </n-form>
-    <p class="hint">
-      改完之后页面会刷新。请求仍然从这台电脑发出，只是数据存到新的云端。
-    </p>
-
-    <template #footer>
-      <n-space justify="end">
-        <n-button @click="showDialog = false">取消</n-button>
-        <n-button type="primary" :loading="saving" @click="save">保存</n-button>
-      </n-space>
-    </template>
-  </n-modal>
 </template>
 
 <style scoped>
@@ -214,12 +171,5 @@ async function save() {
   line-height: 16px;
   color: #a06a00;
   background: rgba(240, 160, 32, 0.18);
-}
-
-.hint {
-  margin: 10px 0 0;
-  font-size: 12px;
-  opacity: 0.6;
-  line-height: 1.6;
 }
 </style>

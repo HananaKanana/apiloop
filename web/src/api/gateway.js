@@ -3,11 +3,11 @@ import { CUSTOM_HEADERS } from './client';
 /**
  * 网关自己的地址。
  *
- * `/__gateway/*` **不在 `/__admin/api` 下面**，所以不能用 `client.js` 里那个带前缀的
- * `request`。自定义头 `X-Apiloop: 1` 还是要带 —— 网关的安全闸门对 `/__gateway/*` 的
- * 非 GET 请求同样要求它（`lib/gateway/index.js` 的 createGuard 第 4 条）。
+ * L1 起前缀是 **`/__apiloop`**（原来是 `/__gateway`）。它**不在 `/__admin/api` 下面**，
+ * 所以不能用 `client.js` 里那个带前缀的 `request`。自定义头 `X-Apiloop: 1` 还是要带 ——
+ * 网关的安全闸门对 `/__apiloop/*` 的非 GET 请求同样要求它（`lib/gateway/index.js` 的 createGuard）。
  */
-const GATEWAY_PREFIX = '/__gateway';
+const GATEWAY_PREFIX = '/__apiloop';
 
 async function requestGateway(method, path, body) {
   const init = {
@@ -45,7 +45,9 @@ async function requestGateway(method, path, body) {
  * 所以判断要两道：先看状态码，再看回来的到底是不是一个带 `version` 的 JSON ——
  * 只看状态码会被那个 200 的 HTML 骗过去。
  *
- * @returns {Promise<{isGateway: boolean, version?: string, cloudUrl?: string, cloudReachable?: boolean}>}
+ * @returns {Promise<{isGateway: boolean, version?: string, cloudUrl?: string,
+ *                    cloudReachable?: boolean, mode?: string}>}
+ *          `mode` 取 `'local'` 或 `'cloud'`，网关没给时当 `'cloud'`
  */
 export async function getStatus() {
   let res;
@@ -78,11 +80,18 @@ export async function getStatus() {
     isGateway: true,
     version: data.version,
     cloudUrl: data.cloudUrl || '',
-    cloudReachable: Boolean(data.cloudReachable)
+    cloudReachable: Boolean(data.cloudReachable),
+    mode: data.mode === 'local' ? 'local' : 'cloud'
   };
 }
 
-/** 改云端地址。成功后网关那边会自己重载配置，页面需要刷新一次 */
-export function setup(cloudUrl) {
-  return requestGateway('POST', '/setup', { cloudUrl: cloudUrl });
+/**
+ * 进入本机模式（L1）：网关打开本机空间、发一个本机用户的会话 Cookie，
+ * 并把 `mode` 记成 `'local'`。
+ *
+ * 返回之后**要整页刷新** —— 所有 store 里现在装的还是云端（或本机）的数据，
+ * 只有重新加载才会按新的模式取数。
+ */
+export function enterLocal() {
+  return requestGateway('POST', '/local/enter');
 }

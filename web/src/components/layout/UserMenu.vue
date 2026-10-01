@@ -14,12 +14,14 @@ import {
 import { changePassword } from '@/api/auth';
 import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
+import { useGatewayStore } from '@/stores/gateway';
 
 const emit = defineEmits(['about']);
 
 const router = useRouter();
 const session = useSessionStore();
 const tabs = useTabsStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 
 const showPassword = ref(false);
@@ -33,6 +35,15 @@ const avatarText = computed(function () {
 });
 
 const options = computed(function () {
+  // 本机模式下没有「登录」这回事：本机用户是自动进去的，
+  // 所以改密码、用户管理、退出登录都没有意义，只留「登录以同步到云端」和「关于」。
+  if (gateway.isLocal) {
+    return [
+      { label: '登录以同步到云端', key: 'login' },
+      { label: '关于', key: 'about' }
+    ];
+  }
+
   const items = [
     { label: '修改密码', key: 'password' },
     { label: '关于', key: 'about' }
@@ -72,6 +83,7 @@ async function submitPassword() {
 }
 
 async function onSelect(key) {
+  if (key === 'login') return router.push('/login');
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
   if (key === 'about') return emit('about');
