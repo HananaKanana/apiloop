@@ -21,3 +21,7 @@ workspace/
 desktop/node_modules/
 desktop/app/
 desktop/dist/
+
+# 本地网关（G0）的安装包：中间产物与打好的 .pkg 都不入库
+agent-installer/.work/
+agent-installer/dist/

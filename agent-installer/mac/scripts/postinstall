@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# apiloop 安装包的 postinstall。**以 root 身份运行。**
+#
+# 装完之后要立刻做三件事（计划里的四步）：
+#   1. 找到当前登录的用户（安装包是系统级的，但服务是用户级的 LaunchAgent）；
+#   2. 覆盖安装的情况：先把旧实例停掉，否则 bootstrap 会返回 EEXIST；
+#   3. 用 launchctl bootstrap 把这个用户的网关拉起来；
+#   4. 以这个用户的身份打开 /Applications/apiloop.app。
+#
+# 这个脚本**永远 exit 0**：文件都已经装好了，服务没起来不该让整个安装报失败。
+# 出问题时把原因写进 /tmp/apiloop-install.log，用户能在终端里看到。
+
+set -u
+
+LA_PLIST="/Library/LaunchAgents/com.apiloop.gateway.plist"
+LAUNCHER_APP="/Applications/apiloop.app"
+LOG="/tmp/apiloop-install.log"
+
+log() {
+    echo "[apiloop] $*" | tee -a "$LOG" >&2
+}
+
+: > "$LOG"
+
+CONSOLE_USER=$(stat -f %Su /dev/console)
+log "登录用户：$CONSOLE_USER"
+
+case "$CONSOLE_USER" in
+    ""|root|loginwindow)
+        log "没有检测到登录用户。LaunchAgent 会在下次登录时自动启动，安装到此为止。"
+        exit 0
+        ;;
+esac
+
+CONSOLE_UID=$(id -u "$CONSOLE_USER" 2>/dev/null || echo "")
+if [ -z "$CONSOLE_UID" ]; then
+    log "取不到用户 $CONSOLE_USER 的 uid，跳过启动。"
+    exit 0
+fi
+
+HOME_DIR=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+if [ -z "$HOME_DIR" ]; then
+    HOME_DIR="/Users/$CONSOLE_USER"
+fi
+
+# 覆盖安装：先 bootout。第一次安装时这一句必然失败（服务不存在），忽略即可。
+log "停掉可能存在的旧实例（覆盖安装）"
+launchctl bootout "gui/$CONSOLE_UID/com.apiloop.gateway" >>"$LOG" 2>&1 || true
+
+log "启动网关"
+launchctl bootstrap "gui/$CONSOLE_UID" "$LA_PLIST" >>"$LOG" 2>&1 || \
+    log "bootstrap 失败，细节见 $LOG"
+
+launchctl enable "gui/$CONSOLE_UID/com.apiloop.gateway" >>"$LOG" 2>&1 || true
+
+# 等它把端口文件写出来再开浏览器，否则启动器只能退回默认端口
+PORT_FILE="$HOME_DIR/.apiloop/gateway.port"
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -f "$PORT_FILE" ] && break
+    sleep 0.5
+done
+log "端口文件：$PORT_FILE → $(cat "$PORT_FILE" 2>/dev/null || echo '（还没写出来）')"
+
+if [ -d "$LAUNCHER_APP" ]; then
+    log "以 $CONSOLE_USER 的身份打开 $LAUNCHER_APP"
+    sudo -u "$CONSOLE_USER" open "$LAUNCHER_APP" >>"$LOG" 2>&1 || \
+        log "打开启动器失败，用户可以自己从「应用程序」里点 apiloop"
+fi
+
+log "完成"
+exit 0
