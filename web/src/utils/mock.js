@@ -1,3 +1,18 @@
+import { useGatewayStore } from '@/stores/gateway';
+
+/**
+ * 内置「Mock」环境的保留 id。
+ *
+ * 它**不存库**：mock 地址要跟着云端地址走（以后上外网地址会变），存成普通环境就会过期，
+ * 也不该被人改掉、删掉，更不该参与同步。所以页面选中它时传这个保留 id，
+ * 外加算好的 `mockBase`，服务端临时拼一个只有 `host` 一个变量的环境
+ * （见 `lib/api/mock-env.js`）。
+ */
+export const MOCK_ENV_ID = 'mock';
+
+/** 内置 Mock 环境里那个变量的名字，和服务端 mock-env.js 的 MOCK_VARIABLE 一致 */
+export const MOCK_VARIABLE = 'host';
+
 /**
  * 项目的 mock 地址前缀。
  *
@@ -13,4 +28,33 @@
 export function mockPrefix(project) {
   if (!project || project.isRoot) return '';
   return '/mock-' + (project.id || '');
+}
+
+/**
+ * 这个项目的 mock 地址（不含具体路径），用作内置 Mock 环境里 `host` 变量的值。
+ *
+ * 在**网关上要用云端地址** —— mock 服务跑在云端，页面上如果给本机地址，请求会打回自己。
+ * 直接打开云端时就是当前 origin。末尾的 `/` 去掉（服务端也会再去一次）。
+ *
+ * @param {{isRoot?: boolean, id?: string}|null} project
+ * @returns {string} 例如 `https://cloud.example.com/mock-p_xxx`；根项目就是云端地址本身
+ */
+export function mockBaseUrl(project) {
+  const gateway = useGatewayStore();
+  const base = gateway.isGateway && gateway.cloudUrl ? gateway.cloudUrl : window.location.origin;
+  return String(base).replace(/\/+$/, '') + mockPrefix(project);
+}
+
+/**
+ * 发送请求时要额外带上的 mock 地址：**选中内置 Mock 环境才带**。
+ *
+ * 服务端不存这个环境，地址得由页面给它（只有页面知道云端对外的地址）。
+ * `/send` 和 WebSocket 建会话都要用，放这里免得两处各写一遍、写岔。
+ *
+ * @param {string} environmentId 这次请求选的环境
+ * @param {{isRoot?: boolean, id?: string}|null} project
+ * @returns {string|undefined}
+ */
+export function mockBaseFor(environmentId, project) {
+  return environmentId === MOCK_ENV_ID ? mockBaseUrl(project) : undefined;
 }

@@ -215,6 +215,9 @@ export const useWsStore = defineStore('ws', function () {
       data = await wsApi.createSession(payload.projectId, {
         spec: payload.spec,
         environmentId: payload.environmentId || undefined,
+        // 选中内置 Mock 环境时额外带上 mock 地址：服务端不存这个环境，
+        // 地址只能由页面给它（见 utils/mock.js）。协议换 ws 由服务端做
+        mockBase: payload.mockBase || undefined,
         options: payload.options
       });
     } catch (err) {
