@@ -41,9 +41,19 @@ export const useTreeStore = defineStore('tree', function () {
   function apply(data) {
     folders.value = data.folders || [];
     apis.value = data.apis || [];
+
+    // 选中的目录不在这棵树里了（切了项目，或者目录被删了）就清掉。
+    // 不清的话，导入 cURL / 新建目录会带着上一个项目的目录 id，云端报「目录不存在或不属于这个项目」
+    if (selectedFolderId.value && !folders.value.some(function (folder) {
+      return folder.id === selectedFolderId.value;
+    })) {
+      selectedFolderId.value = null;
+    }
   }
 
   async function load(pid) {
+    // 换了项目：上一个项目里选中的目录立刻作废，别等新树加载完（那段时间里点导入也会带错）
+    if ((pid || '') !== projectId.value) selectedFolderId.value = null;
     projectId.value = pid || '';
     if (!pid) {
       folders.value = [];
