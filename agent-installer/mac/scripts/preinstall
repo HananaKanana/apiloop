@@ -30,13 +30,17 @@ if [ ! -e "$LAUNCHER_APP" ]; then
     exit 0
 fi
 
-# 旧版启动器可能正开着（它是 osacompile 出来的 applet，跑完会自己退出，
-# 但双击之后那几秒里还在）。按可执行文件路径退掉它 —— **不用 AppleScript**：
+# 可能正开着，两种可执行文件都退掉：
+#   - `applet`：G0 那版用 osacompile 做的启动器（跑完会自己退出，但双击之后那几秒还在）；
+#   - `apiloop`：L4 起的原生壳，**它是常驻的**，覆盖安装时多半正开着窗口。
+# 按可执行文件路径 pkill，**不用 AppleScript**：
 # `tell application "apiloop" to quit` 在它没运行时反而会把它**启动**起来，
-# 正好在安装过程中弹出一个浏览器。
-if pkill -f "$LAUNCHER_APP/Contents/MacOS/applet" >>"$LOG" 2>&1; then
-    log "退掉了正在运行的旧启动器"
-fi
+# 正好在安装过程中弹出一个窗口。
+for binary in applet apiloop; do
+    if pkill -f "$LAUNCHER_APP/Contents/MacOS/$binary" >>"$LOG" 2>&1; then
+        log "退掉了正在运行的 $binary"
+    fi
+done
 
 log "删除旧的 $LAUNCHER_APP"
 rm -rf "$LAUNCHER_APP" >>"$LOG" 2>&1 || log "删除失败，继续安装。"
