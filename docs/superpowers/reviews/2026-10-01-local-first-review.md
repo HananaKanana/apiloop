@@ -289,3 +289,28 @@
 ### 记着（不用改）
 
 - 410 全量重下**中途**断网（基线和流水已经清了、快照还没下完）：下一轮本机还有这些项目的行，但没有基线，会被当成「本机新建」以 `baseRev = 0` 推上去，和云端不一样的列会进冲突，让用户选。数据不会丢，只是提示比较吵。要 30 天以上没同步、重下途中恰好断网才会遇到，先不处理。
+
+## 第 14 轮：e1c95c7（Mac 壳 Task 2 钩子）、c95edd6（Mac 壳 Task 1）——都通过；两处由我直接修
+
+### e1c95c7
+
+- `window.apiloopShell.hasUnsavedChanges()` 只在工作台挂载期间存在，返回 `tabs.hasDirty`；`beforeunload` 保留 ✓。`lib/web` 和源码重新构建出来的一致。
+
+### c95edd6 确认没问题的
+
+- 「编辑」菜单齐全，用的是标准 selector、target 为 nil；菜单的快捷键没有占用 ⌘S、⌘K、⌘\、⌘Enter ✓。
+- ⌘Q 用的是 `.terminateLater` + `reply(toApplicationShouldTerminate:)`；关窗口确认后两个标记一起置上 ✓。
+- 问不到钩子（钩子不存在、JS 抛错、1 秒超时）一律当没有 ✓。
+- 离线说明页：`about:blank` 不会被当成「已连上」；已经显示着就不重新加载，页面不会闪 ✓。
+- 打包：
+  - bundle id 不变，`BundleIsRelocatable=false` 照旧；
+  - 新增三条核对：`lipo -archs`、`plutil -lint`、`codesign -v`；
+  - `preinstall` 把 `applet` 和 `apiloop` 都退掉 ✓。
+- `-disable-autolinking-runtime-compatibility`：CommandLineTools 里那两个兼容库没有 x86_64 切片，x64 包不加这个参数链接不过。壳子没用 async，也没用参数包。**风险记一笔**：macOS 12 的真机没测过，以后有用户在老系统上打不开，先查这一条。
+
+### 我直接改的两处（单独提交）
+
+- **iframe 里的导航和下载被当成主窗口处理。** 响应预览是把 HTML 放进 iframe 显示的，预览的页面里只要自带 iframe（视频、广告），一加载就会走 `decidePolicyFor`：不是网关地址就交给系统浏览器，结果**光是看一下预览就弹出浏览器**。iframe 里加载 PDF、压缩包，也会弹「存储为」。
+  - 改法：导航规则只对主窗口生效；iframe 里只有用户**点了链接**（`.linkActivated`）才交给系统浏览器。响应侧的「转成下载」也只看 `isForMainFrame`。
+- **连按两下 ⌘W / ⌘Q：** 第一下还在问页面时，第二下被当成「没有修改」直接关掉了。确认框还开着时按 ⌘Q，`.terminateLater` 一直不回话，退出请求会挂住。
+  - 改法：一个 `busy` 标记管住整个流程，直到用户做完决定。这期间 ⌘W、⌘R 不理，⌘Q 返回 `.terminateCancel`。
