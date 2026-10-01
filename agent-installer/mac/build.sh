@@ -80,7 +80,7 @@ VERSION="$(node -p "require('$REPO/package.json').version")"
 mkdir -p "$WORK/cache" "$DIST"
 
 log "目标"
-printf '  版本      %s\n  架构      %s（安装包的 hostArchitectures=%s）\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
+printf '  版本      %s\n  架构      %s（node 二进制：%s）\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
     "$VERSION" "$NODE_ARCH" "$PKG_ARCH" "$NODE_VERSION" "$NODE_MIRROR" "$WORK"
 
 # ---------------------------------------------------------------- 1. 官方 node
@@ -265,7 +265,12 @@ pkgbuild \
 # 这段 JS 里**不能出现 `<`、`>`、`&`** —— 它是写在 XML 的 <script> 里的，
 # 这几个字符要么被当成标签、要么必须转义。所以一律用 === / !== / || 表达。
 #
-# installation-check 的约定：返回 true 放行，返回**字符串**就是错误提示并中止安装。
+# installation-check 的约定（Installer JavaScript）：返回 true 放行；要拒绝时先填好
+# my.result（type 设成 'Fatal'，title / message 是给用户看的），再**返回 false**。
+# 返回一个字符串不是约定的写法 —— 非空字符串会被当成「真」，结果照样放行。
+#
+# hostArchitectures 两个包都写 "arm64,x86_64"：只写 x86_64 的话，Apple 芯片上的 Installer
+# 会先弹「需要安装 Rosetta」，轮不到下面这段中文提示。架构由这段脚本来拦，不交给它。
 if [ "$NODE_ARCH" = "arm64" ]; then
     WANTS_ARM="true"
     WRONG_MSG="这是 Apple 芯片版。你的 Mac 是 Intel 芯片，请下载 Intel 芯片版。"
@@ -281,7 +286,7 @@ cat > "$DIST_XML" <<XML
     <title>apiloop</title>
     <organization>com.apiloop</organization>
     <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
-    <options customize="never" require-scripts="false" hostArchitectures="$PKG_ARCH"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <installation-check script="apiloopCheckChip()"/>
     <script>
     function apiloopCheckChip() {
@@ -293,12 +298,11 @@ cat > "$DIST_XML" <<XML
         } catch (err) {
             silicon = false;
         }
-        if ($WANTS_ARM === true) {
-            if (silicon === false) { return '$WRONG_MSG'; }
-            return true;
-        }
-        if (silicon === true) { return '$WRONG_MSG'; }
-        return true;
+        if ($WANTS_ARM === silicon) { return true; }
+        my.result.type = 'Fatal';
+        my.result.title = '芯片类型不对';
+        my.result.message = '$WRONG_MSG';
+        return false;
     }
     </script>
     <choices-outline>
@@ -365,8 +369,8 @@ printf '  下载的  %s\n  包里的  %s\n' "$ORIGINAL_SHA" "$PACKED_SHA"
 log "核对 Distribution（架构限制与装错架构时的提示）"
 DIST_CONTENT="$(cat "$VERIFY/expanded/Distribution")"
 case "$DIST_CONTENT" in
-    *"hostArchitectures=\"$PKG_ARCH\""*) printf '  ✓ hostArchitectures="%s"\n' "$PKG_ARCH" ;;
-    *) die "Distribution 里的 hostArchitectures 不是 $PKG_ARCH" ;;
+    *'hostArchitectures="arm64,x86_64"'*) echo '  ✓ hostArchitectures="arm64,x86_64"（架构由 installation-check 拦）' ;;
+    *) die "Distribution 里的 hostArchitectures 不是 arm64,x86_64" ;;
 esac
 case "$DIST_CONTENT" in
     *'installation-check script="apiloopCheckChip()"'*) echo "  ✓ installation-check 已挂上" ;;
