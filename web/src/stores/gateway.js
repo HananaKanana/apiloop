@@ -18,7 +18,7 @@ const REFRESH_MS = 30000;
 export const useGatewayStore = defineStore('gateway', function () {
   /** 页面是不是从网关上打开的 */
   const isGateway = ref(false);
-  /** `{ version, cloudUrl, cloudReachable }`，不是网关时为 null */
+  /** `{ version, cloudUrl, cloudReachable, mode }`，不是网关时为 null */
   const status = ref(null);
   /** 探测过一次了没有（没探测完之前不要先闪一个「云端发送」出来） */
   const loaded = ref(false);
@@ -44,6 +44,24 @@ export const useGatewayStore = defineStore('gateway', function () {
 
   const cloudUrl = computed(function () {
     return (status.value && status.value.cloudUrl) || '';
+  });
+
+  /**
+   * 网关当前的模式：`'local'` 或 `'cloud'`（L1）。
+   * 不是网关时为空串 —— 直接打开云端没有「模式」这一说。
+   */
+  const mode = computed(function () {
+    return (status.value && status.value.mode) || '';
+  });
+
+  /**
+   * 本机模式：页面读写的是**本机库**，数据不出这台电脑。
+   *
+   * 这个模式下要藏起来的东西：mock 地址（mock 服务在云端）、成员管理、用户管理、
+   * 退出登录 —— 本机没有「登录」这回事，本机用户是自动的。
+   */
+  const isLocal = computed(function () {
+    return isGateway.value && mode.value === 'local';
   });
 
   /**
@@ -80,14 +98,15 @@ export const useGatewayStore = defineStore('gateway', function () {
       ? {
           version: result.version,
           cloudUrl: result.cloudUrl,
-          cloudReachable: result.cloudReachable
+          cloudReachable: result.cloudReachable,
+          mode: result.mode
         }
       : null;
     loaded.value = true;
     return result;
   }
 
-  /** 只刷「云端连得上吗」。失败就沿用上一次的结果，不要因此把圆点变成红的 */
+  /** 只刷「云端连得上吗」和模式。失败就沿用上一次的结果，不要因此把圆点变成红的 */
   async function refresh() {
     if (!isGateway.value) return;
     try {
@@ -96,7 +115,8 @@ export const useGatewayStore = defineStore('gateway', function () {
       status.value = {
         version: result.version,
         cloudUrl: result.cloudUrl,
-        cloudReachable: result.cloudReachable
+        cloudReachable: result.cloudReachable,
+        mode: result.mode
       };
     } catch (err) {
       // 探测失败不打扰用户，下个周期自己会重试
@@ -122,6 +142,8 @@ export const useGatewayStore = defineStore('gateway', function () {
     loaded: loaded,
     showIndicator: showIndicator,
     cloudUrl: cloudUrl,
+    mode: mode,
+    isLocal: isLocal,
     versionMismatch: versionMismatch,
     cloudSendBlocked: cloudSendBlocked,
     load: load,

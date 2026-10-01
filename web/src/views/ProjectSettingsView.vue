@@ -15,6 +15,7 @@ import {
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
+import { useGatewayStore } from '@/stores/gateway';
 import VarTable from '@/components/common/VarTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
@@ -31,8 +32,17 @@ import MembersPanel from '@/components/members/MembersPanel.vue';
 const route = useRoute();
 const router = useRouter();
 const projects = useProjectStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
+
+/**
+ * 本机模式下没有成员管理：本机空间只有一个本机用户，也就没有「谁在这个项目里」这回事。
+ * 这个 tab 整块不渲染，不是禁用。
+ */
+const showMembers = computed(function () {
+  return !gateway.isLocal;
+});
 
 const loading = ref(true);
 const saving = ref(false);
@@ -231,7 +241,7 @@ watch(function () { return route.params.pid; }, load);
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane name="members" tab="成员">
+        <n-tab-pane v-if="showMembers" name="members" tab="成员">
           <members-panel v-if="projectId" :pid="projectId" @left="onLeft" />
         </n-tab-pane>
       </n-tabs>
