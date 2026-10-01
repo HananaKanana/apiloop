@@ -3,7 +3,19 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { NDropdown, NTooltip } from 'naive-ui';
 import { useGatewayStore } from '@/stores/gateway';
+import { useUiStore } from '@/stores/ui';
 import InstallDialog from './InstallDialog.vue';
+import ConflictDialog from '@/components/sync/ConflictDialog.vue';
+
+/** 冲突列表里那个后缀：说清楚冲突的是接口还是目录 */
+const ENTITY_LABEL = {
+  project: '项目',
+  environment: '环境',
+  folder: '目录',
+  api: '接口',
+  example: '示例',
+  expectation: '期望'
+};
 
 /**
  * 顶栏右侧的状态点（设计稿第 7 节）。
@@ -14,13 +26,14 @@ import InstallDialog from './InstallDialog.vue';
  * 直接打开云端时还是那句「云端发送」，和以前一样。
  *
  * 点它：
+ * - 有冲突 → 下拉菜单是冲突列表，点一项开冲突对话框；
  * - 有新版本 → 下拉菜单「安装新版本…」；
  * - 未绑定 / 已退出 / 登录过期 → 去登录页；
- * - 有冲突 → 冲突列表（Task 5 接）；
  * - 其余状态点了没事发生。
  */
 const router = useRouter();
 const gateway = useGatewayStore();
+const ui = useUiStore();
 
 const showInstall = ref(false);
 
@@ -136,12 +149,23 @@ const indicator = computed(function () {
   };
 });
 
-/** 有新版本时才给菜单；其余情况点击按状态各自的动作走 */
+/** 有新版本时才给菜单；有冲突时菜单换成冲突列表 */
 const menuEnabled = computed(function () {
+  if (indicator.value.action === 'conflicts') return conflictOptions.value.length > 0;
   return gateway.isGateway && hasNewVersion.value;
 });
 
+const conflictOptions = computed(function () {
+  return gateway.conflicts.map(function (item) {
+    return {
+      label: item.name + '（' + (ENTITY_LABEL[item.entity] || item.entity) + '）',
+      key: item.entity + ':' + item.id
+    };
+  });
+});
+
 const menuOptions = computed(function () {
+  if (indicator.value.action === 'conflicts') return conflictOptions.value;
   return hasNewVersion.value ? [{ label: '安装新版本…', key: 'install' }] : [];
 });
 
@@ -151,17 +175,24 @@ const clickable = computed(function () {
 });
 
 function onMenuSelect(key) {
-  if (key === 'install') showInstall.value = true;
+  if (key === 'install') {
+    showInstall.value = true;
+    return;
+  }
+
+  // 冲突列表：key 是 `entity:id`
+  const index = key.indexOf(':');
+  if (index > 0) ui.openConflict(key.slice(0, index), key.slice(index + 1));
 }
 
 function onIndicatorClick() {
-  // 有新版本时这一下归下拉菜单管
+  // 菜单能用时这一下归下拉菜单管
   if (menuEnabled.value) return;
 
   const action = indicator.value.action;
   if (action === 'login') router.push('/login');
   if (action === 'install') showInstall.value = true;
-  // action === 'conflicts' 留给 Task 5
+  // action === 'conflicts' 走菜单
 }
 </script>
 
@@ -194,6 +225,9 @@ function onIndicatorClick() {
     :is-gateway="gateway.isGateway"
     :cloud-url="gateway.cloudUrl"
   />
+
+  <!-- 冲突对话框挂在这里：顶栏一直在，三个入口（顶栏列表、目录树、标签页）都靠 ui store 传话 -->
+  <conflict-dialog />
 </template>
 
 <style scoped>

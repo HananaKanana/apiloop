@@ -95,3 +95,33 @@ export async function getStatus() {
 export function deleteSpace() {
   return requestGateway('POST', '/space/delete', {});
 }
+
+/**
+ * 本机还没推上去的行，给目录树打小点用。
+ * `items` 是 `[{ entity, id }]`，`entity` 取 `project` / `environment` / `folder` /
+ * `api` / `example` / `expectation`，和树节点的 `kind` 一致。
+ */
+export function listPending() {
+  return requestGateway('GET', '/sync/pending');
+}
+
+/** 和云端对不上的行。`fields` 是 `[{ field, base, mine, theirs }]`，JSON 列是字符串 */
+export function listConflicts() {
+  return requestGateway('GET', '/sync/conflicts');
+}
+
+/**
+ * 处理一条冲突。
+ *
+ * @param {string} entity
+ * @param {string} id
+ * @param {'mine'|'theirs'|'copy'} choice `copy` 只对接口有效，会多出一个副本
+ * @returns {Promise<{ok: boolean, copyId: string|null}>}
+ */
+export function resolveConflict(entity, id, choice) {
+  return requestGateway('POST', '/sync/conflicts/resolve', {
+    entity: entity,
+    id: id,
+    choice: choice
+  });
+}

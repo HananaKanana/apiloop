@@ -59,6 +59,16 @@ const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
 const gateway = useGatewayStore();
+
+/** 这个接口和云端对不上：标签页顶部一条红提示 + 「处理」入口（设计稿第 7 节） */
+const conflicted = computed(function () {
+  return Boolean(props.tab.apiId) && gateway.isConflicted('api', props.tab.apiId);
+});
+
+function openConflict() {
+  if (!props.tab.apiId) return;
+  ui.openConflict('api', props.tab.apiId);
+}
 const paneTabsTheme = usePaneTabsTheme();
 const message = useMessage();
 
@@ -744,6 +754,15 @@ onBeforeUnmount(function () {
 
 <template>
   <div ref="rootRef" class="request-tab">
+    <!--
+      这个接口和云端对不上：顶部一条红提示 + 处理入口（设计稿第 7 节）。
+      放在面包屑上面，不挤工具栏。
+    -->
+    <div v-if="conflicted" class="conflict-bar">
+      <span class="conflict-text">这个接口和云端有冲突</span>
+      <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+    </div>
+
     <!-- 面包屑：项目 › 目录… › 接口名，右边是保存 -->
     <div class="crumb-bar">
       <div class="crumbs">
@@ -1055,6 +1074,25 @@ onBeforeUnmount(function () {
 }
 
 /* 面包屑那一行：左边是路径，右边是保存 */
+/* 冲突提示条：面包屑上面一条，红底红字，右边一个「处理」 */
+.conflict-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #b3160c;
+  background: rgba(235, 32, 19, 0.1);
+}
+
+.conflict-text {
+  font-weight: 600;
+}
+
 .crumb-bar {
   flex: none;
   display: flex;
