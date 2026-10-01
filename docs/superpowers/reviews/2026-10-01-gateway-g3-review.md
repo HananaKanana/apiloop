@@ -22,3 +22,27 @@
 - **再次提醒：** 提交时只加自己改的路径（`git commit -- <路径>`）。`lib/web` 一定要在提交前重新构建。
 
 `npm test` 71/71。
+
+## 第 2 轮：78b757b（Task 1 Mac 安装包收尾）——通过；审阅方修了一处
+
+### 确认没问题的
+
+- **Intel 版：** node 是 x86_64，TeamIdentifier=HX7739G8FX，sha256 和下载的那份一致；启动器 applet 本来就是通用二进制。
+- **N2：** `launchctl asuser` + `sudo -u` 打开启动器 ✓。
+- **N3：** 补了 `CFBundleIdentifier`，pkgbuild 才认这是 bundle 组件，`relocatable="false"` 才生效。改完以后**只对启动器**重新 ad-hoc 签名，node 没碰（打包脚本最后的 sha256 比对兜底）；preinstall 删掉旧的 `/Applications/apiloop.app` ✓。
+- **N4：** plist 去掉了 `StandardOutPath`；网关自己写 `~/Library/Logs/apiloop/gateway.log`，启动时超过 5MB 转存一份，`uncaughtException` 先写进日志再退出 ✓。
+
+### B1（审阅方已修）：装错芯片版本时拦不住
+
+- **检查函数返回的是字符串。** Installer JavaScript 的约定是：要拒绝时先填 `my.result`（`type = 'Fatal'`，以及 `title`、`message`），再返回 `false`。非空字符串会被当成「真」，结果照样放行。
+- **Intel 版的 `hostArchitectures` 只写了 `x86_64`。** 在 Apple 芯片上，Installer 会先弹「需要安装 Rosetta」，中文提示轮不到出来。两个包都改成 `arm64,x86_64`，架构由检查函数来拦。
+- 已重新打出两个包，打包脚本的自检全部通过。**装错版本时的实际表现要用户确认**：在 Apple 芯片的 Mac 上打开 x64 包，应该看到「这是 Intel 芯片版……」并且装不下去。
+
+### 小问题（不改）
+
+- 终端里跑网关时，stderr 的内容也写到了 stdout（`write` 一律走 `originalOut`）。只影响开发时看终端。
+- postinstall 一开头 `: > "$LOG"` 会清空 preinstall 刚写的日志。只影响排查。
+
+### 共享工作区
+
+- 78b757b 提交 `lib/command.js` 时用的是整个文件，把审阅方「命令行新建用户要求改密码」那一行也带进去了（1186df5 的一部分）。内容是对的。
