@@ -1,4 +1,4 @@
-import { API_PREFIX, redirectToLogin, toError } from './client';
+import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
 
 /**
  * NDJSON 长连接的读取（契约第 14、15 节）。
@@ -97,7 +97,7 @@ export function postNdjson(path, body, options) {
   const opts = options || {};
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: Object.assign({ 'Content-Type': 'application/json' }, CUSTOM_HEADERS),
     body: JSON.stringify(body),
     credentials: 'same-origin'
   };
@@ -110,7 +110,7 @@ export function getNdjson(path, options) {
   const opts = options || {};
   const init = {
     method: 'GET',
-    headers: {},
+    headers: Object.assign({}, CUSTOM_HEADERS),
     credentials: 'same-origin'
   };
   if (opts.signal) init.signal = opts.signal;
