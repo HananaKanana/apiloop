@@ -47,6 +47,24 @@ export const useGatewayStore = defineStore('gateway', function () {
   });
 
   /**
+   * 网关版本和云端版本不一致 —— 说明云端那边有新的安装包。
+   *
+   * 放在 store 里而不是各组件自己算：顶栏的「有新版本」和页面顶部的横幅要用同一个判断，
+   * 两处各写一遍迟早会走岔。
+   *
+   * @returns {{gatewayVersion: string, cloudVersion: string}|null}
+   */
+  const versionMismatch = computed(function () {
+    if (!isGateway.value || !status.value) return null;
+
+    const gatewayVersion = status.value.version || '';
+    const cloudVersion = (useSessionStore().meta && useSessionStore().meta.version) || '';
+    if (!gatewayVersion || !cloudVersion || gatewayVersion === cloudVersion) return null;
+
+    return { gatewayVersion: gatewayVersion, cloudVersion: cloudVersion };
+  });
+
+  /**
    * 直接打开云端、而且云端不发送请求：发送按钮要变灰。
    * 探测还没回来时（`loaded` 为 false）先不当成禁止，免得页面刚开就闪一下灰按钮。
    */
@@ -104,6 +122,7 @@ export const useGatewayStore = defineStore('gateway', function () {
     loaded: loaded,
     showIndicator: showIndicator,
     cloudUrl: cloudUrl,
+    versionMismatch: versionMismatch,
     cloudSendBlocked: cloudSendBlocked,
     load: load,
     refresh: refresh,
