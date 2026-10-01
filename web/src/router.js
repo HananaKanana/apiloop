@@ -1,5 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
+import { useGatewayStore } from '@/stores/gateway';
+import { hasChosen } from '@/utils/firstRun';
 import LoginView from '@/views/LoginView.vue';
 import WorkbenchView from '@/views/WorkbenchView.vue';
 import UsersView from '@/views/UsersView.vue';
@@ -39,6 +41,14 @@ router.beforeEach(async function (to) {
   if (!session.user) {
     // next 统一用 #/ 开头的形式，登录页只接受这种值
     return { name: 'login', query: { next: '#' + to.fullPath } };
+  }
+  // 本机 apiloop 第一次打开：还没登录过、也没选过「不登录」，先去登录页（见 utils/firstRun.js）
+  if (!hasChosen()) {
+    const gateway = useGatewayStore();
+    if (!gateway.loaded) await gateway.load().catch(function () {});
+    if (gateway.isGateway && gateway.spaceState === 'unbound') {
+      return { name: 'login', query: { next: '#' + to.fullPath } };
+    }
   }
   // 密码是管理员重置或设置的：改掉之前哪儿都不能去（服务端也会拦）
   if (session.user.mustChangePassword) {
