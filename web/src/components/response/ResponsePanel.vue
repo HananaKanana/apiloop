@@ -79,10 +79,13 @@ const error = computed(function () {
  * 什么都还没有：没发过、没在发、也没出错。这时面板给一句居中提示，
  * 不然整块是空的，看着像坏了。取消过的请求不算 —— 那种情况下面有专门的说明；
  * 流式发送时 `liveResponse`（响应头）一到就有东西可看了，也不算空。
+ *
+ * **发送没开始就失败**（`sendError`，比如云端不发送的 409）也要算「有东西」：
+ * 那条错误只在 `tab.sendError` 上，如果这里还当它是空状态，错误就被整块藏掉了。
  */
 const idle = computed(function () {
   return !response.value && !error.value && !props.tab.sending && !props.tab.cancelled &&
-    !liveResponse.value;
+    !liveResponse.value && !props.tab.sendError;
 });
 
 const request = computed(function () {
@@ -148,9 +151,12 @@ const errorText = computed(function () {
 /**
  * 直接打开云端、云端又不发送请求时，服务端返回 409 + `SERVER_SEND_DISABLED`。
  * 这不是「出错」，是我们自己的限制，所以不显示成红色的服务端错误。
+ *
+ * 这个错发生在 NDJSON 开始之前，进不了 `result.error`，只在 `tab.sendErrorCode` 上
+ * （见 tabs.js 的 emptyLive / sendRequest）。
  */
 const serverSendDisabled = computed(function () {
-  return Boolean(error.value && error.value.code === 'SERVER_SEND_DISABLED');
+  return props.tab.sendErrorCode === 'SERVER_SEND_DISABLED';
 });
 
 /**
@@ -273,7 +279,12 @@ function requestBodyText() {
           <n-button size="small" type="primary" @click="emit('resend')">重新发送</n-button>
         </div>
 
-        <n-alert v-if="tab.sendError" type="error" :show-icon="false" class="notice">
+        <n-alert
+          v-if="tab.sendError && !serverSendDisabled"
+          type="error"
+          :show-icon="false"
+          class="notice"
+        >
           {{ tab.sendError }}
         </n-alert>
 

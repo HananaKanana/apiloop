@@ -129,9 +129,14 @@ function applyFormat() {
  * CM 的键名是从 `event.key` 拼出来的，而 macOS 上 ⌥F 会组合成一个特殊字符
  * （`event.key` 不再是 'f'），键名就对不上了。`event.code` 不受组合影响，
  * 认 `KeyF` 才能在各种键盘布局和输入法下都稳。
+ *
+ * 这个扩展**一直挂着**，语言在事件里判（审阅 N3）：如果只在创建时按语言决定挂不挂，
+ * 用户在请求体里把语言从「文本」切到 JSON 之后就得重建编辑器才生效 ——
+ * 虽然现在确实会重建，但把「生效与否」押在重建路径上太脆。
  */
 const formatKeyHandler = EditorView.domEventHandlers({
   keydown: function (event) {
+    if (props.language !== 'json') return false;
     if (!event.shiftKey || !event.altKey) return false;
     if (event.ctrlKey || event.metaKey) return false;
     if (event.code !== 'KeyF' && String(event.key).toLowerCase() !== 'f') return false;
@@ -142,7 +147,8 @@ const formatKeyHandler = EditorView.domEventHandlers({
   }
 });
 
-const theme = EditorView.theme({  '&': {
+const theme = EditorView.theme({
+  '&': {
     fontSize: '13px',
     backgroundColor: 'transparent',
     color: 'inherit',
@@ -196,8 +202,9 @@ function createView() {
     extensions.push(autocompletion({ override: [placeholderSource], activateOnTyping: true, icons: false }));
   }
 
-  // 只有 JSON 才谈得上美化（XML / JS 的美化规则不一样，先不做）
-  if (props.language === 'json') extensions.push(formatKeyHandler);
+  // 只有 JSON 才谈得上美化（XML / JS 的美化规则不一样，先不做）。
+  // 一直挂着，语言在事件里判 —— 见 formatKeyHandler 的注释（审阅 N3）
+  extensions.push(formatKeyHandler);
 
   view = new EditorView({
     parent: host.value,
