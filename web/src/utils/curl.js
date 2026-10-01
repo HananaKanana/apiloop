@@ -60,7 +60,10 @@ const ANSI_ESCAPES = {
   b: '\b',
   f: '\f',
   v: '\v',
-  0: '\0'
+  e: '\x1b',
+  E: '\x1b'
+  // 注意：这里**不能**有 `0`。`\0` 开头的是八进制（`\041` 就是 `!`，Safari 复制的 cURL 里常见），
+  // 交给 readAnsiC 末尾的八进制分支处理；写在表里会先把 `\0` 吃掉，剩下的 `41` 变成普通文字
 };
 
 /** Windows cmd 的格式：出现 `^"`，或者行尾有个 `^` */
@@ -94,29 +97,13 @@ function readAnsiC(text, start) {
       continue;
     }
 
-    if (next === 'x') {
-      const hex = text.slice(i + 2, i + 4);
-      if (/^[0-9a-fA-F]{2}$/.test(hex)) {
-        out += String.fromCharCode(parseInt(hex, 16));
-        i += 4;
-        continue;
-      }
-    }
-
-    if (next === 'u') {
-      const hex = text.slice(i + 2, i + 6);
-      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-        out += String.fromCharCode(parseInt(hex, 16));
-        i += 6;
-        continue;
-      }
-    }
-
-    if (next === 'U') {
-      const hex = text.slice(i + 2, i + 10);
-      if (/^[0-9a-fA-F]{8}$/.test(hex)) {
-        out += String.fromCodePoint(parseInt(hex, 16));
-        i += 10;
+    // 和 bash 一样，十六进制位数是「最多」：\xH 到 \xHH、\uH 到 \uHHHH、\UH 到 \UHHHHHHHH
+    const hexLimits = { x: 2, u: 4, U: 8 };
+    if (hexLimits[next]) {
+      const hex = text.slice(i + 2, i + 2 + hexLimits[next]).match(/^[0-9a-fA-F]+/);
+      if (hex) {
+        out += String.fromCodePoint(parseInt(hex[0], 16));
+        i += 2 + hex[0].length;
         continue;
       }
     }
