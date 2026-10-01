@@ -83,6 +83,8 @@ export async function getStatus() {
     cloudReachable: Boolean(data.cloudReachable),
     // 云端版本：网关探云端时从响应头读到的（连不上、云端太老时为空）
     cloudVersion: typeof data.cloudVersion === 'string' ? data.cloudVersion : '',
+    // 一键更新的进度：{ supported, state: idle|downloading|installing|error, version, received, total, error }
+    update: data.update || null,
     space: data.space || null,
     sync: data.sync || null
   };
@@ -94,6 +96,14 @@ export async function getStatus() {
  * 网关会关库、删目录，再换成一个新的空的未绑定空间。删完要**整页刷新** ——
  * 页面里所有 store 装的都是刚被删掉的那份数据。
  */
+/**
+ * 一键更新：网关下载云端那个版本的安装包并打开安装程序。
+ * 版本由网关自己定（只认它探到的云端版本、且必须比本机新），这里不传。
+ */
+export function startUpdate() {
+  return requestGateway('POST', '/update/start', {});
+}
+
 export function deleteSpace() {
   return requestGateway('POST', '/space/delete', {});
 }

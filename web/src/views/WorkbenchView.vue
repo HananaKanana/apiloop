@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { NAlert, NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
 import { Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
+import UpdateAction from '@/components/layout/UpdateAction.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import QuickOpen from '@/components/layout/QuickOpen.vue';
@@ -329,7 +330,10 @@ onBeforeUnmount(function () {
       class="version-banner"
       @close="dismissVersionBanner"
     >
-      本机 apiloop（{{ versionMismatch.gatewayVersion }}）和云端（{{ versionMismatch.cloudVersion }}）版本不一致，请下载新的安装包。
+      <span class="version-text">
+        有新版本 {{ versionMismatch.cloudVersion }}（本机是 {{ versionMismatch.gatewayVersion }}）。
+      </span>
+      <update-action />
     </n-alert>
 
     <div class="body">
