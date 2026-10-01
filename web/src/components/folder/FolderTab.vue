@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import VarTable from '@/components/common/VarTable.vue';
+import InlineRename from '@/components/common/InlineRename.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import { folderChain } from '@/utils/tree';
@@ -76,6 +77,17 @@ watch(
   { deep: true }
 );
 
+/** 标题上双击改名：只改名字、立刻存（`applyRename` 会把保存快照里的名字一起换掉，dirty 不变） */
+async function renameTitle(name) {
+  try {
+    await tree.renameFolder(props.tab.folderId, name);
+    tabs.applyRename('folder', props.tab.folderId, name);
+    message.success('已重命名');
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
 async function save() {
   if (!String(spec.value.name || '').trim()) {
     message.warning('请填写目录名称');
@@ -125,7 +137,10 @@ onBeforeUnmount(function () {
 <template>
   <div class="folder-tab">
     <div class="head">
-      <span class="title">{{ spec.name || '目录设置' }}</span>
+      <!-- 双击改名（参考 Postman）：立刻存，只改名字，下面表单里别的没保存的修改不受影响 -->
+      <span class="title">
+        <inline-rename :value="spec.name" placeholder="目录设置" :editable="canEdit" @commit="renameTitle" />
+      </span>
       <span v-if="parentPath" class="path">位置：{{ parentPath }}</span>
       <span class="spacer" />
       <n-button

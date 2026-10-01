@@ -23,6 +23,7 @@ import { useTabsStore, specFromApi, emptyOptions } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
+import InlineRename from '@/components/common/InlineRename.vue';
 import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
@@ -406,7 +407,8 @@ async function save() {
   // 还没保存过的临时标签页：先问目录和名称
   if (!props.tab.apiId) {
     saveForm.value = {
-      name: props.tab.spec.url || '新建接口',
+      // 双击改过名就用改的名字，否则用地址
+      name: props.tab.customTitle ? props.tab.title : (props.tab.spec.url || '新建接口'),
       folderId: props.tab.folderId || null
     };
     showSaveDialog.value = true;
@@ -468,6 +470,30 @@ const crumbs = computed(function () {
   list.push(props.tab.title || '新建请求');
   return list;
 });
+
+/**
+ * 面包屑上双击改名。
+ *
+ * - 已保存的接口：**只改名字**，立刻存（`renameApi`），别的没保存的修改原样留着；
+ * - 还没保存过的新请求：只改标题，记一个 `customTitle`，保存时弹窗里的默认名用它。
+ *
+ * 失败时不动标题，面包屑显示的自然还是原名。
+ */
+async function renameTitle(name) {
+  if (!props.tab.apiId) {
+    props.tab.title = name;
+    props.tab.customTitle = true;
+    return;
+  }
+
+  try {
+    await tree.renameApi(props.tab.apiId, name);
+    tabs.applyRename('api', props.tab.apiId, name);
+    message.success('已重命名');
+  } catch (err) {
+    message.error(err.message);
+  }
+}
 
 const saveMenu = [{ label: '另存为…', key: 'save-as' }];
 
@@ -768,7 +794,11 @@ onBeforeUnmount(function () {
       <div class="crumbs">
         <template v-for="(part, index) in crumbs" :key="index">
           <span v-if="index" class="sep">›</span>
-          <span class="crumb" :class="{ last: index === crumbs.length - 1 }">{{ part }}</span>
+          <span v-if="index < crumbs.length - 1" class="crumb">{{ part }}</span>
+          <!-- 最后一级是接口名：双击改名（参考 Postman） -->
+          <span v-else class="crumb last">
+            <inline-rename :value="part" :editable="projects.canEdit" @commit="renameTitle" />
+          </span>
         </template>
       </div>
 
@@ -1120,10 +1150,11 @@ onBeforeUnmount(function () {
   opacity: 0.55;
 }
 
-/* 最后一级是当前接口，颜色正常、加粗一点 */
+/* 最后一级是当前接口，颜色正常、加粗一点。可以双击改名，省略号交给里面的 InlineRename */
 .crumb.last {
   opacity: 1;
   font-weight: 600;
+  max-width: 320px;
 }
 
 .sep {
