@@ -122,6 +122,27 @@ const redirects = computed(function () {
   return (result.value && result.value.redirects) || [];
 });
 
+/**
+ * 这次请求**最终**打到的地址 —— 预览的基准地址要用它。
+ *
+ * 注意**不是** `result.request.url`：那个是用户最初发出的那一跳（`lib/executor.js`
+ * 文件头写明），重定向链在 `redirects` 里，每一条的 `url` 是**跳转的目标地址**。
+ * 所以最终地址 = `redirects` 最后一条的 url，没有重定向时才是 `request.url`。
+ *
+ * 用错了的话，跳转过的页面（`http://a.com/x` → `https://a.com/x/`）预览里的相对路径
+ * 会解析到跳转前的地址上，样式和图片都是错的。
+ */
+const finalUrl = computed(function () {
+  const list = redirects.value;
+  if (list.length) return list[list.length - 1].url || '';
+  return (request.value && request.value.url) || '';
+});
+
+/** 用户最初发出的那一跳用的方法。GET 才允许把地址丢给浏览器打开 */
+const requestMethod = computed(function () {
+  return (request.value && request.value.method) || '';
+});
+
 /** 这次请求实际用的代理（地址里的密码服务端已经打码）；直连时为 null */
 const proxy = computed(function () {
   return (result.value && result.value.proxy) || null;
@@ -396,7 +417,12 @@ function requestBodyText() {
               </div>
             </template>
             <n-tab-pane name="body" tab="Body" :disabled="!response">
-              <body-viewer v-if="response" :response="response" />
+              <body-viewer
+                v-if="response"
+                :response="response"
+                :request-url="finalUrl"
+                :request-method="requestMethod"
+              />
             </n-tab-pane>
 
             <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
