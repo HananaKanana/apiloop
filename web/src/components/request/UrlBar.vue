@@ -1,6 +1,6 @@
 <script setup>
 import { computed, h } from 'vue';
-import { NButton, NSelect } from 'naive-ui';
+import { NButton, NSelect, NTooltip } from 'naive-ui';
 import VarInput from '@/components/common/VarInput.vue';
 import { methodColor } from '@/utils/method';
 import { BARE_SELECT_THEME } from '@/utils/bareInput';
@@ -20,7 +20,10 @@ const props = defineProps({
   url: { type: String, default: '' },
   sending: { type: Boolean, default: false },
   /** resolveScope() 的结果，给变量高亮和补全用 */
-  scope: { type: Map, default: null }
+  scope: { type: Map, default: null },
+  /** 直接打开云端、而且云端不发送请求：发送按钮变灰 */
+  sendBlocked: { type: Boolean, default: false },
+  sendBlockedHint: { type: String, default: '' }
 });
 
 const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel']);
@@ -101,6 +104,18 @@ const METHOD_SELECT_THEME = {
     >
       取消
     </n-button>
+    <!--
+      直接打开云端、云端又不发送请求：按钮变灰，悬停说清楚该去哪儿。
+      外面套一层 span 是因为禁用的按钮不派发鼠标事件，提示挂不上去。
+    -->
+    <n-tooltip v-else-if="sendBlocked" trigger="hover">
+      <template #trigger>
+        <span class="send-wrap">
+          <n-button class="send" size="small" disabled :bordered="false">发送</n-button>
+        </span>
+      </template>
+      {{ sendBlockedHint }}
+    </n-tooltip>
     <!-- Postman 的 Send 一直是蓝色，和主色无关，用户看惯了 -->
     <n-button
       v-else
@@ -161,6 +176,12 @@ const METHOD_SELECT_THEME = {
   flex: none;
   width: 72px;
   height: 32px;
+}
+
+/* 禁用的发送按钮：外面这层只为了让悬停提示有个可挂的元素 */
+.send-wrap {
+  display: inline-flex;
+  flex: none;
 }
 
 .method-text {

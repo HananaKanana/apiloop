@@ -38,6 +38,7 @@ import { resolveScope, missingVariables } from '@/utils/variables';
 import { HEADER_NAMES } from '@/utils/suggestions';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
+import { useGatewayStore } from '@/stores/gateway';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -55,6 +56,7 @@ const envs = useEnvStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
+const gateway = useGatewayStore();
 const paneTabsTheme = usePaneTabsTheme();
 const message = useMessage();
 
@@ -751,6 +753,8 @@ onBeforeUnmount(function () {
         :url="spec.url"
         :sending="tab.sending"
         :scope="scope"
+        :send-blocked="gateway.cloudSendBlocked"
+        send-blocked-hint="云端不发送请求，请从本机的 apiloop 打开"
         @update:method="(v) => { spec.method = v; }"
         @update:url="onUrlChange"
         @send="onSend"
@@ -943,6 +947,7 @@ onBeforeUnmount(function () {
         :readonly="!projects.canEdit"
         @save-example="openSaveExample"
         @save-sse-example="saveSseExample"
+        @resend="onSend"
       />
     </div>
 
