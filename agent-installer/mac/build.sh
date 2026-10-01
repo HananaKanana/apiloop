@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apiloop 本地网关：Mac arm64 安装包（.pkg）。
+# apiloop 本地网关：Mac 安装包（.pkg），arm64 与 x64 各一个。
 #
 # 为什么安装包里要带一份 Node：macOS 15 之后，没有苹果签名的程序访问同网段地址会被系统
 # **直接拒绝，而且不弹授权框**；只有带签名、且由 launchd 直接启动的官方 Node 才能让系统
@@ -15,8 +15,17 @@
 # 只用系统自带的 pkgbuild / productbuild / osacompile / pkgutil，仓库根目录的
 # package.json 一个依赖都不加。
 #
-# 用法：bash agent-installer/mac/build.sh
-# 产物：agent-installer/dist/apiloop-gateway-<版本>-arm64.pkg（不入库）
+# 用法：bash agent-installer/mac/build.sh              （arm64）
+#       NODE_ARCH=x64 bash agent-installer/mac/build.sh （Intel）
+#       bash agent-installer/mac/build-all.sh         （两个都打）
+# 产物：agent-installer/dist/apiloop-gateway-<版本>-<架构>.pkg（不入库）
+#
+# **依赖里没有原生模块**（quickjs 是 wasm、sqlite 用 Node 自带的 node:sqlite），
+# 所以 `npm ci` 的结果两种架构通用，不用为 x64 单独装一遍依赖。
+#
+# 写这个脚本的一个坑：变量后面紧跟中文时一律写 `${VAR}`。某些 locale 下 bash 会把变量名
+# 后面的高位字节也算进名字里 —— 实测 `"完成（$NODE_ARCH）"` 报的是
+# `NODE_ARCH<0xef>: unbound variable`，跑到最后一步才炸。
 
 set -euo pipefail
 
@@ -29,12 +38,28 @@ NODE_MIRROR="${NODE_MIRROR:-https://npmmirror.com/mirrors/node}"
 NODE_TEAM_ID="HX7739G8FX"
 PKG_ID="com.apiloop.gateway"
 
-# **中间产物一律不放在仓库里。** 两个理由：
+case "$NODE_ARCH" in
+    arm64|x64) ;;
+    *) printf 'build.sh: NODE_ARCH 只能是 arm64 或 x64，收到 %s\n' "$NODE_ARCH" >&2; exit 1 ;;
+esac
+
+# Distribution 里的 hostArchitectures 用的是**另一套名字**：x86_64 / arm64。
+# 直接把 x64 写进去是个无效值，Installer 会当成「没有架构限制」。
+if [ "$NODE_ARCH" = "x64" ]; then
+    PKG_ARCH="x86_64"
+else
+    PKG_ARCH="arm64"
+fi
+
+# 中间产物一律不放在仓库里。两个理由：
 #   1. 官方 node 解压后有 8000 多个文件，打一次包要整棵重建/整棵删掉；在 WorkBuddy 的
 #      IDE 沙箱里，工作区内一次删超过 50 个文件会被「批量删除保护」拦下，脚本跑到一半
 #      直接退出。放到 /tmp 就完全没有这个问题。
 #   2. 这些中间产物加起来 300 MB 左右，没必要塞在仓库目录里（虽然 .gitignore 也挡得住）。
 # 想固定住缓存（省一次 50MB 的下载）可以设 APILOOP_BUILD_WORK=<某个不入库的目录>。
+#
+# **两种架构共用同一个 $WORK，但各自的中间目录带架构后缀** —— 否则打完 arm64 再打 x64，
+# 第二次会把第一次的 node 目录整个删掉重建，白等一次解压。
 WORK="${APILOOP_BUILD_WORK:-/tmp/apiloop-agent-build}"
 DIST="$REPO/agent-installer/dist"
 
@@ -55,8 +80,8 @@ VERSION="$(node -p "require('$REPO/package.json').version")"
 mkdir -p "$WORK/cache" "$DIST"
 
 log "目标"
-printf '  版本      %s\n  架构      %s\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
-    "$VERSION" "$NODE_ARCH" "$NODE_VERSION" "$NODE_MIRROR" "$WORK"
+printf '  版本      %s\n  架构      %s（安装包的 hostArchitectures=%s）\n  Node      %s（nodejs.org 官方构建，镜像：%s）\n  工作目录  %s\n' \
+    "$VERSION" "$NODE_ARCH" "$PKG_ARCH" "$NODE_VERSION" "$NODE_MIRROR" "$WORK"
 
 # ---------------------------------------------------------------- 1. 官方 node
 
@@ -72,7 +97,7 @@ if [ ! -f "$SHASUMS" ]; then
 fi
 
 EXPECTED="$(awk -v f="$TARBALL_NAME" '$2 == f { print $1 }' "$SHASUMS")"
-[ -n "$EXPECTED" ] || die "$SHASUMS 里没有 $TARBALL_NAME，镜像上可能还没有这个版本"
+[ -n "$EXPECTED" ] || die "$SHASUMS 里没有 ${TARBALL_NAME}，镜像上可能还没有这个版本"
 
 if [ ! -f "$TARBALL" ]; then
     log "下载 $BASE_URL/$TARBALL_NAME"
@@ -91,7 +116,8 @@ fi
 printf '  %s  %s\n' "$ACTUAL" "$TARBALL_NAME"
 
 log "解出 node（原样解压，不碰签名）"
-NODE_DIR="$WORK/node"
+# 目录带架构后缀：两种架构各自的 node 互不覆盖，打第二个包时不用重新解压
+NODE_DIR="$WORK/node-$NODE_ARCH"
 MARKER="$NODE_DIR/.apiloop-node-version"
 if [ ! -f "$MARKER" ] || [ "$(cat "$MARKER")" != "$NODE_VERSION" ]; then
     rm -rf "$NODE_DIR"
@@ -100,7 +126,13 @@ if [ ! -f "$MARKER" ] || [ "$(cat "$MARKER")" != "$NODE_VERSION" ]; then
     printf '%s\n' "$NODE_VERSION" > "$MARKER"
 fi
 [ -x "$NODE_DIR/bin/node" ] || die "解压后没有 bin/node"
-printf '  %s\n' "$("$NODE_DIR/bin/node" --version)"
+# 本机跑不了另一架构的 node（这台 Mac 没有 Rosetta 2，x64 的会报 Bad CPU type），
+# 那只是**打印版本号**这一步跑不了 —— 包里那份文件本身没问题，下面用 file 核架构。
+if BUILT_NODE_VERSION="$("$NODE_DIR/bin/node" --version 2>/dev/null)"; then
+    printf '  %s\n' "$BUILT_NODE_VERSION"
+else
+    printf '  （本机跑不了这份 node，跳过版本打印；架构用 file 核）\n'
+fi
 
 # ---------------------------------------------------------------- 2. 暂存服务端
 
@@ -147,11 +179,25 @@ cp "$HERE/com.apiloop.gateway.plist" "$ROOT/Library/LaunchAgents/com.apiloop.gat
 cp "$HERE/uninstall.command" "$APILOOP_DIR/卸载 apiloop.command"
 chmod 755 "$APILOOP_DIR/卸载 apiloop.command"
 
-# 启动器。osacompile 出来就是 ad-hoc 签名的（arm64 上没签名的 Mach-O 根本起不来），
-# 这里只编译，不再额外签一次。
+# 启动器。osacompile 出来就是 ad-hoc 签名的（arm64 上没签名的 Mach-O 根本起不来）。
 log "编译启动器 /Applications/apiloop.app"
-osacompile -o "$ROOT/Applications/apiloop.app" "$HERE/launcher.applescript"
-codesign -v "$ROOT/Applications/apiloop.app" >/dev/null 2>&1 || echo "  提示：启动器的 ad-hoc 签名校验没过"
+LAUNCHER_APP="$ROOT/Applications/apiloop.app"
+LAUNCHER_PLIST="$LAUNCHER_APP/Contents/Info.plist"
+osacompile -o "$LAUNCHER_APP" "$HERE/launcher.applescript"
+
+# 补上 CFBundleIdentifier。**这一条是 N3 能不能生效的前提**：osacompile 生成的 applet
+# 里没有这个键，而 pkgbuild 判断「这是个 bundle 组件」靠的正是它 —— 缺了就会报
+#   error: Path ".../Applications/apiloop.app" is not a valid bundle component
+# 然后直接退出，--component-plist 里那条 BundleIsRelocatable=false 根本轮不到生效。
+plutil -replace CFBundleIdentifier -string com.apiloop.launcher "$LAUNCHER_PLIST"
+
+# 改了 Info.plist，osacompile 那份 ad-hoc 签名就失效了，重新 ad-hoc 签一次
+# （`--sign -` 是免证书的自签名，不需要开发者账号）。
+#
+# **动的只是这个几十 KB 的启动器**；安装包里那份官方 node 一个字节都没碰 ——
+# 下面第 5 步还会拿 sha256 逐字节比对，并核对 TeamIdentifier。
+codesign --force --sign - "$LAUNCHER_APP"
+codesign -v "$LAUNCHER_APP" >/dev/null 2>&1 || echo "  提示：启动器的 ad-hoc 签名校验没过"
 
 # 多用户的电脑上每个用户各跑一个网关，所以这些东西要对所有用户可读（目录可进）
 chmod -R a+rX "$ROOT"
@@ -169,11 +215,38 @@ printf '  %s（%s）\n' "$APILOOP_DIR/app" "$(du -sh "$APILOOP_DIR/app" | awk '{
 SCRIPTS="$WORK/scripts"
 rm -rf "$SCRIPTS"
 mkdir -p "$SCRIPTS"
+cp "$HERE/scripts/preinstall" "$SCRIPTS/preinstall"
 cp "$HERE/scripts/postinstall" "$SCRIPTS/postinstall"
-chmod 755 "$SCRIPTS/postinstall"
+chmod 755 "$SCRIPTS/preinstall" "$SCRIPTS/postinstall"
 
 COMPONENT="$WORK/apiloop-gateway-component.pkg"
 rm -f "$COMPONENT"
+
+# 组件描述（N3）。`BundleIsRelocatable=false` 是要紧的那一条：用户把 apiloop.app 挪到
+# 别处之后再覆盖安装时，Installer 默认会「就近更新」它找到的那份副本，/Applications
+# 下于是永远没有干净的这一个。设成 false 就是「不准挪，就装在我说的位置」。
+# （preinstall 再删一次旧的是第二道防线，两处都要。）
+COMPONENT_PLIST="$WORK/component-plist.xml"
+cat > "$COMPONENT_PLIST" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleHasStrictIdentifier</key>
+        <false/>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>BundleIsVersionChecked</key>
+        <false/>
+        <key>BundleOverwriteAction</key>
+        <string>upgrade</string>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/apiloop.app</string>
+    </dict>
+</array>
+</plist>
+XML
 
 log "pkgbuild（不带 --sign：这个包就是不签名的，node 也一个字都没动）"
 pkgbuild \
@@ -181,18 +254,53 @@ pkgbuild \
     --identifier "$PKG_ID" \
     --version "$VERSION" \
     --scripts "$SCRIPTS" \
+    --component-plist "$COMPONENT_PLIST" \
     --ownership recommended \
     --install-location "/" \
     "$COMPONENT"
 
-DIST_XML="$WORK/distribution.xml"
+# 装错架构时直接拒绝（审阅重点第 3 条）。判断依据是 `hw.optional.arm64`：
+# Apple 芯片上是 1，Intel 上这个 oid 不存在（Installer 的 sysctl 取不到就返回 null）。
+#
+# 这段 JS 里**不能出现 `<`、`>`、`&`** —— 它是写在 XML 的 <script> 里的，
+# 这几个字符要么被当成标签、要么必须转义。所以一律用 === / !== / || 表达。
+#
+# installation-check 的约定：返回 true 放行，返回**字符串**就是错误提示并中止安装。
+if [ "$NODE_ARCH" = "arm64" ]; then
+    WANTS_ARM="true"
+    WRONG_MSG="这是 Apple 芯片版。你的 Mac 是 Intel 芯片，请下载 Intel 芯片版。"
+else
+    WANTS_ARM="false"
+    WRONG_MSG="这是 Intel 芯片版。你的 Mac 是 Apple 芯片（M 系列），请下载 Apple 芯片版。"
+fi
+
+DIST_XML="$WORK/distribution-$NODE_ARCH.xml"
 cat > "$DIST_XML" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>apiloop</title>
     <organization>com.apiloop</organization>
     <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
-    <options customize="never" require-scripts="false" hostArchitectures="$NODE_ARCH"/>
+    <options customize="never" require-scripts="false" hostArchitectures="$PKG_ARCH"/>
+    <installation-check script="apiloopCheckChip()"/>
+    <script>
+    function apiloopCheckChip() {
+        var silicon = false;
+        try {
+            var raw = system.sysctl('hw.optional.arm64');
+            if (raw === 1) { silicon = true; }
+            if (raw === '1') { silicon = true; }
+        } catch (err) {
+            silicon = false;
+        }
+        if ($WANTS_ARM === true) {
+            if (silicon === false) { return '$WRONG_MSG'; }
+            return true;
+        }
+        if (silicon === true) { return '$WRONG_MSG'; }
+        return true;
+    }
+    </script>
     <choices-outline>
         <line choice="default">
             <line choice="$PKG_ID"/>
@@ -222,13 +330,21 @@ cp -f "$BUILT" "$OUT"
 # ---------------------------------------------------------------- 5. 核对签名
 
 log "展开刚打好的安装包，核对里面那份 node"
-VERIFY="$WORK/verify"
+VERIFY="$WORK/verify-$NODE_ARCH"
 rm -rf "$VERIFY"
 mkdir -p "$VERIFY"
 pkgutil --expand-full "$OUT" "$VERIFY/expanded"
 
 PACKED_NODE="$(find "$VERIFY/expanded" -type f -path '*/apiloop/node/bin/node' | head -1)"
 [ -n "$PACKED_NODE" ] || die "安装包里找不到 node/bin/node，打包结果不对"
+
+echo "----- file 的结果（架构要对得上）-----"
+file "$PACKED_NODE"
+echo "--------------------------------------"
+case "$(file -b "$PACKED_NODE")" in
+    *"$PKG_ARCH"*) ;;
+    *) die "安装包里的 node 不是 ${PKG_ARCH}：$(file -b "$PACKED_NODE")" ;;
+esac
 
 SIG="$(codesign -dv --verbose=4 "$PACKED_NODE" 2>&1 || true)"
 echo "----- codesign -dv --verbose=4 的输出 -----"
@@ -237,7 +353,7 @@ echo "-----------------------------------------"
 
 case "$SIG" in
     *"TeamIdentifier=$NODE_TEAM_ID"*) ;;
-    *) die "安装包里 node 的 TeamIdentifier 不是 $NODE_TEAM_ID，打包流程里有人给它重新签名了" ;;
+    *) die "安装包里 node 的 TeamIdentifier 不是 ${NODE_TEAM_ID}，打包流程里有人给它重新签名了" ;;
 esac
 
 log "逐字节比对：安装包里的 node vs 下载下来那份"
@@ -246,12 +362,74 @@ PACKED_SHA="$(shasum -a 256 "$PACKED_NODE" | awk '{print $1}')"
 printf '  下载的  %s\n  包里的  %s\n' "$ORIGINAL_SHA" "$PACKED_SHA"
 [ "$ORIGINAL_SHA" = "$PACKED_SHA" ] || die "安装包里的 node 和下载的不一样（可能被重新签名了）"
 
+log "核对 Distribution（架构限制与装错架构时的提示）"
+DIST_CONTENT="$(cat "$VERIFY/expanded/Distribution")"
+case "$DIST_CONTENT" in
+    *"hostArchitectures=\"$PKG_ARCH\""*) printf '  ✓ hostArchitectures="%s"\n' "$PKG_ARCH" ;;
+    *) die "Distribution 里的 hostArchitectures 不是 $PKG_ARCH" ;;
+esac
+case "$DIST_CONTENT" in
+    *'installation-check script="apiloopCheckChip()"'*) echo "  ✓ installation-check 已挂上" ;;
+    *) die "Distribution 里没有 installation-check" ;;
+esac
+case "$DIST_CONTENT" in
+    *"$WRONG_MSG"*) printf '  ✓ 提示文字：%s\n' "$WRONG_MSG" ;;
+    *) die "Distribution 里没有那句中文提示" ;;
+esac
+
+log "核对覆盖安装的两道防线（N3）"
+PKGINFO_PATH="$(find "$VERIFY/expanded" -type f -name 'PackageInfo' | head -1)"
+[ -n "$PKGINFO_PATH" ] || die "展开后的安装包里找不到 PackageInfo"
+PKGINFO_CONTENT="$(cat "$PKGINFO_PATH")"
+case "$PKGINFO_CONTENT" in
+    *'relocatable="false"'*) echo '  ✓ PackageInfo 里 relocatable="false"（BundleIsRelocatable 生效）' ;;
+    *) die "component-plist 没生效：PackageInfo 里没有 relocatable=\"false\"" ;;
+esac
+case "$PKGINFO_CONTENT" in
+    *'com.apiloop.launcher'*) echo "  ✓ 启动器被当成 bundle 组件（com.apiloop.launcher）" ;;
+    *) die "启动器没有被识别成 bundle：是不是 CFBundleIdentifier 没补上" ;;
+esac
+
+PREINSTALL_PATH="$(find "$VERIFY/expanded" -type f -path '*/Scripts/preinstall' | head -1)"
+[ -n "$PREINSTALL_PATH" ] || die "安装包里没有 preinstall 脚本"
+POSTINSTALL_PATH="$(find "$VERIFY/expanded" -type f -path '*/Scripts/postinstall' | head -1)"
+[ -n "$POSTINSTALL_PATH" ] || die "安装包里没有 postinstall 脚本"
+echo "  ✓ Scripts/preinstall 与 Scripts/postinstall 都在包里"
+case "$(cat "$POSTINSTALL_PATH")" in
+    *'launchctl asuser "$CONSOLE_UID" sudo -u "$CONSOLE_USER" open'*)
+        echo "  ✓ postinstall 用 launchctl asuser 打开启动器（N2）" ;;
+    *) die "postinstall 里没有 launchctl asuser（N2 没改到）" ;;
+esac
+
+log "核对启动器 .app（BundleIsRelocatable=false 要能看见）"
+LAUNCHER_PATH="$(find "$VERIFY/expanded" -type d -name 'apiloop.app' | head -1)"
+[ -n "$LAUNCHER_PATH" ] || die "安装包里找不到 apiloop.app"
+echo "  ✓ $LAUNCHER_PATH"
+file "$LAUNCHER_PATH/Contents/MacOS/applet" | sed 's/^/  /'
+
+log "核对日志路径（N4：plist 里不该再有 StandardOutPath）"
+PLIST_PATH="$(find "$VERIFY/expanded" -type f -name 'com.apiloop.gateway.plist' | head -1)"
+[ -n "$PLIST_PATH" ] || die "安装包里找不到 LaunchAgent plist"
+PLIST_CONTENT="$(cat "$PLIST_PATH")"
+# 比的是**键本身**（<key>StandardOutPath</key>），不是这个词：plist 里那段注释专门
+# 解释了为什么不能设它，拿裸词去比会把注释也算成「没修掉」。
+case "$PLIST_CONTENT" in
+    *'<key>StandardOutPath</key>'*) die "plist 里还有 StandardOutPath：多用户共用 /tmp 的那个问题没修掉" ;;
+    *'<key>StandardErrorPath</key>'*) die "plist 里还有 StandardErrorPath：多用户共用 /tmp 的那个问题没修掉" ;;
+    *) echo "  ✓ plist 里没有 StandardOutPath / StandardErrorPath" ;;
+esac
+case "$PLIST_CONTENT" in
+    *'node/bin/node'*) echo "  ✓ ProgramArguments 里是官方 node 的绝对路径" ;;
+    *) die "plist 的 ProgramArguments 不对" ;;
+esac
+
 log "安装包里的其它关键文件"
 for probe in \
     "*/apiloop/app/bin/server" \
-    "*/apiloop/app/lib/web/index.html" \
     "*/apiloop/app/lib/gateway/index.js" \
+    "*/apiloop/app/lib/web/index.html" \
     "*/apiloop/app/node_modules/express/package.json" \
+    "*/apiloop/app/node_modules/ws/package.json" \
     "*/LaunchAgents/com.apiloop.gateway.plist" \
     "*/Applications/apiloop.app/Contents/MacOS/applet"
 do
@@ -263,7 +441,7 @@ do
     fi
 done
 
-log "完成"
+log "完成（${NODE_ARCH}）"
 printf '  安装包  %s\n  大小    %s\n  中间产物 %s（可以随时删掉，下次会重新下载 node）\n\n' \
     "$OUT" "$(du -h "$OUT" | awk '{print $1}')" "$WORK"
 echo "安装包**不签名**（用户机器上第一次打开要点「仍要打开」）。"

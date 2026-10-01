@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# apiloop 安装包的 preinstall。**以 root 身份运行，在文件被写入之前。**
+#
+# 只做一件事：把旧的 /Applications/apiloop.app 删掉（G0 审阅 N3）。
+#
+# 为什么必须在这里删：
+#   1. **用户挪过 .app。** 覆盖安装时 Installer 发现同一个 bundle id 已经存在于别处，
+#      会「就近更新」那个副本，于是 /Applications 下永远没有干净的这一个。
+#      （打包侧还把 BundleIsRelocatable 设成了 false，两道一起上。）
+#   2. **装过旧的 Electron 版。** 那种包的 .app 里东西不一样，直接覆盖会留下混合的
+#      内容 —— 启动器是新的、里面却是旧的。
+#
+# 删之前先把可能还在跑的那个实例退掉：它是旧版本，留着没有意义，
+# 而且 macOS 在文件被替换时会给用户弹「xxx 已被修改」的对话框。
+#
+# **永远 exit 0**：删不掉也不该让安装失败（用户手动删一下就行，文件照样会装上）。
+
+set -u
+
+LAUNCHER_APP="/Applications/apiloop.app"
+LOG="/tmp/apiloop-install.log"
+
+log() {
+    echo "[apiloop] $*" | tee -a "$LOG" >&2
+}
+
+if [ ! -e "$LAUNCHER_APP" ]; then
+    log "没有旧的 ${LAUNCHER_APP}，跳过清理。"
+    exit 0
+fi
+
+# 旧版启动器可能正开着（它是 osacompile 出来的 applet，跑完会自己退出，
+# 但双击之后那几秒里还在）。按可执行文件路径退掉它 —— **不用 AppleScript**：
+# `tell application "apiloop" to quit` 在它没运行时反而会把它**启动**起来，
+# 正好在安装过程中弹出一个浏览器。
+if pkill -f "$LAUNCHER_APP/Contents/MacOS/applet" >>"$LOG" 2>&1; then
+    log "退掉了正在运行的旧启动器"
+fi
+
+log "删除旧的 $LAUNCHER_APP"
+rm -rf "$LAUNCHER_APP" >>"$LOG" 2>&1 || log "删除失败，继续安装。"
+
+exit 0
