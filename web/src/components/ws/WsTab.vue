@@ -22,6 +22,8 @@ import { mockBaseFor } from '@/utils/mock';
 import { useWsStore } from '@/stores/ws';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
+import { useUiStore } from '@/stores/ui';
+import { useGatewayStore } from '@/stores/gateway';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import VarInput from '@/components/common/VarInput.vue';
@@ -52,8 +54,20 @@ const envs = useEnvStore();
 const ws = useWsStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
+const ui = useUiStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 const paneTabsTheme = usePaneTabsTheme();
+
+/** 这个接口和云端对不上：顶部一条红提示 + 「处理」入口（设计稿第 7 节，审阅第 11 轮 N6） */
+const conflicted = computed(function () {
+  return Boolean(props.tab.apiId) && gateway.isConflicted('api', props.tab.apiId);
+});
+
+function openConflict() {
+  if (!props.tab.apiId) return;
+  ui.openConflict('api', props.tab.apiId);
+}
 
 const activePane = ref('headers');
 const sending = ref(false);
@@ -455,6 +469,12 @@ watch(
 
 <template>
   <div class="ws-tab">
+    <!-- 这个接口和云端对不上：顶部一条红提示 + 处理入口 -->
+    <div v-if="conflicted" class="conflict-bar">
+      <span class="conflict-text">这个接口和云端有冲突</span>
+      <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+    </div>
+
     <div class="head">
       <var-input
         class="url"
@@ -652,6 +672,24 @@ watch(
   flex-direction: column;
   padding: 12px 16px;
   gap: 8px;
+}
+
+/* 冲突提示条：和普通接口标签页那条一致（RequestTab 里的同款） */
+.conflict-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #b3160c;
+  background: rgba(235, 32, 19, 0.1);
+}
+
+.conflict-text {
+  font-weight: 600;
 }
 
 .head {
