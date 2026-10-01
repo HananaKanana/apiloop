@@ -27,7 +27,9 @@ const dialog = useDialog();
 
 const showCreate = ref(false);
 const creating = ref(false);
-const form = ref({ name: '', slug: '', description: '' });
+// 没有「标识」这一项了：mock 地址改成 /mock-<项目ID>/，标识不再用于 mock（L1）。
+// 服务端仍然会自动生成一个唯一标识，只是界面上不用管它。
+const form = ref({ name: '', description: '' });
 
 /**
  * 选项的自定义渲染，通过 n-dropdown 的 render-label 传入。
@@ -76,7 +78,7 @@ const options = computed(function () {
 });
 
 function openCreate() {
-  form.value = { name: '', slug: '', description: '' };
+  form.value = { name: '', description: '' };
   showCreate.value = true;
 }
 
@@ -101,7 +103,6 @@ async function submitCreate() {
   creating.value = true;
   try {
     const payload = { name: form.value.name.trim() };
-    if (form.value.slug.trim()) payload.slug = form.value.slug.trim();
     if (form.value.description.trim()) payload.description = form.value.description.trim();
 
     const project = await projects.create(payload);
@@ -161,9 +162,6 @@ function onSelect(key) {
     <n-form>
       <n-form-item label="名称">
         <n-input v-model:value="form.name" placeholder="项目名称" />
-      </n-form-item>
-      <n-form-item label="标识">
-        <n-input v-model:value="form.slug" placeholder="留空自动生成；用于 /mock/<标识>/ 前缀" />
       </n-form-item>
       <n-form-item label="说明">
         <n-input v-model:value="form.description" placeholder="可留空" />

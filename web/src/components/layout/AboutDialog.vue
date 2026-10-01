@@ -17,6 +17,14 @@ const meta = computed(function () {
   return session.meta || {};
 });
 
+/**
+ * mock 前缀。服务端的 `mockBase` 现在是 `/mock-`，光显示它用户看不懂 ——
+ * 补上 `<项目ID>/` 把完整格式说清楚（根项目仍然挂在根路径，不带这个前缀）。
+ */
+const mockPrefixHint = computed(function () {
+  return (meta.value.mockBase || '/mock-') + '<项目ID>/';
+});
+
 async function copyPath() {
   try {
     await navigator.clipboard.writeText(meta.value.configPath || '');
@@ -50,7 +58,7 @@ async function copyPath() {
       </div>
       <div class="line">
         <span class="label">mock 前缀</span>
-        <span class="value path">{{ meta.mockBase || '/mock/' }}</span>
+        <span class="value path">{{ mockPrefixHint }}</span>
       </div>
     </div>
 

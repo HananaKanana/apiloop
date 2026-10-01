@@ -51,7 +51,6 @@ const activeTab = ref('basic');
 
 const form = ref({
   name: '',
-  slug: '',
   description: '',
   variables: [],
   auth: { type: 'inherit' },
@@ -71,7 +70,6 @@ const isOwner = computed(function () {
 function fillFrom(project) {
   form.value = {
     name: project.name || '',
-    slug: project.slug || '',
     description: project.description || '',
     variables: JSON.parse(JSON.stringify(project.variables || [])),
     auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' },
@@ -106,7 +104,7 @@ async function save() {
 
   saving.value = true;
   try {
-    // 名称和标识只有 owner 能改，只提交自己能改的字段，别替服务端做判断
+    // 名称只有 owner 能改，只提交自己能改的字段，别替服务端做判断
     const patch = {
       description: form.value.description,
       variables: form.value.variables,
@@ -115,7 +113,6 @@ async function save() {
     };
     if (isOwner.value) {
       patch.name = form.value.name.trim();
-      patch.slug = form.value.slug.trim();
     }
 
     await projects.update(projectId.value, patch);
@@ -198,13 +195,6 @@ watch(function () { return route.params.pid; }, load);
             <n-form label-placement="top">
               <n-form-item label="名称">
                 <n-input v-model:value="form.name" :disabled="!isOwner" placeholder="项目名称" />
-              </n-form-item>
-              <n-form-item label="标识">
-                <n-input
-                  v-model:value="form.slug"
-                  :disabled="!isOwner"
-                  placeholder="用于 /mock/<标识>/ 前缀"
-                />
               </n-form-item>
               <n-form-item label="说明">
                 <n-input
