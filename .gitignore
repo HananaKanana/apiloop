@@ -16,3 +16,8 @@ web/dist-check
 data/
 workspace/
 .env
+
+# 桌面版（D0）：依赖、暂存的 app、打包产物都不入库
+desktop/node_modules/
+desktop/app/
+desktop/dist/
