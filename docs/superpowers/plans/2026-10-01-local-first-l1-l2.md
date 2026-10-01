@@ -356,3 +356,43 @@
 **回报：**
 - 一个地址写成 `{{host}}/xxx`、开了 mock 的接口，切到 Mock 环境发送，响应是 mock 数据，「请求」页里实际的地址是 `<云端>/mock-<项目ID>/xxx`；
 - 切回普通环境，发往真实地址。
+
+---
+
+## 追加：HTML 预览改进（2026-10-01，用户报「预览是空的」）
+
+请求 llama-ui 的首页，「预览」一片空白。原因：
+- 预览在 `<iframe sandbox="">` 里渲染，不执行脚本，这一点**保持不变**，是安全上的要求；
+- llama-ui 是靠脚本渲染的单页应用，HTML 本身只是个空壳；
+- 相对路径的样式、图片也加载不到。
+
+### Task 9（session2）：预览补上基准地址，需要脚本的页面给提示
+
+**文件：** `web/src/components/response/BodyViewer.vue`；`web/src/components/response/ResponsePanel.vue`（多传一个属性）
+
+**接口：** `BodyViewer` 新增属性 `requestUrl: String`（默认空串）和 `requestMethod: String`。`ResponsePanel` 传 `result.request.url` 和 `result.request.method`，这是跟随跳转之后实际请求的地址。
+
+**做什么：**
+- **基准地址：** `requestUrl` 是 http(s) 地址时，给 `srcdoc` 补一个 `<base href="<requestUrl>">`：
+  - 有 `<head>` 就插在 `<head>` 开标签后面（不区分大小写），没有就加在最前面；
+  - 原文里已经有 `<base` 的不补；
+  - 地址里的 `"`、`<`、`&` 要转义。
+  - `sandbox=""` 保持不变，不加 `allow-scripts`。
+- **需要脚本的页面：** 满足下面两条时，预览上方显示一条提示「这个页面要运行脚本才能显示，预览里不执行脚本。」：
+  - 原文里有 `<script`；
+  - 去掉 `<script>…</script>`、`<style>…</style>`、注释和所有标签之后，剩下的可见文字不到 20 个字符。
+  
+  `requestMethod` 是 GET 时，提示旁边再加一个按钮「在浏览器中打开」，点击用 `window.open(requestUrl, '_blank', 'noopener')`。
+- 其余视图（美化、原文）不变。
+
+**回报：**
+- 请求 llama-ui 的首页：看到提示和「在浏览器中打开」；
+- 请求一个普通的服务端渲染页面（随便一个带相对路径 CSS 的静态站）：预览带样式。
+
+---
+
+## 下一步的顺序（用户 2026-10-01 同意）
+
+1. session1：Task 7（同步接口）。
+2. session1：**L3a 登录时上传本机项目**。只依赖 Task 7 的推送接口；推送成功的从本机库删掉，中断了下次登录接着推。计划在 Task 7 审完后写。
+3. L3b：账号空间、双向同步、冲突、离线暂存；L4：同步界面。
