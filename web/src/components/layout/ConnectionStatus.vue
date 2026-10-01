@@ -105,6 +105,16 @@ const indicator = computed(function () {
       };
     }
 
+    // 连不上云端时不能说「已同步」（2026-10-01：云端早就不在了，顶栏还是绿的「已同步」）
+    if (sync.online === false) {
+      return {
+        color: '#f0a020',
+        text: '离线',
+        hint: sync.lastError || '连不上云端，改动会留在本机，联网后自动同步',
+        action: ''
+      };
+    }
+
     const at = formatSyncTime(sync.lastSyncAt);
     return {
       color: '#0cbb52',

@@ -2,6 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
+  NAlert,
   NButton,
   NCard,
   NDataTable,
@@ -54,12 +55,17 @@ const isSelf = computed(function () {
   return Boolean(editing.value && session.user && editing.value.id === session.user.id);
 });
 
+/** 拉不到用户列表的原因（常见：本机 apiloop 连不上云端）。要一直留在页面上 —— 只弹一下的话表格看起来就是「无数据」 */
+const loadError = ref('');
+
 async function load() {
   loading.value = true;
+  loadError.value = '';
   try {
     const data = await usersApi.listUsers();
     users.value = data.users || [];
   } catch (err) {
+    loadError.value = '用户列表拉不下来：' + err.message;
     showError(err);
   } finally {
     loading.value = false;
@@ -244,6 +250,9 @@ onMounted(load);
 
     <div class="content">
       <n-card :bordered="false" size="small">
+        <n-alert v-if="loadError" type="error" :show-icon="false" style="margin-bottom: 12px">
+          {{ loadError }}
+        </n-alert>
         <n-data-table
           :columns="columns"
           :data="users"
