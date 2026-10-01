@@ -90,6 +90,25 @@ function onBeforeUnload(event) {
   event.returnValue = '';
 }
 
+/**
+ * 给 Mac 原生壳留的钩子：壳子关窗口、退出、刷新之前会问一句，
+ * 返回 true 就弹「还有没保存的修改」（见 docs/superpowers/plans/2026-10-01-mac-shell.md）。
+ *
+ * **只在工作台挂着的时候存在** —— 离开工作台（比如回登录页）就删掉。
+ * 壳子那边拿不到这个对象、或者调用报错，一律当「没有未保存的修改」直接关，
+ * 所以这里不用做任何兜底。
+ */
+function mountShellHook() {
+  window.apiloopShell = {
+    /** 壳子关窗口、退出、刷新之前问一句（Mac 原生壳，见 docs/superpowers/plans/2026-10-01-mac-shell.md） */
+    hasUnsavedChanges: function () { return Boolean(tabs.hasDirty); }
+  };
+}
+
+function unmountShellHook() {
+  delete window.apiloopShell;
+}
+
 /* ---------------- 版本不一致的横幅 ---------------- */
 
 /**
@@ -267,6 +286,8 @@ onMounted(async function () {
   window.addEventListener('resize', onResize);
   window.addEventListener('beforeunload', onBeforeUnload);
   window.addEventListener('keydown', onKeydown);
+  // 浏览器里的刷新提示（beforeunload）和壳子的钩子都要，两个各管一边
+  mountShellHook();
   onResize();
 
   try {
@@ -283,6 +304,7 @@ onMounted(async function () {
 
 onBeforeUnmount(function () {
   gateway.stop();
+  unmountShellHook();
   window.removeEventListener('mousemove', onMove);
   window.removeEventListener('mouseup', stopDrag);
   window.removeEventListener('resize', onResize);
