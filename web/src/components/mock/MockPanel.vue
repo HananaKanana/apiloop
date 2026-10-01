@@ -515,7 +515,7 @@ async function onDrop() {
         <div class="url-row">
           <span class="url-label">mock 地址</span>
           <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
-          <span v-if="gateway.isLocal" class="url-hint">登录后可用</span>
+          <span v-if="!gateway.mockAvailable" class="url-hint">登录后可用</span>
           <template v-else>
             <code class="url">{{ mockUrl }}</code>
             <n-button size="tiny" quaternary @click="copyMockUrl">复制</n-button>

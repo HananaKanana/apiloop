@@ -505,7 +505,7 @@ export const useTabsStore = defineStore('tabs', function () {
     // 重放历史时把环境也切回去：Mock 环境不存库，不切的话这次请求会打到真实地址上。
     // 本机模式下没有 Mock，退成「无环境」。
     if (environmentId === MOCK_ENV_ID) {
-      useEnvStore().select(useGatewayStore().isLocal ? '' : MOCK_ENV_ID);
+      useEnvStore().select(useGatewayStore().mockAvailable ? MOCK_ENV_ID : '');
     }
 
     return tab;

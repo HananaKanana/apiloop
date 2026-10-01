@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { NAlert, NButton, NModal, NSpace, NSpin, NTag } from 'naive-ui';
 import * as downloadsApi from '@/api/downloads';
+import { useGatewayStore } from '@/stores/gateway';
 import { formatBytes } from '@/utils/bytes';
 
 /**
@@ -22,6 +23,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:show']);
+
+const gateway = useGatewayStore();
 
 const loading = ref(false);
 const loadError = ref('');
@@ -61,6 +64,14 @@ const steps = computed(function () {
 });
 
 async function load() {
+  // 安装包列表存在云端，没登录时网关会返回 409 —— 干脆不请求，直接说「登录后可用」
+  if (!gateway.cloudFeaturesAvailable) {
+    files.value = [];
+    loadError.value = '';
+    loaded.value = true;
+    return;
+  }
+
   loading.value = true;
   loadError.value = '';
   try {
@@ -117,6 +128,11 @@ function archLabel(arch) {
           {{ loadError }}
         </n-alert>
 
+        <!-- 安装包在云端，没登录拿不到列表（也就没得下） -->
+        <n-alert v-else-if="!gateway.cloudFeaturesAvailable" type="info" :show-icon="false" class="notice">
+          登录后可用。
+        </n-alert>
+
         <template v-else-if="loaded && !files.length">
           <n-alert type="info" :show-icon="false" class="notice">
             管理员还没有上传安装包。
@@ -134,7 +150,8 @@ function archLabel(arch) {
           </div>
         </template>
 
-        <div class="steps">
+        <!-- 登录后才有得下，步骤就等登录了再看 -->
+        <div v-if="gateway.cloudFeaturesAvailable" class="steps">
           <p class="steps-title">安装步骤</p>
           <ol class="steps-list">
             <li v-for="(step, index) in steps" :key="index">{{ step }}</li>

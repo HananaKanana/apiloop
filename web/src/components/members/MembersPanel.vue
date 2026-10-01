@@ -10,6 +10,7 @@ import {
   useDialog,
   useMessage
 } from 'naive-ui';
+import { isLoginRequired } from '@/api/client';
 import * as membersApi from '@/api/members';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
@@ -29,6 +30,15 @@ const emit = defineEmits(['left']);
 const projects = useProjectStore();
 const session = useSessionStore();
 const message = useMessage();
+
+/**
+ * 这些接口都是「只有云端有的功能」：没登录时网关返回 409 + LOGIN_REQUIRED。
+ * 那是「要先登录」，不是出错，所以用提示语气，也别跳登录页（客户端只在 401 时跳）。
+ */
+function showError(err) {
+  if (isLoginRequired(err)) message.warning(err.message);
+  else showError(err);
+}
 const dialog = useDialog();
 
 const members = ref([]);
@@ -60,7 +70,7 @@ async function load() {
     const data = await membersApi.listMembers(props.pid);
     members.value = data.members || [];
   } catch (err) {
-    message.error(err.message);
+    showError(err);
   } finally {
     loading.value = false;
   }
@@ -88,7 +98,7 @@ function onSearch(keyword) {
         };
       });
     } catch (err) {
-      message.error(err.message);
+      showError(err);
     } finally {
       searching.value = false;
     }
@@ -109,7 +119,7 @@ async function addMember() {
     userOptions.value = [];
     message.success('已添加');
   } catch (err) {
-    message.error(err.message);
+    showError(err);
   } finally {
     adding.value = false;
   }
@@ -126,7 +136,7 @@ async function changeRole(member, role) {
     if (member.userId === myUserId.value) await projects.refresh();
   } catch (err) {
     // 把自己降级成最后一个 owner 这种情况，原因由服务端说清楚
-    message.error(err.message);
+    showError(err);
     await load();
   }
 }
@@ -151,7 +161,7 @@ function askRemove(member) {
         await load();
         message.success('已移除');
       } catch (err) {
-        message.error(err.message);
+        showError(err);
       }
     }
   });

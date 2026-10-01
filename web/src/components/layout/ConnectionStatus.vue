@@ -6,21 +6,18 @@ import { useGatewayStore } from '@/stores/gateway';
 import InstallDialog from './InstallDialog.vue';
 
 /**
- * 顶栏右侧的连接状态：一个小圆点 + 一句话。
+ * 顶栏右侧的状态点（设计稿第 7 节）。
  *
- * 四种形态：
- * - 网关上、**本机模式** → 灰点「仅本机」，点了去登录页（L1）；
- * - 网关上、云端模式、云端连得上 → 绿点「本机发送」；
- * - 网关上、云端模式、云端连不上 → 红点「云端连不上」；
- * - 直接打开云端 → 灰点「云端发送」。
+ * 网关上的状态优先级从高到低：
+ * 登录过期 → 有冲突 → 正在同步 → N 项待同步（连不上云端时是「离线 · N 项待同步」）
+ * → 已同步 → 未绑定 / 已退出。
+ * 直接打开云端时还是那句「云端发送」，和以前一样。
  *
- * 点它的行为：
- * - 本机模式 → 去登录页（想用云端的项目就去登录）；
- * - 网关上、有新版本 → 下拉菜单「安装新版本…」；
- * - 直接打开云端 → 直接开「安装本机 apiloop」对话框。
- *
- * L1 起**不再有「云端地址…」**：地址在打包时写死，界面上不给改
- * （换地址 = 发一个新版本的安装包）。
+ * 点它：
+ * - 有新版本 → 下拉菜单「安装新版本…」；
+ * - 未绑定 / 已退出 / 登录过期 → 去登录页；
+ * - 有冲突 → 冲突列表（Task 5 接）；
+ * - 其余状态点了没事发生。
  */
 const router = useRouter();
 const gateway = useGatewayStore();
@@ -38,41 +35,101 @@ const versionHint = computed(function () {
   return '本机 apiloop 是 ' + mismatch.gatewayVersion + '，云端是 ' + mismatch.cloudVersion;
 });
 
+/** 同步时间戳：数字当毫秒、字符串按 ISO 解析，认不出来就不显示 */
+function formatSyncTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '';
+  function pad(number) { return String(number).padStart(2, '0'); }
+  return pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+}
+
 const indicator = computed(function () {
-  if (gateway.isLocal) {
+  // 直接打开云端：没有空间、没有同步，就是「请求从云端发出」这一件事。
+  // 点开是「安装本机 apiloop」——装完请求就能从自己电脑发出
+  if (!gateway.isGateway) {
     return {
       color: '#6b7280',
-      text: '仅本机',
-      hint: '数据只保存在这台电脑上。登录后可以使用云端的项目'
+      text: '云端发送',
+      hint: '请求从云端服务器发出，访问不了你电脑上和内网的地址。安装本机的 apiloop 后可以从本机发送',
+      action: 'install'
     };
   }
 
-  if (gateway.isGateway) {
-    const reachable = Boolean(gateway.status && gateway.status.cloudReachable);
-    if (reachable) {
+  // 网关还没实现同步引擎时 sync 是 null，按「没有同步信息」处理
+  const sync = gateway.sync || {};
+
+  /*
+   * 同步相关的状态只在**已登录**时才有意义。
+   *
+   * 未绑定 / 已退出时 `sync` 里也可能带着数字（本机库有自己的变更流水，
+   * 实测未绑定状态下 `pending` 就是 1），但那些改动没有云端可去，
+   * 显示成「N 项待同步」是错的 —— 设计稿第 7 节这两种状态分别是「仅本机」和「未登录 · 不同步」。
+   */
+  if (gateway.signedIn) {
+    if (sync.expired) {
       return {
-        color: '#0cbb52',
-        text: '本机发送',
-        hint: '请求从这台电脑发出；数据保存在 ' + (gateway.cloudUrl || '云端')
+        color: '#eb2013',
+        text: '登录已过期',
+        hint: '同步暂停了，本机照常能用。点这里重新登录',
+        action: 'login'
       };
     }
+
+    if (sync.conflicts > 0) {
+      return {
+        color: '#eb2013',
+        text: sync.conflicts + ' 个冲突',
+        hint: '有几处改动和云端对不上，点开看看',
+        action: 'conflicts'
+      };
+    }
+
+    if (sync.running) {
+      return { color: '#0cbb52', text: '同步中', hint: '正在和云端同步', action: '', spin: true };
+    }
+
+    if (sync.pending > 0) {
+      const offline = sync.online === false;
+      return {
+        color: '#f0a020',
+        text: (offline ? '离线 · ' : '') + sync.pending + ' 项待同步',
+        hint: offline
+          ? '连不上云端，改动都留在本机，联网后会自动同步'
+          : '本机有改动还没同步到云端',
+        action: ''
+      };
+    }
+
+    const at = formatSyncTime(sync.lastSyncAt);
     return {
-      color: '#eb2013',
-      text: '云端连不上',
-      hint: gateway.cloudUrl ? '连不上 ' + gateway.cloudUrl : '还没设置云端地址'
+      color: '#0cbb52',
+      text: '已同步',
+      hint: at ? '最近同步：' + at : '已和云端同步',
+      action: ''
+    };
+  }
+
+  if (gateway.spaceState === 'signedOut') {
+    return {
+      color: '#6b7280',
+      text: '未登录 · 不同步',
+      hint: '数据只保存在这台电脑上，改动不会同步。点这里登录',
+      action: 'login'
     };
   }
 
   return {
     color: '#6b7280',
-    text: '云端发送',
-    hint: '请求从云端服务器发出，访问不了你电脑上和内网的地址。安装本机的 apiloop 后可以从本机发送'
+    text: '仅本机',
+    hint: '数据只保存在这台电脑上。登录后，本机的项目会自动同步到这个账号',
+    action: 'login'
   };
 });
 
-/** 本机模式下没有菜单（没有云端地址可改），点一下直接去登录页 */
+/** 有新版本时才给菜单；其余情况点击按状态各自的动作走 */
 const menuEnabled = computed(function () {
-  return gateway.isGateway && !gateway.isLocal && hasNewVersion.value;
+  return gateway.isGateway && hasNewVersion.value;
 });
 
 const menuOptions = computed(function () {
@@ -81,7 +138,7 @@ const menuOptions = computed(function () {
 
 /** 光标要不要变成手型：点了有事发生才变 */
 const clickable = computed(function () {
-  return gateway.isLocal || !gateway.isGateway || hasNewVersion.value;
+  return menuEnabled.value || indicator.value.action !== '';
 });
 
 function onMenuSelect(key) {
@@ -89,12 +146,13 @@ function onMenuSelect(key) {
 }
 
 function onIndicatorClick() {
-  if (gateway.isLocal) {
-    router.push('/login');
-    return;
-  }
-  // 网关上的点击归下拉菜单管；直接打开云端时没有菜单，点了就开安装对话框
-  if (!gateway.isGateway) showInstall.value = true;
+  // 有新版本时这一下归下拉菜单管
+  if (menuEnabled.value) return;
+
+  const action = indicator.value.action;
+  if (action === 'login') router.push('/login');
+  if (action === 'install') showInstall.value = true;
+  // action === 'conflicts' 留给 Task 5
 }
 </script>
 
@@ -109,7 +167,9 @@ function onIndicatorClick() {
     <n-tooltip trigger="hover">
       <template #trigger>
         <button class="conn" :class="{ clickable: clickable }" type="button" @click="onIndicatorClick">
-          <span class="dot" :style="{ background: indicator.color }" />
+          <!-- 同步中转圈；其余状态是一个实心圆点 -->
+          <span v-if="indicator.spin" class="spinner" />
+          <span v-else class="dot" :style="{ background: indicator.color }" />
           <span class="text">{{ indicator.text }}</span>
           <span v-if="hasNewVersion" class="new-version">有新版本</span>
         </button>
@@ -156,6 +216,22 @@ function onIndicatorClick() {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+}
+
+/* 「同步中」转圈：一个小小的旋转圆环，和圆点同宽高 */
+.spinner {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 2px solid rgba(12, 187, 82, 0.25);
+  border-top-color: #0cbb52;
+  border-radius: 50%;
+  animation: conn-spin 0.8s linear infinite;
+}
+
+@keyframes conn-spin {
+  to { transform: rotate(360deg); }
 }
 
 .text {

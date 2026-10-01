@@ -115,7 +115,7 @@ export const useEnvStore = defineStore('env', function () {
     // 内置的 Mock 环境不在列表里，要单独认；本机模式下 mock 用不了，退成「无环境」。
     const saved = localStorage.getItem(storageKey(pid)) || '';
     if (saved === MOCK_ENV_ID) {
-      selectedId.value = useGatewayStore().isLocal ? '' : MOCK_ENV_ID;
+      selectedId.value = useGatewayStore().mockAvailable ? MOCK_ENV_ID : '';
       return environments.value;
     }
 

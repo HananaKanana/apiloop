@@ -62,6 +62,20 @@ export async function toError(res) {
 }
 
 /**
+ * 网关对「只有云端有的功能」（改密码、用户管理、成员管理、mock 日志、安装包列表）
+ * 在没登录时返回 409 + `code: 'LOGIN_REQUIRED'`。
+ *
+ * 这**不算出错** —— 只是这个功能要先登录 —— 所以调用方应该用 `message.warning` 提示，
+ * 而且**不要跳登录页**（`request` 只在 401 时跳，409 不会）。
+ *
+ * 这些功能的入口在没登录时本来就是藏起来的，所以这是兜底路径：
+ * 页面开着的时候登录态变了（比如会话过期），才会走到这里。
+ */
+export function isLoginRequired(err) {
+  return Boolean(err && err.status === 409 && err.data && err.data.code === 'LOGIN_REQUIRED');
+}
+
+/**
  * @param {string} method
  * @param {string} path 以 / 开头的接口路径，不含 /__admin/api 前缀
  * @param {any} [body] 会按 JSON 序列化
