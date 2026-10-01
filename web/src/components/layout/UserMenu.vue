@@ -97,15 +97,14 @@ function confirmDelete(title, withLogout) {
 }
 
 /**
- * 退出登录（网关上）：只表示「不同步了」——**不跳登录页**，本机的会话和数据的都留着，
- * 页面照常能用。
+ * 退出登录（网关上）：只表示「不同步了」——**不跳登录页，也不关标签页**。
+ * 本机的会话和数据一个都不动，页面照常能用，开着的东西就还开着。
  *
  * 所以这里**不能**用 `session.logout()`：那会把前端的 user / meta 清掉，
  * 之后随便点一下就撞上路由守卫、被弹回登录页。网关的退出本来就不动浏览器那份会话
  * （见 `lib/gateway/account.js` 的 logout），直接调接口再刷新状态就对了。
  */
 async function signOut() {
-  tabs.closeAll();
   try {
     await logoutApi();
   } catch (err) {

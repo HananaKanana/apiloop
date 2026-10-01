@@ -67,15 +67,6 @@ const indicator = computed(function () {
    * 显示成「N 项待同步」是错的 —— 设计稿第 7 节这两种状态分别是「仅本机」和「未登录 · 不同步」。
    */
   if (gateway.signedIn) {
-    if (sync.expired) {
-      return {
-        color: '#eb2013',
-        text: '登录已过期',
-        hint: '同步暂停了，本机照常能用。点这里重新登录',
-        action: 'login'
-      };
-    }
-
     if (sync.conflicts > 0) {
       return {
         color: '#eb2013',
@@ -111,6 +102,24 @@ const indicator = computed(function () {
   }
 
   if (gateway.spaceState === 'signedOut') {
+    /*
+     * 「登录已过期」和「自己退出登录」在状态上是同一个值。
+     *
+     * 网关的 `markExpired()`（space.js）会删掉 `session.json` 同时置 `expired`，
+     * 所以 `state` 也变成 `signedOut` —— **只能靠 `sync.expired` 区分这两件事**。
+     * 早先把这一支写在 `signedIn` 里，结果永远显示不出来（审阅第 8 轮 B2）。
+     *
+     * `sync` 要等同步引擎才有，没有时按 false 处理。
+     */
+    if (sync.expired) {
+      return {
+        color: '#eb2013',
+        text: '登录已过期',
+        hint: '同步暂停了，本机照常能用。点这里重新登录',
+        action: 'login'
+      };
+    }
+
     return {
       color: '#6b7280',
       text: '未登录 · 不同步',
