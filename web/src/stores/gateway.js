@@ -73,6 +73,75 @@ export const useGatewayStore = defineStore('gateway', function () {
   });
 
   /**
+   * 待同步的行和冲突的行。`sync` 里只有**个数**，目录树要按行打标记，
+   * 所以计数不为 0 时另外拉一次清单（见 `refreshSyncDetails`）。
+   */
+  const pendingItems = ref([]);
+  const conflicts = ref([]);
+
+  /** `entity:id` 的集合 —— 目录树每个节点都要查一次，用数组 some 太慢 */
+  function keySet(items) {
+    const set = new Set();
+    items.forEach(function (item) { set.add(item.entity + ':' + item.id); });
+    return set;
+  }
+
+  const pendingKeys = computed(function () { return keySet(pendingItems.value); });
+  const conflictKeys = computed(function () { return keySet(conflicts.value); });
+
+  /** 这一行有没有还没推上去的改动。`entity` 用树节点的 `kind`（folder / api / …） */
+  function isPending(entity, id) {
+    return pendingKeys.value.has(entity + ':' + id);
+  }
+
+  /** 这一行和云端对不对得上 */
+  function isConflicted(entity, id) {
+    return conflictKeys.value.has(entity + ':' + id);
+  }
+
+  /** 冲突的详情，冲突对话框用 */
+  function findConflict(entity, id) {
+    return conflicts.value.find(function (item) {
+      return item.entity === entity && item.id === id;
+    }) || null;
+  }
+
+  /**
+   * 拉待同步 / 冲突的清单。**只在计数不为 0 时拉**，清空时也要把本地清掉
+   * （否则同步完了树上的小点还挂着）。
+   *
+   * 拉不到不影响顶栏状态，吞掉错误等下个周期重试。
+   */
+  async function refreshSyncDetails() {
+    if (!isGateway.value || !signedIn.value) {
+      pendingItems.value = [];
+      conflicts.value = [];
+      return;
+    }
+
+    const counts = sync.value || {};
+    try {
+      if (counts.pending > 0) {
+        pendingItems.value = (await gatewayApi.listPending()).items || [];
+      } else {
+        pendingItems.value = [];
+      }
+    } catch (err) {
+      // 下个周期自己会重试
+    }
+
+    try {
+      if (counts.conflicts > 0) {
+        conflicts.value = (await gatewayApi.listConflicts()).items || [];
+      } else {
+        conflicts.value = [];
+      }
+    } catch (err) {
+      // 同上
+    }
+  }
+
+  /**
    * 「只有云端有的功能」能不能用：改密码、用户管理、成员管理、mock 日志、安装包列表。
    * 这些数据不同步到本机，没登录就没有。
    */
@@ -124,16 +193,18 @@ export const useGatewayStore = defineStore('gateway', function () {
     isGateway.value = result.isGateway;
     status.value = result.isGateway ? pick(result) : null;
     loaded.value = true;
+    await refreshSyncDetails();
     return result;
   }
 
-  /** 只刷状态。失败就沿用上一次的结果，不要因此把圆点变成红的 */
+  /** 只刷状态（外加待同步 / 冲突清单）。失败就沿用上一次的结果，不要因此把圆点变成红的 */
   async function refresh() {
     if (!isGateway.value) return;
     try {
       const result = await gatewayApi.getStatus();
       if (!result.isGateway) return;
       status.value = pick(result);
+      await refreshSyncDetails();
     } catch (err) {
       // 探测失败不打扰用户，下个周期自己会重试
     }
@@ -172,6 +243,12 @@ export const useGatewayStore = defineStore('gateway', function () {
     spaceState: spaceState,
     signedIn: signedIn,
     sync: sync,
+    pendingItems: pendingItems,
+    conflicts: conflicts,
+    isPending: isPending,
+    isConflicted: isConflicted,
+    findConflict: findConflict,
+    refreshSyncDetails: refreshSyncDetails,
     cloudFeaturesAvailable: cloudFeaturesAvailable,
     mockAvailable: mockAvailable,
     versionMismatch: versionMismatch,

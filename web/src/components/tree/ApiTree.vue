@@ -4,6 +4,7 @@ import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree
 import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
+import { useGatewayStore } from '@/stores/gateway';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
@@ -13,6 +14,7 @@ const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import'])
 
 const projects = useProjectStore();
 const tree = useTreeStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 const prompt = usePrompt();
 
@@ -147,10 +149,30 @@ function renderLabel(info) {
   ]);
 }
 
+/**
+ * 名字后面的小标记（设计稿第 7 节）：
+ * - 和云端有冲突 → 红色感叹号（比「待同步」严重，两个都占时只显示它）；
+ * - 还没同步到云端 → 灰色小圆点；
+ * - mock 开着 → 原来那个绿点，照旧。
+ */
 function renderSuffix(info) {
   const node = info.option;
-  if (node.kind !== 'api' || !node.api || !node.api.mockEnabled) return null;
-  return h('span', { class: 'mock-dot', title: 'mock 已启用' });
+  const marks = [];
+
+  if (gateway.isConflicted(node.kind, node.id)) {
+    marks.push(h('span', {
+      class: 'sync-mark conflict',
+      title: '和云端有冲突，打开这个接口处理'
+    }, '!'));
+  } else if (gateway.isPending(node.kind, node.id)) {
+    marks.push(h('span', { class: 'sync-mark pending', title: '还没同步到云端' }));
+  }
+
+  if (node.kind === 'api' && node.api && node.api.mockEnabled) {
+    marks.push(h('span', { class: 'mock-dot', title: 'mock 已启用' }));
+  }
+
+  return marks.length ? marks : null;
 }
 
 function nodeProps(info) {
@@ -676,6 +698,33 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   border-radius: 50%;
   background: #0cbb52;
   margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 待同步：中性灰的小点。它是常态（本机改一下就有），别做得太扎眼 */
+:deep(.sync-mark.pending) {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(128, 128, 128, 0.55);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 冲突：红色感叹号 —— 这个是真的需要人去处理 */
+:deep(.sync-mark.conflict) {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #eb2013;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
   vertical-align: middle;
 }
 </style>
