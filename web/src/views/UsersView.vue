@@ -207,7 +207,11 @@ const columns = [
       return h(NSpace, { size: 4 }, {
         default: () => [
           h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, { default: () => '编辑' }),
-          h(NButton, { size: 'tiny', quaternary: true, onClick: () => resetPassword(row) }, { default: () => '重置密码' }),
+          // 自己的密码不在这里重置：重置会清掉这个人的所有会话，包括自己当前这个，
+          // 新密码还没显示出来人就被踢回登录页了（2026-10-01 用户遇到）。改自己的用右上角「修改密码」
+          session.user && row.id === session.user.id
+            ? null
+            : h(NButton, { size: 'tiny', quaternary: true, onClick: () => resetPassword(row) }, { default: () => '重置密码' }),
           h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => removeUser(row) }, { default: () => '删除' })
         ]
       });
