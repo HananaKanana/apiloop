@@ -110,6 +110,28 @@ function unmountShellHook() {
   delete window.apiloopShell;
 }
 
+/* ---------------- 别的电脑同步过来的改动 ---------------- */
+
+/**
+ * 网关在后台同步，拉下来新项目、新接口时页面不会知道 —— 以前要重开 apiloop 才看得到
+ * （用户 2026-10-01：「Windows 显示已同步，但是项目没有同步过来」）。
+ * 网关的 `sync.dataVersion` 每次同步改了本机数据就加一，这里盯着它重新加载项目、目录树和环境。
+ * 打开着的标签页不动：里面可能有没保存的修改。
+ */
+watch(
+  function () { return gateway.sync ? gateway.sync.dataVersion : undefined; },
+  async function (version, previous) {
+    if (version === undefined || previous === undefined || version === previous) return;
+    try {
+      await projects.load();
+      await tree.refresh();
+      if (projects.currentId) await envs.load(projects.currentId);
+    } catch (err) {
+      // 下一次同步还会再触发，这次拉不到不打扰用户
+    }
+  }
+);
+
 /* ---------------- 版本不一致的横幅 ---------------- */
 
 /**
