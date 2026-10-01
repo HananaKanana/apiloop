@@ -97,8 +97,10 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// 已经在关窗口 / 退出了，别再问第二遍（`applicationShouldTerminate` 会被调两次）
     private var allowClose = false
     private var allowTerminate = false
-    /// 正在问「有没有没保存的修改」，避免叠起来问好几次
-    private var asking = false
+    /// 一次「关窗口 / 退出 / 刷新」正在进行（问页面、等用户在确认框里选），直到用户做完决定。
+    /// 这期间再按 ⌘W / ⌘Q / ⌘R 一律不理：以前第二下会被当成「没有修改」直接关掉，
+    /// 确认框还开着时按 ⌘Q 则会让这次退出请求一直挂着
+    private var busy = false
 
     private var gatewayURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
 
@@ -243,9 +245,12 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 
     @objc private func reloadPage(_ sender: Any?) {
+        if busy { return }
+        busy = true
         askUnsavedChanges { hasChanges in
-            if !hasChanges { self.reload(); return }
+            if !hasChanges { self.busy = false; self.reload(); return }
             self.confirmDiscard(actionTitle: "仍然刷新") { discard in
+                self.busy = false
                 if discard { self.reload() }
             }
         }
@@ -374,6 +379,20 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
         // `<a download>`、blob 地址（页面导出就是这么做）走这一条
         if navigationAction.shouldPerformDownload { decisionHandler(.download); return }
 
+        // **iframe 里的导航不归这里管**：响应预览是把 HTML 放进 iframe 显示的，那个页面里
+        // 自己的 iframe（视频、广告……）一加载就会走到这里，按主窗口的规则处理的话，
+        // 光是预览一下就会自己弹出系统浏览器。只有用户在 iframe 里**点了链接**才交给系统浏览器
+        if navigationAction.targetFrame?.isMainFrame == false {
+            if navigationAction.navigationType == .linkActivated,
+               let target = url, !isGatewayURL(target) {
+                NSWorkspace.shared.open(target)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+            return
+        }
+
         // about:blank / loadHTMLString 出来的说明页
         guard let target = url else { decisionHandler(.allow); return }
         if isGatewayURL(target) { decisionHandler(.allow); return }
@@ -389,6 +408,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        // 只看主窗口：预览里的 iframe 加载了一个 PDF / 压缩包，不该弹出「存储为」
+        if !navigationResponse.isForMainFrame { decisionHandler(.allow); return }
+
         if let response = navigationResponse.response as? HTTPURLResponse,
            let disposition = response.value(forHTTPHeaderField: "Content-Disposition"),
            disposition.lowercased().contains("attachment") {
@@ -558,14 +580,10 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// 页面还没加载出来的时候（比如启动就关窗口）本来也问不到，直接关是对的 ——
     /// 绝不能因为问不到把用户锁在窗口里。
     private func askUnsavedChanges(_ completion: @escaping (Bool) -> Void) {
-        guard !asking else { completion(false); return }
-        asking = true
-
         var answered = false
         let finish: (Bool) -> Void = { value in
             if answered { return }
             answered = true
-            self.asking = false
             completion(value)
         }
 
@@ -603,6 +621,8 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// 关窗口之前先问一句。返回 false 只是「这次先别关」，问完再自己调 close()。
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if allowClose { return true }
+        if busy { return false }
+        busy = true
 
         askUnsavedChanges { hasChanges in
             let close = {
@@ -615,7 +635,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
             if !hasChanges { close(); return }
             self.confirmDiscard(actionTitle: "仍然关闭") { discard in
-                if discard { close() }
+                if discard { close() } else { self.busy = false }
             }
         }
         return false
@@ -628,6 +648,9 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// 用户点了「取消」之后再按 ⌘Q 就没反应了。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if allowTerminate { return .terminateNow }
+        // 关窗口 / 刷新的确认还开着：这次退出先不算（返回 .terminateLater 又不回话会一直挂着）
+        if busy { return .terminateCancel }
+        busy = true
 
         askUnsavedChanges { hasChanges in
             if !hasChanges {
@@ -637,6 +660,7 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
             }
             self.confirmDiscard(actionTitle: "仍然退出") { discard in
                 self.allowTerminate = discard
+                if !discard { self.busy = false }
                 NSApp.reply(toApplicationShouldTerminate: discard)
             }
         }
