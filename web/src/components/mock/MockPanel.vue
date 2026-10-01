@@ -17,6 +17,8 @@ import * as apisApi from '@/api/apis';
 import * as expectationsApi from '@/api/expectations';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
+import { useGatewayStore } from '@/stores/gateway';
+import { mockPrefix } from '@/utils/mock';
 import { usePrompt } from '@/utils/prompt';
 import { conditionSummary } from '@/utils/expectation';
 import ExampleEditor from './ExampleEditor.vue';
@@ -34,6 +36,7 @@ const props = defineProps({
 });
 
 const projects = useProjectStore();
+const gateway = useGatewayStore();
 const session = useSessionStore();
 const message = useMessage();
 const dialog = useDialog();
@@ -98,17 +101,15 @@ const isWs = computed(function () {
 });
 
 const mockUrl = computed(function () {
-  const project = projects.current;
-  const prefix = project && project.isRoot ? '' : '/mock/' + (project ? project.slug : '');
   // mock 是 computed，脚本里必须写 .value；只有模板里才会自动解包。
-  // 写成 mock.path 会拿到 undefined，拼出来就是 http://host/mock/<slug>undefined
+  // 写成 mock.path 会拿到 undefined，拼出来就是 http://host/mock-<ID>undefined
   //
   // WS 接口给的是 WebSocket 地址。http → ws / https → wss 正好是一次前缀替换，
   // 端口也能跟着一起带过来（window.location.origin 里含端口）。
   const origin = isWs.value
     ? window.location.origin.replace(/^http/, 'ws')
     : window.location.origin;
-  return origin + prefix + mock.value.path;
+  return origin + mockPrefix(projects.current) + mock.value.path;
 });
 
 watch(
@@ -513,8 +514,12 @@ async function onDrop() {
 
         <div class="url-row">
           <span class="url-label">mock 地址</span>
-          <code class="url">{{ mockUrl }}</code>
-          <n-button size="tiny" quaternary @click="copyMockUrl">复制</n-button>
+          <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
+          <span v-if="gateway.isLocal" class="url-hint">登录后可用</span>
+          <template v-else>
+            <code class="url">{{ mockUrl }}</code>
+            <n-button size="tiny" quaternary @click="copyMockUrl">复制</n-button>
+          </template>
         </div>
       </div>
 
@@ -739,6 +744,13 @@ async function onDrop() {
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   opacity: 0.85;
+}
+
+/* 本机模式下没有地址可显示，用一句灰字顶替 */
+.url-hint {
+  flex: 1;
+  min-width: 0;
+  opacity: 0.55;
 }
 
 .notice {

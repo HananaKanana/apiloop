@@ -14,6 +14,7 @@ import * as mockLogApi from '@/api/mockLog';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { mockPrefix } from '@/utils/mock';
 
 /**
  * Mock 调用日志抽屉。
@@ -59,10 +60,10 @@ const visible = computed({
 });
 
 /** 空状态里要显示的 mock 地址前缀，和 Mock 页签里那条保持一致 */
-const mockPrefix = computed(function () {
+const mockPrefixText = computed(function () {
   const project = projects.current;
   if (!project) return '';
-  return window.location.origin + (project.isRoot ? '' : '/mock/' + project.slug);
+  return window.location.origin + mockPrefix(project);
 });
 
 /* ---------------- 轮询 ---------------- */
@@ -314,7 +315,7 @@ function clearAll() {
           >
             <template #extra>
               <p class="empty-tip">
-                访问 <code>{{ mockPrefix }}/...</code> 后，记录会出现在这里。
+                访问 <code>{{ mockPrefixText }}/...</code> 后，记录会出现在这里。
               </p>
             </template>
           </n-empty>
