@@ -5,11 +5,13 @@ import * as streamApi from '@/api/stream';
 import * as historyApi from '@/api/history';
 import { createSseParser } from '@/utils/sse';
 import { encodeQueryPart } from '@/utils/query';
+import { MOCK_ENV_ID, mockBaseFor } from '@/utils/mock';
 import { byteLength } from '@/utils/bytes';
 import { useWsStore } from '@/stores/ws';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
+import { useGatewayStore } from '@/stores/gateway';
 
 let draftSeq = 0;
 let wsSeq = 0;
@@ -492,6 +494,13 @@ export const useTabsStore = defineStore('tabs', function () {
 
     tabs.value.push(tab);
     activeKey.value = key;
+
+    // 重放历史时把环境也切回去：Mock 环境不存库，不切的话这次请求会打到真实地址上。
+    // 本机模式下没有 Mock，退成「无环境」。
+    if (environmentId === MOCK_ENV_ID) {
+      useEnvStore().select(useGatewayStore().isLocal ? '' : MOCK_ENV_ID);
+    }
+
     return tab;
   }
 
@@ -706,6 +715,9 @@ export const useTabsStore = defineStore('tabs', function () {
           request: clone(tab.spec),
           apiId: tab.apiId || undefined,
           environmentId: environmentId || undefined,
+          // 选中内置 Mock 环境时要额外带上 mock 地址：服务端不存这个环境，
+          // 地址只能由页面给它（见 utils/mock.js）
+          mockBase: mockBaseFor(environmentId, useProjectStore().current),
           options: clone(tab.options || emptyOptions())
         },
         { signal: tab.controller.signal, onEvent: onEvent }

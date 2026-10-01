@@ -18,6 +18,7 @@ import {
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
+import { mockBaseFor } from '@/utils/mock';
 import { useWsStore } from '@/stores/ws';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
@@ -253,6 +254,8 @@ async function onConnect() {
     projectId: projects.currentId,
     spec: clone(props.tab.spec),
     environmentId: envs.selectedId || undefined,
+    // 选中内置 Mock 环境时额外带上 mock 地址（服务端不存这个环境）
+    mockBase: mockBaseFor(envs.selectedId, projects.current),
     options: clone(options.value)
   });
 

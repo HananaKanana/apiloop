@@ -3,16 +3,21 @@ import { computed, ref, watch } from 'vue';
 import { NIcon, NPopover } from 'naive-ui';
 import { Check, ChevronDown } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
-import { useEnvStore } from '@/stores/env';
+import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useGatewayStore } from '@/stores/gateway';
 import { useUiStore } from '@/stores/ui';
 
 /**
  * 标签行最右边的环境按钮。点开是一个面板：上半截切换环境，下半截是当前环境的变量
  * （secret 遮住）。原来「快速查看」是旁边单独一个眼睛按钮，用户觉得应该合在一起，
  * 2026-09-30 合并进来，EnvQuickView 删掉。
+ *
+ * 列表里除了「无环境」和真实环境，还有一项**内置的 Mock 环境**（带「内置」小标签）：
+ * 选中后 `host` 变量就是本项目的 mock 地址。它不存库，本机模式下用不了（置灰）。
  */
 const projects = useProjectStore();
 const envs = useEnvStore();
+const gateway = useGatewayStore();
 const ui = useUiStore();
 
 const show = ref(false);
@@ -51,8 +56,15 @@ function select(id) {
   envs.select(id);
 }
 
+/** 内置 Mock 环境：本机模式下用不了（mock 服务在云端） */
+function selectMock() {
+  if (gateway.isLocal) return;
+  envs.select(MOCK_ENV_ID);
+}
+
 function editCurrent() {
-  if (!envs.selected) return;
+  // 内置的 Mock 环境不存库，没有可编辑的东西
+  if (!envs.selected || envs.selected.builtin) return;
   envs.edit(envs.selected.id);
   ui.setSidebarTab('env');
   show.value = false;
@@ -87,6 +99,21 @@ function manage() {
           <span class="tick"><n-icon v-if="!envs.selectedId" size="14" :component="Check" /></span>
           <span class="item-name">无环境</span>
         </div>
+
+        <!-- 内置的 Mock 环境：不存库，固定在这里；本机模式下用不了 -->
+        <div
+          class="item"
+          :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: gateway.isLocal }"
+          :title="gateway.isLocal ? 'mock 服务在云端，登录后可用' : ''"
+          @click="selectMock"
+        >
+          <span class="tick">
+            <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
+          </span>
+          <span class="item-name">{{ gateway.isLocal ? 'Mock（登录后可用）' : 'Mock' }}</span>
+          <span class="tag">内置</span>
+        </div>
+
         <div
           v-for="env in envs.environments"
           :key="env.id"
@@ -103,7 +130,8 @@ function manage() {
       <div v-if="envs.selected" class="section vars">
         <div class="vars-head">
           <span>变量</span>
-          <a class="link" @click="editCurrent">编辑</a>
+          <!-- 内置的 Mock 环境不存库，没有「编辑」 -->
+          <a v-if="!envs.selected.builtin" class="link" @click="editCurrent">编辑</a>
         </div>
         <div v-if="rows.length" class="rows">
           <div v-for="row in rows" :key="row.key" class="row" :class="{ off: row.off }">
@@ -181,6 +209,28 @@ function manage() {
 
 .item.active {
   font-weight: 600;
+}
+
+/* 用不了的项（本机模式下的 Mock）：灰掉、不响应点击 */
+.item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.item.disabled:hover {
+  background: transparent;
+}
+
+/* 「内置」小标签：中性灰底，别和状态色打架 */
+.tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 400;
+  opacity: 0.75;
+  background: rgba(128, 128, 128, 0.16);
 }
 
 .tick {
