@@ -1156,19 +1156,33 @@ onBeforeUnmount(function () {
 
 /* 上下分栏的分隔线：和左右那条一样，平时透明、鼠标上去才显色 */
 .h-splitter {
+  position: relative;
   flex: none;
+  /* 可拖的区域 7px 高，好抓；看得见的只有中间那条线（::after） */
   height: 7px;
   margin: -3px 0 -4px;
   z-index: 2;
   cursor: row-resize;
   background: transparent;
-  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
-  transition: background 0.15s;
 }
 
-.h-splitter:hover,
-.h-splitter.active {
-  background: var(--apiloop-primary);
+.h-splitter::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+  background: var(--apiloop-divider);
+  transition: background 0.15s, height 0.15s, top 0.15s;
+}
+
+/* 悬停 / 拖动：线加粗到 2px、颜色加深，不再整块涂成主色（用户嫌粗、嫌颜色难看） */
+.h-splitter:hover::after,
+.h-splitter.active::after {
+  top: 2.5px;
+  height: 2px;
+  background: var(--apiloop-divider-active);
 }
 
 .pane {

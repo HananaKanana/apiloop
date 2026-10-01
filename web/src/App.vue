@@ -71,11 +71,18 @@ const themeOverrides = computed(() => (osTheme.value === 'dark' ? DARK_OVERRIDES
  */
 :root {
   --apiloop-primary: #ff6c37;
+  /* 页面底色。需要「不透明底」的地方（吸顶的表头等）用它 ——
+     不要用 var(--n-color)：它会从外层的 naive-ui 组件继承到别的颜色（比如主色橙） */
+  --apiloop-surface: #ffffff;
+  /* 分隔线：平时 / 悬停或拖动时 */
+  --apiloop-divider: rgba(128, 128, 128, 0.2);
+  --apiloop-divider-active: rgba(128, 128, 128, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --apiloop-primary: #ff7a4d;
+    --apiloop-surface: #101014;
   }
 }
 

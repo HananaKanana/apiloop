@@ -455,19 +455,33 @@ onBeforeUnmount(function () {
 }
 
 .splitter {
+  position: relative;
   flex: none;
+  /* 可拖的区域 5px 宽；看得见的只有中间那条线，和上下分栏的分隔线同一套样式 */
   width: 5px;
   cursor: col-resize;
   margin-left: -3px;
   margin-right: -2px;
   z-index: 2;
   background: transparent;
-  transition: background 0.15s;
 }
 
-.splitter:hover,
-.splitter.active {
-  background: var(--apiloop-primary);
+.splitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s, width 0.15s, left 0.15s;
+}
+
+.splitter:hover::after,
+.splitter.active::after {
+  left: 1.5px;
+  width: 2px;
+  background: var(--apiloop-divider-active);
 }
 
 .right {
