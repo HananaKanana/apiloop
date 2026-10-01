@@ -7,10 +7,56 @@
   "scripts": {
     "stage": "node scripts/stage.js",
     "self-check": "node scripts/stage.js && node scripts/run-electron.js --self-check",
-    "dev": "node scripts/stage.js && node scripts/run-electron.js"
+    "dev": "node scripts/stage.js && node scripts/run-electron.js",
+    "dist": "node scripts/dist.js"
   },
   "devDependencies": {
     "electron": "44.5.1",
     "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.apiloop.desktop",
+    "productName": "apiloop",
+    "directories": {
+      "app": ".",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "scripts/fixtures/**",
+      "app/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "app/node_modules/@jitl/**",
+      "app/node_modules/quickjs-emscripten-core/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

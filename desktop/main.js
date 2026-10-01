@@ -30,14 +30,17 @@ var { app, BrowserWindow } = require('electron');
 var SELF_CHECK = process.argv.indexOf('--self-check') > -1;
 
 /**
- * 服务端代码在哪：
- * - 开发时是 `desktop/app/`（`node scripts/stage.js` 生成的暂存目录）；
- * - 打包后在 `resources/app/`。
- * 两种情况下这一份目录里都有完整的 lib/ + node_modules（生产依赖）。
+ * 服务端代码在哪：**两种形态下都是 `__dirname/app`**。
+ *
+ * - 开发时 `__dirname` 是 `desktop/`，也就是 `node scripts/stage.js` 生成的 `desktop/app/`；
+ * - 打包后 `__dirname` 是 `.../Resources/app.asar`，于是这里是 `app.asar/app/`。
+ *   服务端代码确实在 asar 里面（`asar: true` 把它打进去了，磁盘上并没有
+ *   `Resources/app/` 这个目录），Electron 的 fs 会照常读 asar；`asarUnpack` 出来的
+ *   文件（QuickJS 的 wasm）Electron 会自动转到 `app.asar.unpacked`。
+ *
+ * 所以不要再按 `process.resourcesPath/app` 找 —— 那样打包后必然找不到。
  */
-var APP_ROOT = app.isPackaged
-    ? path.join(process.resourcesPath, 'app')
-    : path.join(__dirname, 'app');
+var APP_ROOT = path.join(__dirname, 'app');
 
 var SERVER_ENTRY = path.join(APP_ROOT, 'lib', 'command.js');
 
@@ -122,6 +125,14 @@ async function startShell() {
     // 上传的文件、Cookie 之类也跟着落到用户目录（默认是 ~/.apiloop）。
     // 必须在 require 服务端之前设 —— lib/app-info.js 是在模块加载时读它的。
     process.env.APILOOP_HOME = dataDir;
+
+    // 初始管理员密码固定下来：双击安装包进来的用户看不到控制台，
+    // 随机密码打印在 stdout 里等于没有，登录页会直接卡住。
+    // 只在库里一个用户都没有的时候生效（bootstrapAdmin 的判断），
+    // 之后改密码走界面。D1 桌面模式不需要登录本地服务，这段会删掉。
+    if (!process.env.APILOOP_ADMIN_PASSWORD) {
+        process.env.APILOOP_ADMIN_PASSWORD = 'apiloop';
+    }
 
     var port = await freePort();
 
