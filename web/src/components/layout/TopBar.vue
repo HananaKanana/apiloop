@@ -7,6 +7,7 @@ import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
 import { useUiStore } from '@/stores/ui';
 import * as mockLogApi from '@/api/mockLog';
+import ConnectionStatus from './ConnectionStatus.vue';
 import UserMenu from './UserMenu.vue';
 
 /**
@@ -155,6 +156,8 @@ onBeforeUnmount(function () {
         </template>
         系统设置
       </n-tooltip>
+
+      <connection-status />
 
       <user-menu @about="emit('about')" />
     </div>

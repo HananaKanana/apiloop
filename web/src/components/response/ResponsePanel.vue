@@ -8,7 +8,8 @@ import {
   NSpin,
   NTabPane,
   NTabs,
-  NTag
+  NTag,
+  NTooltip
 } from 'naive-ui';
 import BodyViewer from './BodyViewer.vue';
 import HeadersTable from './HeadersTable.vue';
@@ -29,7 +30,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['save-example', 'save-sse-example']);
+const emit = defineEmits(['save-example', 'save-sse-example', 'resend']);
 
 const ERROR_TEXT = {
   TIMEOUT: '请求超时，对方在限定时间内没有返回。',
@@ -44,6 +45,9 @@ const ERROR_TEXT = {
   SCRIPT: '前置脚本出错，请求没有发送。改完脚本再发，或者在「设置」页签里关掉这次请求的「执行脚本」。',
   OTHER: '请求失败。'
 };
+
+/** 云端不发送请求时的那句话，按钮的悬停提示和这里共用同一份文案 */
+const SERVER_SEND_DISABLED_TEXT = '云端不发送请求，请从本机的 apiloop 打开';
 
 const activeTab = ref('body');
 
@@ -139,6 +143,29 @@ const errorText = computed(function () {
   return base + '（' + error.value.code + '：' + error.value.message + '）';
 });
 
+/* ---------------- 网关相关的三种情况（G2） ---------------- */
+
+/**
+ * 直接打开云端、云端又不发送请求时，服务端返回 409 + `SERVER_SEND_DISABLED`。
+ * 这不是「出错」，是我们自己的限制，所以不显示成红色的服务端错误。
+ */
+const serverSendDisabled = computed(function () {
+  return Boolean(error.value && error.value.code === 'SERVER_SEND_DISABLED');
+});
+
+/**
+ * Mac 第一次访问局域网时被系统拦下（G0 已有这个标记）。
+ * 这时候要给的是一套操作步骤，不是一行「请求失败」。
+ */
+const localNetworkHint = computed(function () {
+  return Boolean(error.value && error.value.localNetworkHint === true);
+});
+
+/** 请求发成功了，但历史和变量没存到云端（G1）。响应照常显示，另外给个黄标签 */
+const recordError = computed(function () {
+  return (result.value && result.value.recordError) || '';
+});
+
 /* ---------------- 脚本结果（契约第 16 节） ---------------- */
 
 /** 一段脚本都没执行时服务端给 null */
@@ -222,9 +249,29 @@ function requestBodyText() {
 
         <template v-else>
 
-        <n-alert v-if="error" type="error" :show-icon="false" class="notice">
+        <n-alert
+          v-if="error && !serverSendDisabled && !localNetworkHint"
+          type="error"
+          :show-icon="false"
+          class="notice"
+        >
           {{ errorText }}
         </n-alert>
+
+        <!-- 云端不发送请求：这不是「服务端出错」，是我们自己的限制，别用红色 -->
+        <n-alert v-if="serverSendDisabled" type="warning" :show-icon="false" class="notice">
+          {{ SERVER_SEND_DISABLED_TEXT }}
+        </n-alert>
+
+        <!-- Mac 第一次访问局域网被系统拦下：给一套能照着做的步骤，而不是一行错误 -->
+        <div v-if="localNetworkHint" class="local-network">
+          <p class="ln-title">需要允许本地网络访问</p>
+          <p class="ln-body">
+            系统刚才弹出了「允许 node 访问本地网络」，请点「允许」后重新发送。
+            如果没看到弹框：打开「系统设置 → 隐私与安全性 → 本地网络」，把 node 打开。
+          </p>
+          <n-button size="small" type="primary" @click="emit('resend')">重新发送</n-button>
+        </div>
 
         <n-alert v-if="tab.sendError" type="error" :show-icon="false" class="notice">
           {{ tab.sendError }}
@@ -268,6 +315,14 @@ function requestBodyText() {
                   <n-tag :type="statusType" size="small" :bordered="false">
                     {{ statusLine.status }} {{ statusLine.statusText }}
                   </n-tag>
+
+                  <!-- 请求发成功了，但历史和变量没存到云端：响应照常看，这里只提醒一句 -->
+                  <n-tooltip v-if="recordError" trigger="hover">
+                    <template #trigger>
+                      <n-tag size="small" :bordered="false" type="warning">未保存历史</n-tag>
+                    </template>
+                    {{ recordError }}
+                  </n-tooltip>
 
                   <!-- 接收中：只报进度，不报耗时/最终大小（都还没定） -->
                   <span v-if="tab.sending" class="metric">
@@ -481,6 +536,28 @@ function requestBodyText() {
 .notice {
   flex: none;
   font-size: 12px;
+}
+
+/* 局域网授权：比一行错误重，所以自己画一块带步骤的提示 */
+.local-network {
+  flex: none;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 160, 32, 0.45);
+  border-radius: 6px;
+  background: rgba(240, 160, 32, 0.1);
+}
+
+.ln-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ln-body {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.85;
 }
 
 

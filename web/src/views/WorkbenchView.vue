@@ -1,7 +1,7 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
+import { NAlert, NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
 import { Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
@@ -21,6 +21,8 @@ import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { useEnvStore } from '@/stores/env';
+import { useSessionStore } from '@/stores/session';
+import { useGatewayStore } from '@/stores/gateway';
 import { methodColor } from '@/utils/method';
 
 const MIN_WIDTH = 180;
@@ -33,6 +35,8 @@ const tree = useTreeStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const envs = useEnvStore();
+const session = useSessionStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -86,6 +90,48 @@ function onBeforeUnload(event) {
   if (!tabs.hasDirty) return;
   event.preventDefault();
   event.returnValue = '';
+}
+
+/* ---------------- 版本不一致的横幅 ---------------- */
+
+/**
+ * 网关版本和云端版本不一样时提示去下新的安装包。
+ * 关掉之后**这个版本组合**在本次会话里不再出现（sessionStorage）——
+ * 换个版本组合（升级了一边）还会再提示一次。
+ */
+const VERSION_DISMISS_KEY = 'apiloop.versionMismatch.dismissed';
+
+function readDismissedVersion() {
+  try {
+    return sessionStorage.getItem(VERSION_DISMISS_KEY) || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+const dismissedVersion = ref(readDismissedVersion());
+
+const versionMismatch = computed(function () {
+  if (!gateway.isGateway || !gateway.status) return null;
+
+  const gatewayVersion = gateway.status.version || '';
+  const cloudVersion = (session.meta && session.meta.version) || '';
+  if (!gatewayVersion || !cloudVersion || gatewayVersion === cloudVersion) return null;
+
+  const key = gatewayVersion + '|' + cloudVersion;
+  if (dismissedVersion.value === key) return null;
+  return { gatewayVersion: gatewayVersion, cloudVersion: cloudVersion, key: key };
+});
+
+function dismissVersionBanner() {
+  const current = versionMismatch.value;
+  if (!current) return;
+  dismissedVersion.value = current.key;
+  try {
+    sessionStorage.setItem(VERSION_DISMISS_KEY, current.key);
+  } catch (err) {
+    // 存不下就这次会话里多显示几次，不影响用
+  }
 }
 
 function onProjectChange(id) {
@@ -233,9 +279,15 @@ onMounted(async function () {
   } catch (err) {
     message.error(err.message);
   }
+
+  // 探测「是不是在网关上」。放在项目加载之后：它不影响主流程，慢一点没关系
+  gateway.load().catch(function () {}).finally(function () {
+    gateway.start();
+  });
 });
 
 onBeforeUnmount(function () {
+  gateway.stop();
   window.removeEventListener('mousemove', onMove);
   window.removeEventListener('mouseup', stopDrag);
   window.removeEventListener('resize', onResize);
@@ -252,6 +304,16 @@ onBeforeUnmount(function () {
         <project-switcher @change="onProjectChange" />
       </template>
     </top-bar>
+
+    <n-alert
+      v-if="versionMismatch"
+      type="warning"
+      closable
+      class="version-banner"
+      @close="dismissVersionBanner"
+    >
+      本机 apiloop（{{ versionMismatch.gatewayVersion }}）和云端（{{ versionMismatch.cloudVersion }}）版本不一致，请下载新的安装包。
+    </n-alert>
 
     <div class="body">
       <!--
@@ -374,6 +436,13 @@ onBeforeUnmount(function () {
   flex: 1;
   min-height: 0;
   display: flex;
+}
+
+/* 版本不一致的横幅：横在顶栏下面，别把它挤到视口外 */
+.version-banner {
+  flex: none;
+  border-radius: 0;
+  font-size: 12px;
 }
 
 .left {
