@@ -96,7 +96,17 @@ export function request(method, path, body, options) {
         redirectToLogin();
         return pendingForever();
       }
-      if (!res.ok) throw await toError(res);
+      if (!res.ok) {
+        const error = await toError(res);
+        // 密码被管理员重置过、还没改：去「请先修改密码」页（服务端除了改密码之外的接口都会拒绝）
+        if (res.status === 403 && error.data && error.data.code === 'PASSWORD_CHANGE_REQUIRED') {
+          if (window.location.hash.indexOf('#/change-password') !== 0) {
+            window.location.hash = '/change-password';
+          }
+          return pendingForever();
+        }
+        throw error;
+      }
 
       const text = await res.text();
       const data = parseJson(text);
