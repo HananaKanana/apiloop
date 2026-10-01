@@ -260,7 +260,14 @@ export const useTabsStore = defineStore('tabs', function () {
     return tab;
   }
 
-  function openDraft(folderId) {
+  /**
+   * 新建一个还没保存的临时标签页。
+   *
+   * @param {string|null} folderId 保存时默认落到哪个目录
+   * @param {object} [spec] 传了就用它当请求内容（从 cURL 解析出来直接开一个标签页）；
+   *                        不传就是一个空请求
+   */
+  function openDraft(folderId, spec) {
     draftSeq += 1;
     const key = 'draft:' + draftSeq;
     const tab = Object.assign({
@@ -269,7 +276,7 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: null,
       folderId: folderId || null,
       title: '新建请求',
-      spec: emptySpec(),
+      spec: spec ? JSON.parse(JSON.stringify(spec)) : emptySpec(),
       savedSnapshot: null,
       options: emptyOptions(),
       api: null,
@@ -283,6 +290,9 @@ export const useTabsStore = defineStore('tabs', function () {
 
     tabs.value.push(tab);
     activeKey.value = key;
+
+    // 带内容开出来的（cURL）：按「已经动过」算，关它的时候要提示一下
+    if (spec) touch(tab);
     return tab;
   }
 

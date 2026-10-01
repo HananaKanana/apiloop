@@ -36,6 +36,7 @@ import { inheritHint } from '@/utils/auth';
 import { clampReplayDelay } from '@/utils/replay';
 import { resolveScope, missingVariables } from '@/utils/variables';
 import { HEADER_NAMES } from '@/utils/suggestions';
+import { parseCurl } from '@/utils/curl';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
@@ -325,6 +326,37 @@ function onSend() {
 
 function onCancel() {
   tabs.cancelSend();
+}
+
+/* ---------------- 地址栏粘贴 cURL ---------------- */
+
+/**
+ * 地址栏里粘了一段 cURL（和 Postman 一样）：整条请求换成解析出来的那个，
+ * **标签页的名字不动** —— 用户多半是想拿这个地址发一次，不是想改名。
+ * 解析失败就只提示原因，地址栏里原来是什么还是什么。
+ */
+function onPasteCurl(text) {
+  let parsed;
+  try {
+    parsed = parseCurl(text);
+  } catch (err) {
+    message.error(err.message);
+    return;
+  }
+
+  const current = props.tab.spec;
+  current.method = parsed.method;
+  current.url = parsed.url;
+  current.params = {
+    path: [],
+    query: parsed.params.query,
+    headers: parsed.params.headers
+  };
+  current.body = parsed.body;
+  current.auth = parsed.auth;
+  // scripts 不在替换范围内，原样留着
+
+  message.success('已从 cURL 填充');
 }
 
 /* ---------------- 保存 ---------------- */
@@ -759,6 +791,7 @@ onBeforeUnmount(function () {
         @update:url="onUrlChange"
         @send="onSend"
         @cancel="onCancel"
+        @paste-curl="onPasteCurl"
       />
     </div>
 

@@ -26,7 +26,27 @@ const props = defineProps({
   sendBlockedHint: { type: String, default: '' }
 });
 
-const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel']);
+const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel', 'paste-curl']);
+
+/**
+ * 地址栏里粘贴一段 cURL 时，像 Postman 那样直接把整条请求填满。
+ *
+ * 两件事必须在这里做：
+ * - 判断放在这里而不是 RequestTab —— 只有拦下 paste 事件，内容才不会落进输入框；
+ * - 监听要挂在**捕获阶段**。地址栏是 CodeMirror，它在自己的 contentDOM 上也有 paste
+ *   处理，冒泡阶段挂的话它已经先把文本插进去了，那时再 preventDefault 就晚了。
+ */
+function onPaste(event) {
+  const clipboard = event.clipboardData || window.clipboardData;
+  if (!clipboard) return;
+
+  const text = String(clipboard.getData('text') || '').trim();
+  if (!/^curl\s/.test(text)) return; // 普通地址的粘贴照旧
+
+  event.preventDefault();
+  event.stopPropagation();
+  emit('paste-curl', text);
+}
 
 // WS 也是一种接口（契约第 17 节）：存进目录树，打开时是 WebSocket 标签页。
 // 放在这里是为了「新建接口」时能直接选它，和选 GET / POST 一样。
@@ -66,7 +86,7 @@ const METHOD_SELECT_THEME = {
 <template>
   <div class="url-bar">
     <!-- 方法下拉和地址合成一个带边框的整体：下拉自己不要边框，中间一条竖线分开 -->
-    <div class="url-box">
+    <div class="url-box" @paste.capture="onPaste">
       <n-select
         class="method"
         size="small"
