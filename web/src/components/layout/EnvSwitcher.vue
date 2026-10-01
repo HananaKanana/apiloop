@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { NIcon, NPopover } from 'naive-ui';
-import { Check, ChevronDown } from '@vicons/tabler';
+import { Bolt, Check, ChevronDown, Pencil, Server, Settings } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
@@ -86,7 +86,7 @@ function manage() {
     style="padding: 0"
   >
     <template #trigger>
-      <button class="switcher" :class="{ open: show }">
+      <button class="switcher" :class="{ open: show, empty: !envs.selected }">
         <span class="name">{{ envs.selected ? envs.selected.name : '无环境' }}</span>
         <n-icon size="14" :component="ChevronDown" />
       </button>
@@ -95,23 +95,25 @@ function manage() {
     <div class="panel">
       <!-- 上半截：切换环境 -->
       <div class="section">
+        <div class="section-title">环境</div>
+
         <div class="item" :class="{ active: !envs.selectedId }" @click="select('')">
-          <span class="tick"><n-icon v-if="!envs.selectedId" size="14" :component="Check" /></span>
+          <span class="item-icon none" />
           <span class="item-name">无环境</span>
+          <n-icon v-if="!envs.selectedId" class="tick" size="16" :component="Check" />
         </div>
 
         <!-- 内置的 Mock 环境：不存库，固定在这里；本机模式下用不了 -->
         <div
           class="item"
           :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: !gateway.mockAvailable }"
-          :title="!gateway.mockAvailable ? '登录后可用' : ''"
+          :title="!gateway.mockAvailable ? '登录后可用' : 'host 变量就是这个项目的 mock 地址'"
           @click="selectMock"
         >
-          <span class="tick">
-            <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
-          </span>
-          <span class="item-name">{{ !gateway.mockAvailable ? 'Mock（登录后可用）' : 'Mock' }}</span>
-          <span class="tag">内置</span>
+          <n-icon class="item-icon" size="15" :component="Bolt" />
+          <span class="item-name">Mock</span>
+          <span class="tag">{{ gateway.mockAvailable ? '内置' : '登录后可用' }}</span>
+          <n-icon v-if="envs.selectedId === MOCK_ENV_ID" class="tick" size="16" :component="Check" />
         </div>
 
         <div
@@ -121,22 +123,26 @@ function manage() {
           :class="{ active: env.id === envs.selectedId }"
           @click="select(env.id)"
         >
-          <span class="tick"><n-icon v-if="env.id === envs.selectedId" size="14" :component="Check" /></span>
+          <n-icon class="item-icon" size="15" :component="Server" />
           <span class="item-name">{{ env.name }}</span>
+          <n-icon v-if="env.id === envs.selectedId" class="tick" size="16" :component="Check" />
         </div>
       </div>
 
       <!-- 下半截：当前环境里的变量（只看，改去环境标签页） -->
       <div v-if="envs.selected" class="section vars">
         <div class="vars-head">
-          <span>变量</span>
+          <span class="section-title flat">「{{ envs.selected.name }}」的变量</span>
           <!-- 内置的 Mock 环境不存库，没有「编辑」 -->
-          <a v-if="!envs.selected.builtin" class="link" @click="editCurrent">编辑</a>
+          <button v-if="!envs.selected.builtin" class="text-button" @click="editCurrent">
+            <n-icon size="13" :component="Pencil" />
+            编辑
+          </button>
         </div>
         <div v-if="rows.length" class="rows">
           <div v-for="row in rows" :key="row.key" class="row" :class="{ off: row.off }">
-            <span class="key">{{ row.key }}</span>
-            <span class="value" :class="{ secret: row.secret }" :title="row.secret ? '' : row.value">{{ row.value }}</span>
+            <span class="key" :title="row.key">{{ row.key }}</span>
+            <span class="value" :class="{ secret: row.secret }" :title="row.secret ? '' : row.value">{{ row.value || '（空）' }}</span>
           </div>
         </div>
         <div v-else class="empty">这个环境里还没有变量</div>
@@ -144,7 +150,7 @@ function manage() {
 
       <div class="section foot">
         <div class="item" @click="manage">
-          <span class="tick" />
+          <n-icon class="item-icon" size="15" :component="Settings" />
           <span class="item-name">管理环境…</span>
         </div>
       </div>
@@ -167,6 +173,10 @@ function manage() {
   cursor: pointer;
 }
 
+.switcher.empty .name {
+  opacity: 0.6;
+}
+
 .switcher:hover,
 .switcher.open {
   background: rgba(128, 128, 128, 0.14);
@@ -180,35 +190,73 @@ function manage() {
 }
 
 .panel {
-  width: 320px;
+  width: 300px;
   max-width: 90vw;
   font-size: 13px;
 }
 
 .section {
-  padding: 4px;
+  padding: 6px;
 }
 
 .section + .section {
-  border-top: 1px solid rgba(128, 128, 128, 0.16);
+  border-top: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+/* 小标题：灰色小字，和下面的条目拉开层级 */
+.section-title {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.5;
+}
+
+.section-title.flat {
+  padding: 0;
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
+  gap: 8px;
+  height: 32px;
   padding: 0 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
 .item:hover {
-  background: rgba(128, 128, 128, 0.12);
+  background: rgba(128, 128, 128, 0.1);
 }
 
+/* 选中：浅橙底 + 橙字，右边一个勾，一眼能看出来 */
 .item.active {
-  font-weight: 600;
+  background: rgba(255, 108, 55, 0.1);
+  color: var(--apiloop-primary);
+  font-weight: 500;
+}
+
+.item-icon {
+  flex: none;
+  width: 15px;
+  opacity: 0.55;
+}
+
+.item.active .item-icon {
+  opacity: 1;
+}
+
+.item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tick {
+  flex: none;
+  color: var(--apiloop-primary);
 }
 
 /* 用不了的项（本机模式下的 Mock）：灰掉、不响应点击 */
@@ -224,82 +272,86 @@ function manage() {
 /* 「内置」小标签：中性灰底，别和状态色打架 */
 .tag {
   flex: none;
-  padding: 0 5px;
-  border-radius: 3px;
+  padding: 0 6px;
+  border-radius: 4px;
   font-size: 11px;
-  line-height: 16px;
+  line-height: 18px;
   font-weight: 400;
-  opacity: 0.75;
-  background: rgba(128, 128, 128, 0.16);
+  color: inherit;
+  opacity: 0.7;
+  background: rgba(128, 128, 128, 0.14);
 }
 
-.tick {
-  flex: none;
-  width: 14px;
-  display: flex;
-  align-items: center;
-  color: var(--apiloop-primary);
-}
-
-.item-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* 变量区：浅灰底的一块，像「这个环境的名片」 */
 .vars {
-  padding: 8px 12px;
+  padding: 10px 12px 12px;
+  background: rgba(128, 128, 128, 0.04);
 }
 
 .vars-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
-  font-size: 12px;
-  opacity: 0.6;
+  margin-bottom: 6px;
 }
 
-.link {
-  color: var(--apiloop-primary);
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.65;
   cursor: pointer;
+}
+
+.text-button:hover {
+  opacity: 1;
+  color: var(--apiloop-primary);
+  background: rgba(255, 108, 55, 0.08);
 }
 
 .rows {
   max-height: 40vh;
   overflow: auto;
+  border: 1px solid rgba(128, 128, 128, 0.14);
+  border-radius: 6px;
+  background: var(--n-color, transparent);
 }
 
 .row {
-  display: flex;
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: minmax(60px, 38%) 1fr;
   gap: 10px;
-  padding: 2px 0;
+  padding: 6px 10px;
   font-size: 12px;
 }
 
+.row + .row {
+  border-top: 1px solid rgba(128, 128, 128, 0.1);
+}
+
 .row.off {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 .key {
-  flex: none;
-  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
 }
 
 .value {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.75;
+  opacity: 0.6;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -308,8 +360,16 @@ function manage() {
 }
 
 .empty {
+  padding: 8px 0 2px;
   font-size: 12px;
   opacity: 0.5;
-  padding: 4px 0;
+}
+
+.foot .item {
+  opacity: 0.8;
+}
+
+.foot .item:hover {
+  opacity: 1;
 }
 </style>
