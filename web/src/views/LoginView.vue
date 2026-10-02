@@ -168,7 +168,7 @@ async function submit() {
       </n-button>
 
       <p class="hint">
-        忘记密码？请联系管理员在服务器上执行 <code>./deploy.sh user reset-password &lt;用户名&gt;</code> 重置。
+        忘记密码？请联系管理员重置。
       </p>
     </n-card>
   </div>
