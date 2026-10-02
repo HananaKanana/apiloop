@@ -8,6 +8,9 @@ import { xml } from '@codemirror/lang-xml';
 import { javascript } from '@codemirror/lang-javascript';
 import { autocompletion } from '@codemirror/autocomplete';
 import { Decoration } from '@codemirror/view';
+import { openSearchPanel } from '@codemirror/search';
+import { syntaxHighlighting } from '@codemirror/language';
+import { classHighlighter } from '@lezer/highlight';
 import { formatJson } from '@/utils/jsonFormat';
 
 /**
@@ -21,6 +24,8 @@ const props = defineProps({
   language: { type: String, default: 'text' },
   readonly: { type: Boolean, default: false },
   minHeight: { type: String, default: '180px' },
+  /** 自动换行（响应体、代码片段里长行要能看全） */
+  wrap: { type: Boolean, default: false },
   /**
    * mock 占位符（`/meta` 的 placeholders）。传了它，输入 `{{@` 就补全占位符 ——
    * 只在 mock 示例编辑器里传；请求区不补，因为发送请求时不会渲染它们。
@@ -188,6 +193,8 @@ function createView() {
     basicSetup,
     theme,
     languageExtension(props.language),
+    // 语法高亮用 class（tok-*），颜色在下面的样式里按亮 / 暗两套给（接近 Postman 的配色）
+    syntaxHighlighting(classHighlighter),
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
     EditorView.updateListener.of(function (update) {
@@ -195,6 +202,8 @@ function createView() {
       emit('update:modelValue', update.state.doc.toString());
     })
   ];
+
+  if (props.wrap) extensions.push(EditorView.lineWrapping);
 
   // 只有传了占位符才挂：请求区、脚本编辑器都不需要
   if (props.placeholders && props.placeholders.length) {
@@ -252,7 +261,7 @@ watch(
 );
 
 watch(
-  function () { return props.readonly; },
+  function () { return props.readonly + '|' + props.wrap; },
   function () {
     if (view) view.destroy();
     view = null;
@@ -272,12 +281,56 @@ function insertAtCursor(text) {
   view.focus();
 }
 
-defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat });
+/** 打开 CodeMirror 自带的查找面板（响应体工具栏的「搜索」按钮用） */
+function openSearch() {
+  if (!view) return;
+  view.focus();
+  openSearchPanel(view);
+}
+
+defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: openSearch });
 </script>
 
 <template>
   <div ref="host" class="code-editor" :style="{ minHeight: minHeight }" />
 </template>
+
+<style>
+/* 语法高亮配色（classHighlighter 的 tok-* 类）。不能 scoped：这些类是 CodeMirror 在运行时生成的节点 */
+.code-editor .tok-propertyName { color: #1f2937; }
+.code-editor .tok-string { color: #1a56c5; }
+.code-editor .tok-number { color: #0b8a50; }
+.code-editor .tok-bool,
+.code-editor .tok-null,
+.code-editor .tok-atom { color: #b5530f; }
+.code-editor .tok-keyword { color: #8b2fc9; }
+.code-editor .tok-comment { color: #8a8f98; font-style: italic; }
+.code-editor .tok-typeName,
+.code-editor .tok-className { color: #0f7f8a; }
+.code-editor .tok-tagName { color: #b42318; }
+.code-editor .tok-attributeName { color: #b5530f; }
+.code-editor .tok-attributeValue { color: #1a56c5; }
+.code-editor .tok-variableName.tok-definition { color: #1f4fbf; }
+.code-editor .tok-punctuation,
+.code-editor .tok-bracket { opacity: 0.75; }
+
+@media (prefers-color-scheme: dark) {
+  .code-editor .tok-propertyName { color: #e5e7eb; }
+  .code-editor .tok-string { color: #7fb0ff; }
+  .code-editor .tok-number { color: #6fd3a1; }
+  .code-editor .tok-bool,
+  .code-editor .tok-null,
+  .code-editor .tok-atom { color: #f0a868; }
+  .code-editor .tok-keyword { color: #d4a5ff; }
+  .code-editor .tok-comment { color: #8b9099; }
+  .code-editor .tok-typeName,
+  .code-editor .tok-className { color: #6fd0da; }
+  .code-editor .tok-tagName { color: #ff8b80; }
+  .code-editor .tok-attributeName { color: #f0a868; }
+  .code-editor .tok-attributeValue { color: #7fb0ff; }
+  .code-editor .tok-variableName.tok-definition { color: #8ab4ff; }
+}
+</style>
 
 <style scoped>
 .code-editor {

@@ -16,7 +16,7 @@ import {
   NTabs,
   useMessage
 } from 'naive-ui';
-import { ChevronDown, DeviceFloppy } from '@vicons/tabler';
+import { ChevronDown, Code, DeviceFloppy } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useTabsStore, specFromApi, emptyOptions } from '@/stores/tabs';
@@ -24,6 +24,8 @@ import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
+import CurlSnippet from '@/components/request/CurlSnippet.vue';
+import { mockBaseFor } from '@/utils/mock';
 import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
@@ -495,10 +497,41 @@ async function renameTitle(name) {
   }
 }
 
-const saveMenu = [{ label: '另存为…', key: 'save-as' }];
+const saveMenu = [
+  { label: '另存为…', key: 'save-as' },
+  { label: '复制为 cURL', key: 'copy-curl' }
+];
 
 function onSaveMenu(key) {
   if (key === 'save-as') saveAs();
+  if (key === 'copy-curl') copyCurl();
+}
+
+/* ---------------- 代码片段（cURL） ---------------- */
+
+const showSnippet = ref(false);
+
+/** 按当前环境生成这个请求的 cURL（后台按发送的同一套规则解析变量和鉴权，不发请求） */
+function loadCurl() {
+  return apisApi.curlFor(projects.currentId, {
+    request: JSON.parse(JSON.stringify(props.tab.spec)),
+    apiId: props.tab.apiId || undefined,
+    environmentId: envs.selectedId || undefined,
+    mockBase: mockBaseFor(envs.selectedId, projects.current)
+  });
+}
+
+/** 一键复制：不开面板，直接进剪贴板 */
+async function copyCurl() {
+  try {
+    const data = await loadCurl();
+    await navigator.clipboard.writeText(data.curl || '');
+    message.success(data.missing && data.missing.length
+      ? '已复制 cURL（有未定义的变量：' + data.missing.join('、') + '）'
+      : '已复制 cURL');
+  } catch (err) {
+    message.error('复制失败：' + err.message);
+  }
 }
 
 /**
@@ -792,6 +825,12 @@ onBeforeUnmount(function () {
     </div>
 
     <!-- 面包屑：项目 › 目录… › 接口名，右边是保存 -->
+    <curl-snippet
+      v-model:show="showSnippet"
+      :load="loadCurl"
+      :env-name="envs.selected ? envs.selected.name : ''"
+    />
+
     <div class="crumb-bar">
       <div class="crumbs">
         <template v-for="(part, index) in crumbs" :key="index">
@@ -804,7 +843,15 @@ onBeforeUnmount(function () {
         </template>
       </div>
 
-      <n-space v-if="projects.canEdit" align="center" :size="4">
+      <n-space align="center" :size="4">
+        <!-- 代码片段：当前请求的 cURL，一键复制（参考 Postman 右侧的 Code snippet） -->
+        <n-button size="small" quaternary title="代码片段（cURL）" @click="showSnippet = true">
+          <template #icon>
+            <n-icon :component="Code" />
+          </template>
+          代码
+        </n-button>
+        <template v-if="projects.canEdit">
         <n-button
           size="small"
           :disabled="Boolean(tab.apiId) && !tab.dirty"
@@ -824,6 +871,7 @@ onBeforeUnmount(function () {
             </template>
           </n-button>
         </n-dropdown>
+        </template>
       </n-space>
     </div>
 
