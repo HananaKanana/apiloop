@@ -37,5 +37,3 @@ services:
     volumes:
       # 数据库 data.db 与上传文件 files/
       - ./data:/app/data
-      # 可选：挂载一个老的 server-mock 项目目录，沿用它的 router.js / routes.json / 静态文件
-      # - ./workspace:/app/workspace
