@@ -1,7 +1,8 @@
 <script setup>
-import { computed, h, ref } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
+  NBadge,
   NButton,
   NCheckbox,
   NDropdown,
@@ -16,6 +17,7 @@ import { useDialog } from '@/utils/dialog';
 import { changePassword, logout as logoutApi } from '@/api/auth';
 import { isLoginRequired } from '@/api/client';
 import * as gatewayApi from '@/api/gateway';
+import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
 import { useGatewayStore } from '@/stores/gateway';
@@ -32,6 +34,38 @@ const dialog = useDialog();
 const showPassword = ref(false);
 const saving = ref(false);
 const form = ref({ oldPassword: '', newPassword: '', confirm: '' });
+
+/**
+ * 注册了、等审核的人数。管理员才问；头像上一个红点、菜单里写明有几个（用户 2026-10-02 加注册审核）。
+ * 打开页面问一次，之后每分钟、以及每次点开菜单再问。失败不提示 —— 角标而已。
+ */
+const pendingUsers = ref(0);
+let pendingTimer = null;
+
+function canSeeUsers() {
+  return session.isAdmin && (!gateway.isGateway || gateway.signedIn);
+}
+
+async function refreshPending() {
+  if (!canSeeUsers()) {
+    pendingUsers.value = 0;
+    return;
+  }
+  try {
+    const data = await usersApi.pendingCount();
+    pendingUsers.value = Number(data.count) || 0;
+  } catch (err) {
+    // 云端暂时连不上之类：保持上一次的数
+  }
+}
+
+onMounted(function () {
+  refreshPending();
+  pendingTimer = setInterval(refreshPending, 60 * 1000);
+});
+onBeforeUnmount(function () {
+  if (pendingTimer) clearInterval(pendingTimer);
+});
 
 /** 头像里那个字：显示名的第一个字 */
 const avatarText = computed(function () {
@@ -67,7 +101,12 @@ const options = computed(function () {
     { label: '关于', key: 'about' }
   ];
   // 系统设置不放这里：顶栏已经有齿轮按钮直达，两处入口重复（2026-10-01 用户反馈）
-  if (session.isAdmin) items.push({ label: '用户管理', key: 'users' });
+  if (session.isAdmin) {
+    items.push({
+      label: pendingUsers.value > 0 ? '用户管理（' + pendingUsers.value + ' 人待审核）' : '用户管理',
+      key: 'users'
+    });
+  }
   items.push({ type: 'divider', key: 'd1' });
   // 只有一个「退出登录」：要不要顺带删本机数据，在确认框里勾（用户 2026-10-02）
   items.push({ label: '退出登录', key: 'logout' });
@@ -234,8 +273,15 @@ async function onSelect(key) {
 </script>
 
 <template>
-  <n-dropdown :options="options" trigger="click" @select="onSelect">
-    <button class="avatar" :title="session.displayName || '未登录'">{{ avatarText }}</button>
+  <n-dropdown
+    :options="options"
+    trigger="click"
+    @select="onSelect"
+    @update:show="(open) => { if (open) refreshPending(); }"
+  >
+    <n-badge :show="pendingUsers > 0" dot :offset="[-3, 3]">
+      <button class="avatar" :title="session.displayName || '未登录'">{{ avatarText }}</button>
+    </n-badge>
   </n-dropdown>
 
   <n-modal

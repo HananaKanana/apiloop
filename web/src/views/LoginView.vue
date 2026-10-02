@@ -7,6 +7,7 @@ import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
 import { markChosen } from '@/utils/firstRun';
 import { useTabsStore } from '@/stores/tabs';
+import { register as registerApi } from '@/api/auth';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,6 +20,50 @@ const username = ref('');
 const password = ref('');
 const loading = ref(false);
 const errorText = ref('');
+
+/**
+ * 同一张卡片上切「登录 / 注册」（用户 2026-10-02：加注册，管理员审核通过才能登录）。
+ * 注册成功不登录，切回登录并提示等审核；用户名留在输入框里，审核过了直接输密码就行。
+ */
+const mode = ref('login');
+const displayName = ref('');
+const confirmPassword = ref('');
+const noticeText = ref('');
+
+function switchMode(next) {
+  mode.value = next;
+  errorText.value = '';
+  noticeText.value = '';
+  password.value = '';
+  confirmPassword.value = '';
+}
+
+async function submitRegister() {
+  errorText.value = '';
+  if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(username.value)) {
+    errorText.value = '用户名只能用字母、数字、下划线、点、连字符，长度 2~32';
+    return;
+  }
+  if (password.value.length < 6) {
+    errorText.value = '密码至少 6 位';
+    return;
+  }
+  if (password.value !== confirmPassword.value) {
+    errorText.value = '两次输入的密码不一样';
+    return;
+  }
+
+  loading.value = true;
+  try {
+    await registerApi({ username: username.value, password: password.value, displayName: displayName.value });
+    switchMode('login');
+    noticeText.value = '注册成功，等管理员审核通过后就能登录了。';
+  } catch (err) {
+    errorText.value = err.message;
+  } finally {
+    loading.value = false;
+  }
+}
 
 /** 只接受 #/ 开头的 next，其余一律回首页 */
 function targetAfterLogin() {
@@ -88,7 +133,9 @@ async function continueLocal() {
 }
 
 async function submit() {
+  if (mode.value === 'register') return submitRegister();
   errorText.value = '';
+  noticeText.value = '';
 
   if (!username.value || !password.value) {
     errorText.value = '请填写用户名和密码';
@@ -118,10 +165,13 @@ async function submit() {
   <div class="login-page">
     <n-card class="login-card" :bordered="false">
       <h1 class="brand">{{ session.appName }}</h1>
-      <p class="subtitle">登录管理台</p>
+      <p class="subtitle">{{ mode === 'register' ? '注册账号' : '登录管理台' }}</p>
 
       <n-alert v-if="errorText" type="error" :show-icon="false" class="alert">
         {{ errorText }}
+      </n-alert>
+      <n-alert v-if="noticeText" type="success" :show-icon="false" class="alert">
+        {{ noticeText }}
       </n-alert>
 
       <!-- 已经在本机模式、又从菜单进到登录页：先说清楚登录之后会看到什么 -->
@@ -129,7 +179,7 @@ async function submit() {
         连不上云端，登录需要联网。不登录也可以继续在本机使用。
       </n-alert>
 
-      <p v-if="unbound" class="local-note">
+      <p v-if="unbound && mode === 'login'" class="local-note">
         登录后，本机的项目会自动同步到这个账号。
       </p>
 
@@ -142,24 +192,36 @@ async function submit() {
             @keyup.enter="submit"
           />
         </n-form-item>
+        <n-form-item v-if="mode === 'register'" label="显示名">
+          <n-input v-model:value="displayName" placeholder="可留空，比如你的名字" @keyup.enter="submit" />
+        </n-form-item>
         <n-form-item label="密码">
           <n-input
             v-model:value="password"
             type="password"
             show-password-on="click"
-            placeholder="密码"
+            :placeholder="mode === 'register' ? '至少 6 位' : '密码'"
+            @keyup.enter="submit"
+          />
+        </n-form-item>
+        <n-form-item v-if="mode === 'register'" label="确认密码">
+          <n-input
+            v-model:value="confirmPassword"
+            type="password"
+            show-password-on="click"
+            placeholder="再输一次"
             @keyup.enter="submit"
           />
         </n-form-item>
       </n-form>
 
       <n-button type="primary" block :loading="loading" @click="submit">
-        登录
+        {{ mode === 'register' ? '提交注册' : '登录' }}
       </n-button>
 
       <!-- 网关上才给这条路：回工作台，数据都在本机，不登录也能用 -->
       <n-button
-        v-if="gateway.isGateway"
+        v-if="gateway.isGateway && mode === 'login'"
         class="skip"
         block
         quaternary
@@ -168,8 +230,12 @@ async function submit() {
         不登录，继续在本机使用
       </n-button>
 
-      <p class="hint">
-        忘记密码？请联系管理员重置。
+      <p v-if="mode === 'login'" class="hint">
+        没有账号？<a class="link" @click="switchMode('register')">注册</a>，管理员审核通过后即可登录。
+        <br />忘记密码？请联系管理员重置。
+      </p>
+      <p v-else class="hint">
+        已有账号？<a class="link" @click="switchMode('login')">去登录</a>
       </p>
     </n-card>
   </div>
@@ -229,6 +295,11 @@ async function submit() {
   opacity: 0.55;
   text-align: center;
   line-height: 1.6;
+}
+
+.link {
+  color: var(--apiloop-primary);
+  cursor: pointer;
 }
 
 .hint code {

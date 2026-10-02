@@ -9,6 +9,11 @@ export function login(username, password) {
   return request('POST', '/auth/login', { username: username, password: password }, { noAuthRedirect: true });
 }
 
+/** 自助注册：成功只代表申请提交了，要等管理员在「用户管理」里通过才能登录 */
+export function register(payload) {
+  return request('POST', '/auth/register', payload, { noAuthRedirect: true });
+}
+
 export function logout() {
   return post('/auth/logout');
 }

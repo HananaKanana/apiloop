@@ -64,7 +64,10 @@ async function load() {
   loadError.value = '';
   try {
     const data = await usersApi.listUsers();
-    users.value = data.users || [];
+    // 待审核的排最前面：管理员点进来就是来处理它们的
+    users.value = (data.users || []).slice().sort(function (a, b) {
+      return Number(Boolean(b.pending)) - Number(Boolean(a.pending));
+    });
   } catch (err) {
     loadError.value = '用户列表拉不下来：' + err.message;
     showError(err);
@@ -153,6 +156,35 @@ async function resetPassword(row) {
   });
 }
 
+async function approve(row) {
+  try {
+    await usersApi.approveUser(row.id);
+    message.success('已通过，「' + row.username + '」现在可以登录了');
+    await load();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+/** 拒绝就是删掉这条注册：用户名空出来，对方可以换个信息重新注册 */
+function reject(row) {
+  dialog.error({
+    title: '拒绝注册',
+    content: '拒绝「' + row.username + '」的注册申请？这条申请会被删掉。',
+    positiveText: '拒绝',
+    negativeText: '取消',
+    onPositiveClick: async function () {
+      try {
+        await usersApi.removeUser(row.id);
+        message.success('已拒绝');
+        await load();
+      } catch (err) {
+        showError(err);
+      }
+    }
+  });
+}
+
 function removeUser(row) {
   dialog.error({
     title: '删除用户',
@@ -200,6 +232,9 @@ const columns = [
     key: 'role',
     width: 110,
     render: function (row) {
+      if (row.pending) {
+        return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: () => '待审核' });
+      }
       return h(
         NTag,
         { size: 'small', type: row.role === 'admin' ? 'info' : 'default', bordered: false },
@@ -212,6 +247,7 @@ const columns = [
     key: 'disabled',
     width: 90,
     render: function (row) {
+      if (row.pending) return '—';
       // 自己不能禁用自己（服务端也拦：「不能对自己做删除、禁用或降级」），开关直接置灰
       return h(NSwitch, {
         size: 'small',
@@ -228,6 +264,14 @@ const columns = [
     key: 'actions',
     width: 220,
     render: function (row) {
+      if (row.pending) {
+        return h(NSpace, { size: 4 }, {
+          default: () => [
+            h(NButton, { size: 'tiny', type: 'primary', onClick: () => approve(row) }, { default: () => '通过' }),
+            h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => reject(row) }, { default: () => '拒绝' })
+          ]
+        });
+      }
       return h(NSpace, { size: 4 }, {
         default: () => [
           h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, { default: () => '编辑' }),
