@@ -20,7 +20,7 @@ var adminModule = require('../lib/admin');
 var ctx = null;
 
 test.before(async function () {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-http-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-http-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
     var project = projectsRepo.create(handle, { name: '测试项目' });
     var store = storeModule.createStore({ handle: handle, projectId: project.id });

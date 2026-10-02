@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+http://leonaz.top:3000/liuxiuqi/server-mock.git"
+    "url": "git+http://leonaz.top:3000/liuxiuqi/apiloop.git"
   },
   "keywords": [
     "api",
@@ -35,9 +35,9 @@
   "author": "ruoyu",
   "license": "ISC",
   "bugs": {
-    "url": "http://leonaz.top:3000/liuxiuqi/server-mock/issues"
+    "url": "http://leonaz.top:3000/liuxiuqi/apiloop/issues"
   },
-  "homepage": "http://leonaz.top:3000/liuxiuqi/server-mock",
+  "homepage": "http://leonaz.top:3000/liuxiuqi/apiloop",
   "dependencies": {
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
     "body-parser": "^1.15.0",

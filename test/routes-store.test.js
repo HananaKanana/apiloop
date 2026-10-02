@@ -14,7 +14,7 @@ var legacyImport = require('../lib/legacy-import');
  * store 现在是「单个项目的门面」，所以要先开库、建一个项目，再拿它建 store。
  */
 function tempStore() {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-store-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-store-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
     var project = projectsRepo.create(handle, { name: '测试项目' });
     return {
@@ -110,7 +110,7 @@ test('迁移：旧 routes.json 坏掉时只记警告，不影响启动', functio
 });
 
 test('迁移：旧 routes.json 支持直接是数组的极简写法', function () {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-legacy-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
     fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify([{ path: '/api/a' }]));
 
@@ -126,7 +126,7 @@ test('迁移：旧 routes.json 支持直接是数组的极简写法', function (
 });
 
 test('迁移：目录里同时有 routes.db 和 routes.json 时只认 routes.db', function () {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-legacy-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
 
     // 造一个 P0 格式的库：它自己的表结构由 legacy 模块负责
@@ -152,7 +152,7 @@ test('迁移：目录里同时有 routes.db 和 routes.json 时只认 routes.db'
 });
 
 test('迁移：同一个目录不会重复导入', function () {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-legacy-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
     fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify([{ path: '/api/a', group: '分组甲' }]));
 
@@ -176,7 +176,7 @@ test('迁移：同一个目录不会重复导入', function () {
 });
 
 test('迁移：声明的空分组也会按原顺序建出来', function () {
-    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'server-mock-legacy-'));
+    var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apiloop-legacy-'));
     var handle = dbModule.open(path.join(dir, 'data.db'));
     fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({
         version: 1,
