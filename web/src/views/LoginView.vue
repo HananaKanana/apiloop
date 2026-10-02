@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useDialog } from 'naive-ui';
+import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
 import { markChosen } from '@/utils/firstRun';

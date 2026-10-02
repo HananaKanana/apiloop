@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { NButton, NEmpty, NTag, useDialog, useMessage } from 'naive-ui';
+import { NButton, NEmpty, NTag, useMessage } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import * as historyApi from '@/api/history';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';

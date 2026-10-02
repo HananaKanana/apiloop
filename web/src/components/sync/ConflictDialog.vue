@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NModal, NSpace, NSpin, useDialog, useMessage } from 'naive-ui';
+import { NButton, NModal, NSpace, NSpin, useMessage } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import * as apisApi from '@/api/apis';
 import * as gatewayApi from '@/api/gateway';
 import { useGatewayStore } from '@/stores/gateway';

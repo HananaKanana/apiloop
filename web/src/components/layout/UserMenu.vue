@@ -10,9 +10,9 @@ import {
   NInput,
   NModal,
   NSpace,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { changePassword, logout as logoutApi } from '@/api/auth';
 import { isLoginRequired } from '@/api/client';
 import * as gatewayApi from '@/api/gateway';
@@ -125,7 +125,7 @@ function confirmSignOut() {
             'onUpdate:checked': function (value) {
               removeLocal.value = value;
               instance.positiveText = value ? '退出并删除' : '退出登录';
-              instance.type = value ? 'error' : 'warning';
+              instance.type = value ? 'error' : 'default';
             }
           }, { default: function () { return '同时删除这台电脑上的数据（项目、历史、Cookie）'; } }),
           removeLocal.value && pending > 0

@@ -1,5 +1,6 @@
 import { h, ref } from 'vue';
-import { NInput, useDialog } from 'naive-ui';
+import { NInput } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 
 /**
  * 一句话要个名字的小弹窗（新建目录、新建接口、重命名都用它）。

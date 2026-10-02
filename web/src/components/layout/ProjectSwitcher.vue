@@ -9,9 +9,9 @@ import {
   NModal,
   NSpace,
   NButton,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { ChevronDown, Package } from '@vicons/tabler';
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';

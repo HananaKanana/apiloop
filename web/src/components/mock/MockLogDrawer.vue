@@ -7,9 +7,9 @@ import {
   NEmpty,
   NSpace,
   NTag,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { isLoginRequired } from '@/api/client';
 import * as mockLogApi from '@/api/mockLog';
 import { useProjectStore } from '@/stores/project';

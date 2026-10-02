@@ -7,9 +7,9 @@ import {
   NInputNumber,
   NSwitch,
   NTag,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import * as apisApi from '@/api/apis';
 import * as expectationsApi from '@/api/expectations';
 import { useProjectStore } from '@/stores/project';

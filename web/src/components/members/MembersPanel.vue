@@ -7,9 +7,9 @@ import {
   NSpace,
   NSpin,
   NTag,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { isLoginRequired } from '@/api/client';
 import * as membersApi from '@/api/members';
 import { useProjectStore } from '@/stores/project';

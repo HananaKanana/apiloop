@@ -11,9 +11,9 @@ import {
   NSpace,
   NTabPane,
   NTabs,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
 import VarTable from '@/components/common/VarTable.vue';
