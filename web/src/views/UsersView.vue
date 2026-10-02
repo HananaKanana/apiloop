@@ -32,7 +32,7 @@ const message = useMessage();
  */
 function showError(err) {
   if (isLoginRequired(err)) message.warning(err.message);
-  else showError(err);
+  else message.error(err.message);
 }
 const dialog = useDialog();
 
@@ -181,6 +181,11 @@ async function copyPassword() {
   }
 }
 
+/** 当前登录的这个人自己那一行：不能删除、禁用、重置密码（改自己的密码走右上角「修改密码」） */
+function isSelfRow(row) {
+  return Boolean(session.user && row.id === session.user.id);
+}
+
 const columns = [
   { title: '用户名', key: 'username', width: 180 },
   {
@@ -207,9 +212,11 @@ const columns = [
     key: 'disabled',
     width: 90,
     render: function (row) {
+      // 自己不能禁用自己（服务端也拦：「不能对自己做删除、禁用或降级」），开关直接置灰
       return h(NSwitch, {
         size: 'small',
         value: !row.disabled,
+        disabled: isSelfRow(row),
         'onUpdate:value': function (value) {
           toggleDisabled(row, !value);
         }
@@ -226,10 +233,12 @@ const columns = [
           h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, { default: () => '编辑' }),
           // 自己的密码不在这里重置：重置会清掉这个人的所有会话，包括自己当前这个，
           // 新密码还没显示出来人就被踢回登录页了（2026-10-01 用户遇到）。改自己的用右上角「修改密码」
-          session.user && row.id === session.user.id
+          isSelfRow(row)
             ? null
             : h(NButton, { size: 'tiny', quaternary: true, onClick: () => resetPassword(row) }, { default: () => '重置密码' }),
-          h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => removeUser(row) }, { default: () => '删除' })
+          isSelfRow(row)
+            ? null
+            : h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => removeUser(row) }, { default: () => '删除' })
         ]
       });
     }

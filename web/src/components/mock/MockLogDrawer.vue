@@ -44,7 +44,7 @@ const message = useMessage();
  */
 function showError(err) {
   if (isLoginRequired(err)) message.warning(err.message);
-  else showError(err);
+  else message.error(err.message);
 }
 const dialog = useDialog();
 
