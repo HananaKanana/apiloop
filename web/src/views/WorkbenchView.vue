@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { NAlert, NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
+import { NAlert, NEmpty, NIcon, useMessage } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import UpdateAction from '@/components/layout/UpdateAction.vue';

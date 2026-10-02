@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { NButton, NDropdown, NIcon, NInput, NTag, useDialog, useMessage } from 'naive-ui';
+import { NButton, NDropdown, NIcon, NInput, NTag, useMessage } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { Dots } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';

@@ -14,9 +14,9 @@ import {
   NSpace,
   NSwitch,
   NTag,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { isLoginRequired } from '@/api/client';
 import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';

@@ -11,9 +11,9 @@ import {
   NSpace,
   NSpin,
   NTag,
-  useDialog,
   useMessage
 } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import * as cookiesApi from '@/api/cookies';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';

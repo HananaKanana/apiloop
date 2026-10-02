@@ -38,7 +38,22 @@ const DARK_OVERRIDES = {
   }
 };
 
-const themeOverrides = computed(() => (osTheme.value === 'dark' ? DARK_OVERRIDES : LIGHT_OVERRIDES));
+/**
+ * 确认框（useDialog）：标题小一号、四周留白匀一点、圆角大一点。
+ * 图标和按钮样式在 utils/dialog.js 里统一（用户 2026-10-02 嫌「清空历史」框丑）。
+ */
+const DIALOG_OVERRIDES = {
+  titleFontSize: '16px',
+  padding: '20px 24px',
+  contentMargin: '10px 0 22px 0',
+  borderRadius: '10px',
+  closeMargin: '18px 20px 0 0'
+};
+
+const themeOverrides = computed(() => ({
+  ...(osTheme.value === 'dark' ? DARK_OVERRIDES : LIGHT_OVERRIDES),
+  Dialog: DIALOG_OVERRIDES
+}));
 </script>
 
 <template>

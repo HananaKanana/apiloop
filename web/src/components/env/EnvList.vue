@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NDropdown, NEmpty, NIcon, useDialog, useMessage } from 'naive-ui';
+import { NButton, NDropdown, NEmpty, NIcon, useMessage } from 'naive-ui';
+import { useDialog } from '@/utils/dialog';
 import { Check, Dots, Plus } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
