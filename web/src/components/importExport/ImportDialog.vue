@@ -441,7 +441,7 @@ function routeLabel(route) {
     style="width: 820px; max-width: 94vw"
   >
     <n-tabs v-model:value="activeTab" type="line" size="small" animated>
-      <n-tab-pane name="postman" tab="Postman">
+      <n-tab-pane name="postman" tab="JSON 文件">
         <div class="pane">
           <n-space align="center" :size="8">
             <n-button size="small" @click="pickPostmanFile">选择文件…</n-button>
@@ -460,7 +460,7 @@ function routeLabel(route) {
             v-model:value="postmanText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="Postman Collection / Environment / Globals 的 JSON"
+            placeholder="粘贴集合、环境或全局变量的 JSON（Collection v2.1 格式）"
             @update:value="postmanPreview = null"
           />
 

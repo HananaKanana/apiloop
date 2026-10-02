@@ -176,7 +176,7 @@ function removeEnv() {
 }
 
 const menuOptions = computed(function () {
-  const exportItem = { label: '导出为 Postman 环境', key: 'export' };
+  const exportItem = { label: '导出为 JSON', key: 'export' };
   // viewer 只读，但导出是看数据、不改数据 —— 原来那个弹窗里 viewer 也是能导出的
   if (!canEdit.value) return [exportItem];
 
