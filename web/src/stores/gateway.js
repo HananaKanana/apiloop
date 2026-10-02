@@ -12,7 +12,8 @@ import { useSessionStore } from '@/stores/session';
  * - **网关、已登录**：双向同步，只有云端有的功能才可用。
  *
  * 判据统一收在这里，别在各组件里自己拼：
- * - `mockAvailable`：mock 服务在**本机**（网关自己起），所以只要空间不是「未绑定」就能用；
+ * - `mockAvailable`：mock 服务在**云端**（`/mock-<项目ID>`），项目要登录同步过才在云端有，
+ *   所以「未绑定」时不能用；
  * - `cloudFeaturesAvailable`：改密码、用户管理、成员管理、mock 日志、安装包列表
  *   这些数据在云端，必须登录才能用。
  */
@@ -165,8 +166,8 @@ export const useGatewayStore = defineStore('gateway', function () {
   /**
    * mock 能不能用。
    *
-   * mock 服务跑在**网关本机**（不是云端），所以只要空间不是「未绑定」就能用 ——
-   * 退出登录之后数据都在本机，mock 照常跑。
+   * mock 服务跑在**云端**（网关不提供 /mock-*，见 gateway/space.js）。「未绑定」时项目从没
+   * 上过云端，mock 必然打不到；退出登录之后云端还留着上次同步的那份，所以照常给用。
    */
   const mockAvailable = computed(function () {
     if (!isGateway.value) return true;
