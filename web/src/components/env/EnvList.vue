@@ -1,9 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { NButton, NDropdown, NEmpty, NIcon, useMessage } from 'naive-ui';
+import { NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { Check, Dots, Plus } from '@vicons/tabler';
-import { useEnvStore } from '@/stores/env';
+import { MOCK_ENV_ID, useEnvStore } from '@/stores/env';
+import { useGatewayStore } from '@/stores/gateway';
 import { useProjectStore } from '@/stores/project';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 
@@ -12,6 +13,18 @@ import ContextMenu from '@/components/common/ContextMenu.vue';
  * 当前正在用的那个前面打勾；鼠标悬停时右边出现「…」菜单。
  */
 const envs = useEnvStore();
+const gateway = useGatewayStore();
+
+/** 内置 Mock 环境固定排在最上面：单击编辑变量，双击设为当前（本机模式下 mock 用不了，不能设） */
+function openMock() {
+  envs.edit(MOCK_ENV_ID);
+}
+
+function useMock() {
+  if (envs.selectedId === MOCK_ENV_ID || !gateway.mockAvailable) return;
+  envs.select(MOCK_ENV_ID);
+  message.success('已切换到「Mock」');
+}
 const projects = useProjectStore();
 const message = useMessage();
 const dialog = useDialog();
@@ -130,6 +143,19 @@ async function onMenuSelect(env, key) {
 
     <div class="list">
       <div
+        class="item"
+        :class="{ active: envs.editing && envs.editing.builtin }"
+        @click="openMock"
+        @dblclick="useMock"
+      >
+        <span class="tick">
+          <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
+        </span>
+        <span class="name">Mock</span>
+        <span class="builtin">内置</span>
+      </div>
+
+      <div
         v-for="env in list"
         :key="env.id"
         class="item"
@@ -158,11 +184,6 @@ async function onMenuSelect(env, key) {
         </n-dropdown>
       </div>
 
-      <n-empty
-        v-if="!list.length"
-        size="small"
-        description="还没有环境，点右上角「新建环境」"
-      />
     </div>
 
     <context-menu
@@ -214,6 +235,15 @@ async function onMenuSelect(env, key) {
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.builtin {
+  flex: none;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 3px;
+  color: var(--apiloop-primary);
+  background: rgba(255, 108, 55, 0.12);
 }
 
 .dirty-dot {

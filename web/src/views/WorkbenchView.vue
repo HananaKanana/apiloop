@@ -14,6 +14,7 @@ import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import EnvTab from '@/components/env/EnvTab.vue';
+import MockEnvTab from '@/components/env/MockEnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
@@ -425,7 +426,8 @@ onBeforeUnmount(function () {
           请求区这时用 v-if 卸掉，免得它的 ⌘S 也跟着响；标签页的状态都在 store 里，切回来照旧。
         -->
         <div v-if="ui.sidebarTab === 'env'" class="tab-body">
-          <env-tab v-if="envs.editing" :key="envs.editing.id" :env-id="envs.editing.id" />
+          <mock-env-tab v-if="envs.editing && envs.editing.builtin" />
+          <env-tab v-else-if="envs.editing" :key="envs.editing.id" :env-id="envs.editing.id" />
           <div v-else class="placeholder">
             <n-empty description="还没有环境，点左边的「新建环境」" />
           </div>

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import * as envsApi from '@/api/envs';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
-import { MOCK_ENV_ID, MOCK_VARIABLE, mockBaseUrl } from '@/utils/mock';
+import { MOCK_ENV_ID, mockVariables } from '@/utils/mock';
 
 /** 内置的 Mock 环境。定义在 utils/mock.js，这里转出去给界面用 */
 export { MOCK_ENV_ID };
@@ -36,9 +36,10 @@ export const useEnvStore = defineStore('env', function () {
   const drafts = ref({});
 
   /**
-   * 内置 Mock 环境：只有 `host` 一个变量，值是当前项目的 mock 地址。
+   * 内置 Mock 环境：默认只有 `host` = 当前项目的 mock 地址；改过的话用项目上存的那份
+   * （用户 2026-10-02：要能改，比如接口都带 /api 前缀）。
    *
-   * 临时拼出来而不是从 `environments` 里找 —— 它不存库，值还要跟着云端地址走。
+   * 临时拼出来而不是从 `environments` 里找 —— 它不是普通环境，值还要跟着云端地址走。
    * 变量高亮、悬停看值、缺失变量提示都读 `selected`，所以拼在这里它们自动就对。
    */
   function mockEnvironment() {
@@ -46,9 +47,7 @@ export const useEnvStore = defineStore('env', function () {
       id: MOCK_ENV_ID,
       name: 'Mock',
       builtin: true,
-      variables: [
-        { key: MOCK_VARIABLE, value: mockBaseUrl(useProjectStore().current), enabled: true }
-      ]
+      variables: mockVariables(useProjectStore().current)
     };
   }
 
@@ -62,6 +61,8 @@ export const useEnvStore = defineStore('env', function () {
    * **内置的 Mock 环境不能编辑**（它不在库里），所以不当退路。
    */
   const editing = computed(function () {
+    // 内置 Mock 环境也能点开编辑变量（MockEnvTab）；但不当「没点过时」的退路
+    if (editingId.value === MOCK_ENV_ID) return mockEnvironment();
     const list = environments.value;
     const picked = list.find(function (item) { return item.id === editingId.value; });
     if (picked) return picked;

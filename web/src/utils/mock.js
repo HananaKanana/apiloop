@@ -14,6 +14,12 @@ export const MOCK_ENV_ID = 'mock';
 export const MOCK_VARIABLE = 'host';
 
 /**
+ * 存库时代表「这个项目的 mock 地址」的占位符，和服务端 mock-env.js 的 MOCK_BASE_TOKEN 一致。
+ * 页面上永远显示展开后的地址；保存时再把地址收回成占位符，云端地址变了改过的变量也不过期。
+ */
+export const MOCK_BASE_TOKEN = '$MOCK_BASE';
+
+/**
  * 项目的 mock 地址前缀。
  *
  * L1 起 mock 路径是 **`/mock-<项目ID>/`**（原来是 `/mock/<标识>/`）：
@@ -43,6 +49,33 @@ export function mockBaseUrl(project) {
   const gateway = useGatewayStore();
   const base = gateway.isGateway && gateway.cloudUrl ? gateway.cloudUrl : window.location.origin;
   return String(base).replace(/\/+$/, '') + mockPrefix(project);
+}
+
+/** 默认的 Mock 变量表（展开后的）：只有 host = mock 地址 */
+export function defaultMockVariables(project) {
+  return [{ key: MOCK_VARIABLE, value: mockBaseUrl(project), enabled: true }];
+}
+
+/**
+ * 内置 Mock 环境实际用的变量表（展开后的）。项目上改过就用改过的（`project.mockVariables`），
+ * 否则是默认值。
+ */
+export function mockVariables(project) {
+  const stored = project && Array.isArray(project.mockVariables) ? project.mockVariables : null;
+  if (!stored) return defaultMockVariables(project);
+  const base = mockBaseUrl(project);
+  return stored.map(function (row) {
+    return { ...row, value: String(row.value || '').split(MOCK_BASE_TOKEN).join(base) };
+  });
+}
+
+/** 保存前把值里的 mock 地址收回成占位符（只认开头那一段，和用户手写的别的地址无关） */
+export function collapseMockVariables(project, rows) {
+  const base = mockBaseUrl(project);
+  return (rows || []).map(function (row) {
+    const value = String((row && row.value) || '');
+    return { ...row, value: value.indexOf(base) === 0 ? MOCK_BASE_TOKEN + value.slice(base.length) : value };
+  });
 }
 
 /**
