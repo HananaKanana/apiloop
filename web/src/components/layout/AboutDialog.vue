@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { NButton, NModal, NSpace, useMessage } from 'naive-ui';
 import { useSessionStore } from '@/stores/session';
+import { copyText } from '@/utils/clipboard';
 
 /** 关于：产品名、版本号、数据库路径。数据全部来自 /meta。 */
 const props = defineProps({
@@ -27,7 +28,7 @@ const mockPrefixHint = computed(function () {
 
 async function copyPath() {
   try {
-    await navigator.clipboard.writeText(meta.value.configPath || '');
+    await copyText(meta.value.configPath || '');
     message.success('已复制');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');

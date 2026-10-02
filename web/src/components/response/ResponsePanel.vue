@@ -12,6 +12,7 @@ import {
   NTooltip
 } from 'naive-ui';
 import BodyViewer from './BodyViewer.vue';
+import VisualizerView from './VisualizerView.vue';
 import HeadersTable from './HeadersTable.vue';
 import SseEventsTable from './SseEventsTable.vue';
 import TimingsBar from './TimingsBar.vue';
@@ -242,6 +243,11 @@ const scriptTests = computed(function () {
   return (scripts.value && scripts.value.tests) || [];
 });
 
+/** 测试脚本里 pm.visualizer.set 的结果（「可视化」页签） */
+const scriptVisualizer = computed(function () {
+  return (scripts.value && scripts.value.visualizer) || null;
+});
+
 const scriptConsole = computed(function () {
   return (scripts.value && scripts.value.console) || [];
 });
@@ -461,6 +467,11 @@ function requestBodyText() {
                 :request-url="finalUrl"
                 :request-method="requestMethod"
               />
+            </n-tab-pane>
+
+            <!-- 测试脚本调用过 pm.visualizer.set 才有（参考 Postman 的 Visualize） -->
+            <n-tab-pane v-if="scriptVisualizer" name="visualize" tab="可视化">
+              <visualizer-view :visualizer="scriptVisualizer" />
             </n-tab-pane>
 
             <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
