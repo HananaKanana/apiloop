@@ -27,6 +27,11 @@ namespace Apiloop
             var silent = args.Any(arg => arg.Equals("/update", StringComparison.OrdinalIgnoreCase)
                                       || arg.Equals("/silent", StringComparison.OrdinalIgnoreCase));
 
+            // 一键更新时是网关（node）拉起的，当前目录继承成了安装目录下的 app\。
+            // Windows 上进程的当前目录会占着那个文件夹，下面删 app\ 就报「另一个程序正在使用」
+            // （2026-10-02 用户遇到）。老版本网关拉起时也是这样，所以由安装程序自己先挪开
+            try { Directory.SetCurrentDirectory(Path.GetTempPath()); } catch { }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
