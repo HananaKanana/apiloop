@@ -23,7 +23,7 @@ import { methodColor } from '@/utils/method';
 import { readFileAsText } from '@/utils/download';
 
 /**
- * 导入弹窗：Postman / cURL / OpenAPI / HAR 四个页签。
+ * 导入弹窗：JSON 文件（集合 / 环境）/ cURL / OpenAPI / HAR 四个页签。
  *
  * cURL 是**前端自己解析**的（`utils/curl.js`）—— 服务端那个 `/import/curl` 是给
  * 「造 mock 路由」写的，会丢请求头、丢主机端口、把 JSON 拆散，不能用来还原一次请求。
@@ -268,10 +268,44 @@ const openapiText = ref('');
 const openapiRoutes = ref(null);
 const openapiBusy = ref(false);
 
+/**
+ * 三种来源（用户 2026-10-02：swagger 常常是个地址，也可能是文件）：
+ * 填了地址就按地址拉（客户端里由本机去拉，内网的也行）；否则用选的文件或粘贴的文本。
+ * OpenAPI / Swagger 只有 JSON 和 YAML 两种写法，没有 XML 版。
+ */
+const openapiUrl = ref('');
+const openapiFileInput = ref(null);
+const openapiFileName = ref('');
+
+function pickOpenapiFile() {
+  if (!openapiFileInput.value) return;
+  openapiFileInput.value.value = '';
+  openapiFileInput.value.click();
+}
+
+async function onOpenapiFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  try {
+    openapiText.value = await readFileAsText(file);
+    openapiFileName.value = file.name;
+    openapiUrl.value = '';
+    openapiRoutes.value = null;
+    parseOpenapi();
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
 async function parseOpenapi() {
+  const url = openapiUrl.value.trim();
+  if (!url && !openapiText.value.trim()) {
+    message.warning('填一个地址、选一个文件，或者把内容粘进来');
+    return;
+  }
   openapiBusy.value = true;
   try {
-    const data = await importExportApi.parseOpenapi(openapiText.value);
+    const data = await importExportApi.parseOpenapi(url ? { url: url } : { text: openapiText.value });
     openapiRoutes.value = data.routes || [];
   } catch (err) {
     openapiRoutes.value = null;
@@ -298,6 +332,8 @@ async function importParsed(routes) {
     visible.value = false;
     openapiRoutes.value = null;
     openapiText.value = '';
+    openapiUrl.value = '';
+    openapiFileName.value = '';
   } catch (err) {
     message.error(err.message);
   }
@@ -575,15 +611,31 @@ function routeLabel(route) {
       <n-tab-pane name="openapi" tab="OpenAPI">
         <div class="pane">
           <n-input
+            v-model:value="openapiUrl"
+            size="small"
+            clearable
+            placeholder="接口文档地址，比如 http://内网地址/v3/api-docs 或 /swagger.json（不填就用下面的文件或粘贴内容）"
+            @update:value="openapiRoutes = null"
+            @keyup.enter="parseOpenapi"
+          />
+
+          <n-space align="center" :size="8">
+            <n-button size="small" @click="pickOpenapiFile">选择文件…</n-button>
+            <span class="hint">{{ openapiFileName ? '已读入 ' + openapiFileName : '支持 .json / .yaml / .yml，或者直接把内容粘在下面' }}</span>
+          </n-space>
+
+          <n-input
             v-model:value="openapiText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
             placeholder="粘贴 OpenAPI / Swagger 定义（JSON 或 YAML）"
-            @update:value="openapiRoutes = null"
+            @update:value="openapiRoutes = null; openapiFileName = ''"
           />
 
           <n-space align="center" :size="8">
-            <n-button size="small" secondary :loading="openapiBusy" @click="parseOpenapi">解析</n-button>
+            <n-button size="small" secondary :loading="openapiBusy" @click="parseOpenapi">
+              {{ openapiUrl.trim() ? '拉取并解析' : '解析' }}
+            </n-button>
             <span v-if="tree.selectedFolderId" class="hint">会导入到目录树里选中的目录</span>
             <span v-else class="hint">没有选中目录，会按分组建顶层目录</span>
           </n-space>
@@ -687,6 +739,13 @@ function routeLabel(route) {
     </n-tabs>
 
     <input ref="fileInput" type="file" accept=".json,application/json" class="hidden-input" @change="onPostmanFile" />
+    <input
+      ref="openapiFileInput"
+      type="file"
+      accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml"
+      class="hidden-input"
+      @change="onOpenapiFile"
+    />
     <input
       ref="harFileInput"
       type="file"

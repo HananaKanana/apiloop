@@ -6,8 +6,9 @@ export function parseCurl(text) {
   return post('/import/curl', { text: text });
 }
 
-export function parseOpenapi(text) {
-  return post('/import/openapi', { text: text });
+/** source: { text } 粘贴 / 文件内容，或 { url } 由服务端（客户端里是本机）去拉 */
+export function parseOpenapi(source) {
+  return post('/import/openapi', typeof source === 'string' ? { text: source } : source);
 }
 
 /* ---------------- Postman ---------------- */
