@@ -1,7 +1,7 @@
 # apiloop 管理台（前端）
 
-Vue 3 + Vite 写的单页应用，打包产物放在 `lib/web/`，随 npm 包一起发布，
-所以使用者装完包直接用，不需要自己构建。
+Vue 3 + Vite + Naive UI 写的单页应用。打包产物放在 `lib/web/`，云端（Docker 镜像）和
+客户端安装包都直接用这份产物，部署时不需要再构建前端。
 
 ## 目录
 
@@ -12,9 +12,9 @@ web/
   src/
     api/            fetch 封装与按契约分组的接口调用
     stores/         Pinia：session、project、env、tree、tabs、ws、ui
-    components/     layout / tree / request / response / mock / scripts / history / importExport / ws / folder / common
-    views/          LoginView、WorkbenchView、UsersView、ProjectSettingsView
-    utils/          树组装、下载、提示弹窗、SSE 解析、鉴权继承
+    components/     layout / tree / request / response / mock / scripts / history / importExport / ws / folder / env / sync / help / common
+    views/          LoginView、WorkbenchView、UsersView、ProjectSettingsView、SettingsView、ChangePasswordView
+    utils/          树组装、下载、确认框（dialog.js）、剪贴板、SSE 解析、鉴权继承、Mock 地址
 ```
 
 ## 开发
@@ -34,7 +34,8 @@ npm run dev:web
 ```
 
 `/__admin` 和 `/mock` 会被代理到 `http://127.0.0.1:8080`，所以浏览器里只需要开 5173。
-开发期间旧版管理台（如果还在）不受影响。
+要调客户端里的行为（本机空间、同步、一键更新），用构建好的产物直接打开本机网关：
+`node bin/server gateway --cloud=http://127.0.0.1:8080`，然后访问 `http://127.0.0.1:47321`。
 
 ## 打包
 
@@ -42,8 +43,7 @@ npm run dev:web
 npm run build:web
 ```
 
-产物直接写进 `lib/web/`，并且会**先清空**这个目录 —— 旧的 `app.js`、`style.css`、
-`login.html` 都是被这样替换掉的。
+产物直接写进 `lib/web/`，并且会**先清空**这个目录。
 
 > **改完前端一定要重新打包，并把 `lib/web` 一起提交。**
 > 后端只认 `lib/web` 里的产物，源码改了不打包等于没改。
@@ -59,8 +59,10 @@ rm -rf web/dist-check
 
 - **依赖全放 `devDependencies`**：它们会被打包进产物，运行时不需要安装，
   所以 `dependencies` 保持原样。
-- **完全离线可用**：不引 CDN、不引外部字体和图标库，只用系统字体；图标用 Naive UI
-  自带的或手写内联 SVG。
+- **完全离线可用**：不引 CDN、不引外部字体，只用系统字体；图标用 `@vicons/tabler`（打包进产物）。
+- **确认框一律用 `@/utils/dialog` 的 `useDialog`**，不要直接用 naive-ui 的：统一了样式（无图标、
+  取消不抢焦点、危险操作红色按钮）。
+- **复制到剪贴板用 `@/utils/clipboard` 的 `copyText`**：http 页面上没有 `navigator.clipboard`。
 - **模板表达式里不要写 `function (x) { ... }`**。Vue 编译器解析这种写法会报
   `Unexpected token`（Babel 单独解析同一段是没问题的），一律用箭头函数。
   `<script setup>` 里不受影响。

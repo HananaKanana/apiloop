@@ -11,16 +11,18 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /auth/login` | 登录，body `{username, password}`，成功种 cookie。**公开** |
+| `POST /auth/register` | 自助注册，body `{username, password, displayName?}`。建一个**待审核**的普通成员，不登录；同一 IP 每小时最多 30 个。**公开** |
+| `POST /auth/login` | 登录，body `{username, password}`，成功种 cookie。还没审核通过的账号（密码正确时）返回 403「账号还在等管理员审核」。**公开** |
 | `POST /auth/logout` | 退出 |
 | `GET /auth/me` | 当前登录用户 |
 | `PUT /auth/password` | 改密码，body `{oldPassword, newPassword}` |
-| `GET /users` | 用户列表。仅管理员 |
-| `GET /users/lookup?q=` | 搜人（按用户名或显示名模糊匹配，最多 20 条，不含被禁用的）。登录即可，加项目成员时用 |
+| `GET /users` | 用户列表，每个用户带 `pending`（待审核）。仅管理员 |
+| `GET /users/pending-count` | 待审核的人数 `{ count }`。仅管理员 |
+| `GET /users/lookup?q=` | 搜人（按用户名或显示名模糊匹配，最多 20 条，不含被禁用和待审核的）。登录即可，加项目成员时用 |
 | `POST /users` | 新建用户；没传密码会随机生成并在响应里返回一次。仅管理员 |
-| `PUT /users/:id` | 改显示名 / 角色 / 禁用。仅管理员 |
+| `PUT /users/:id` | 改显示名 / 角色 / 禁用；`{ approve: true }` 审核通过。不能对自己禁用、降级。仅管理员 |
 | `POST /users/:id/reset-password` | 重置密码并返回一次。仅管理员 |
-| `DELETE /users/:id` | 删除用户。仅管理员 |
+| `DELETE /users/:id` | 删除用户（拒绝注册申请也是它）。不能删自己。仅管理员 |
 
 ## 项目（契约第 2 节）
 
@@ -29,7 +31,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `GET /projects` | 项目列表；只返回自己参与的项目（admin 返回全部） |
 | `POST /projects` | 新建项目；任何登录用户都可以，创建者自动成为 owner |
 | `GET /projects/:pid` | 项目详情，`:pid` 可以是 id 或 slug |
-| `PUT /projects/:pid` | 改描述 / 变量 / 鉴权 / 脚本要 editor；改名字 / 标识要 owner。标识被占用会报错，不自动改名 |
+| `PUT /projects/:pid` | 改描述 / 变量 / 鉴权 / 脚本 / `mockVariables` 要 editor；改名字 / 标识要 owner。标识被占用会报错，不自动改名 |
 | `DELETE /projects/:pid` | 删除项目。owner；根项目与默认项目不能删 |
 | `GET /projects/:pid/members` | 成员列表。viewer |
 | `PUT /projects/:pid/members/:userId` | 加成员或改角色。owner；不是成员就加进来 |
@@ -69,21 +71,31 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /projects/:pid/send` | 由服务端代发请求，返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行前置 / 测试脚本。`apiId` 指向 `WS` 接口时返回 400 |
-| `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」。测试脚本在 `end` 之前跑完，结果在 `end.result.scripts` 里 |
+| `POST /projects/:pid/send` | 代发请求（网页版由云端发，客户端里由本机网关发），返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行「请求前 / 响应后」脚本。`apiId` 指向 `WS` 接口时返回 400 |
+| `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」。「响应后」脚本在 `end` 之前跑完，结果在 `end.result.scripts` 里 |
+| `POST /projects/:pid/send/curl` | 把请求转成 cURL 命令（变量按选中的环境解析），返回 `{ curl, missing }`；不发请求 |
 | `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
 | `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果）。查看者不是发起人时，`result.scripts` 的 `console` 为空、变量 `set` 的值为 `***` |
 | `DELETE /projects/:pid/history` | 清空该项目的历史 |
 | `POST /projects/:pid/files` | 上传文件（`application/octet-stream` + `X-Filename`），返回服务端绝对路径 |
 
-## Postman 导入导出（契约第 6 节）
+## 内置 Mock 环境
+
+项目 DTO 带 `mockVariables`：内置「Mock」环境改过的变量表，没改过是 `null`（默认只有 `host`）。
+值里的 `$MOCK_BASE` 代表这个项目的 mock 地址，发送时换成页面给的 `mockBase`。
+`PUT /projects/:pid` 传 `mockVariables: [...]` 保存，传 `null` 还原默认值。
+`/send`、`/send/stream`、`POST /projects/:pid/ws` 用 `environmentId: 'mock'` 加 `mockBase` 选中它。
+
+## 集合 / 环境 JSON 导入导出（契约第 6 节）
+
+格式是 Collection v2.0 / v2.1、Environment、Globals 的 JSON。
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /import/postman/preview` | 解析并统计，不写库 |
-| `POST /import/postman` | 导入 collection / environment / globals；整个导入是一个事务 |
-| `GET /projects/:pid/export/postman` | 导出成 Postman Collection。`method` 为 `WS` 的接口会被跳过，`warnings` 里说明跳过了几个 |
-| `GET /environments/:id/export/postman` | 导出成 Postman Environment |
+| `POST /import/json/preview` | 解析并统计，不写库 |
+| `POST /import/json` | 导入集合 / 环境 / 全局变量；`{ text, mode?: 'new'\|'into', projectId? }`，整个导入是一个事务 |
+| `GET /projects/:pid/export/json` | 导出项目（集合 JSON），返回 `{ filename, json }`。`method` 为 `WS` 的接口会被跳过，`warnings` 里说明跳过了几个 |
+| `GET /environments/:id/export/json` | 导出环境 JSON |
 
 ## HAR 导入（契约第 13 节）
 
@@ -93,13 +105,13 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `POST /import/har` | 导入；`{ text, projectId?, mode?: 'new'\|'into', options? }` |
 
 > 这两条路径的**请求体上限是 50MB**（HAR 经常几十 MB），管理台其他接口仍是 4MB。
-> 权限与 Postman 的 collection 导入一致：`new` 谁都能用（导完是 owner），`into` 要 editor，
-> 且「项目不存在」与「不是成员」返回**同一个 400**。**凭据默认不保留**，规则见
-> [README 的 HAR 导入一节](../README.md#har-导入)。
+> 权限与集合 JSON 导入一致：`new` 谁都能用（导完是 owner），`into` 要 editor，
+> 且「项目不存在」与「不是成员」返回**同一个 400**。**凭据默认不保留**（请求头 `Cookie`、`Authorization`、
+> `Proxy-Authorization` 和响应头 `Set-Cookie` 会去掉），`options.keepCredentials: true` 才保留。
 
 ## 脚本（契约第 16 节）
 
-接口、目录、项目三层各可以挂前置脚本（`prerequest`）与测试脚本（`test`）：
+接口、目录、项目三层各可以挂「请求前」脚本（`prerequest`）与「响应后」脚本（`test`）：
 
 ```js
 scripts = [{ listen: 'prerequest' | 'test', exec: '脚本源码' }]
@@ -128,8 +140,8 @@ scripts = {
 }
 ```
 
-> 沙箱限制、支持的 `pm.*` API、变量写回规则见 [README 的「脚本」一节](../README.md#脚本)。
-> 前置脚本出错时请求不发送，`result.error.code` 是 `SCRIPT`。
+> 支持的 `pm.*` API 和用例见应用里的「帮助 → 脚本」；沙箱限制、变量写回规则见契约第 16 节。
+> 「请求前」脚本出错时请求不发送，`result.error.code` 是 `SCRIPT`。
 
 ## SSE 与 WebSocket 的 mock 回放（契约第 17 节）
 
@@ -153,9 +165,7 @@ scripts = {
 
 `method` 为 `WS` 的接口：存进目录树、可以配 mock，但**不注册 HTTP 路由**，由 mock 服务端在
 `upgrade` 事件上按 mockPath 匹配（规则和 HTTP 路由相同，`:param` 也支持；
-非根项目要带 `/mock/<slug>` 前缀）。每个项目最多同时保持 100 条 mock 连接，超了拒绝。
-
-> 用法、示例格式和「怎么录下来」见 [README 的「SSE 与 WebSocket 的 mock 回放」](../README.md#sse-与-websocket-的-mock-回放)。
+非根项目要带 `/mock-<项目ID>` 前缀）。每个项目最多同时保持 100 条 mock 连接，超了拒绝。
 
 ## 流式发送与 WebSocket（契约第 14、15 节）
 
@@ -215,8 +225,7 @@ scripts = {
 | `DELETE /cookies/:id` | 删一条自己的。不是自己的、与不存在，都是同一个 404「Cookie不存在」 |
 | `DELETE /projects/:pid/cookies?domain=` | 清空自己在这个项目下的 cookie；带 `domain` 时只清这个域名的 |
 
-> 每个用户在每个项目里各有一份，接口里没有任何一处能看到别人的。规则见
-> [Cookie 与代理](#cookie-与代理)。
+> 每个用户在每个项目里各有一份，接口里没有任何一处能看到别人的。匹配规则见契约第 12 节。
 
 ## 系统设置（契约第 12 节）
 
@@ -233,9 +242,9 @@ scripts = {
 | `DELETE /projects/:pid/mock-log` | 清空该项目的日志（只清内存）。editor |
 
 联调时最常问的一句话是「我明明发了请求，怎么没反应」。日志回答的就是它：每条记下完整
-原始地址（含 `/mock/<slug>` 前缀与查询串）、查询参数、请求头、请求体预览、命中了哪个
-接口的哪条期望（`matched: null` 表示在 `/mock/<slug>` 下根本没有命中，这正是地址写错、
-slug 拼错时最需要看到的）、状态码与耗时。请求头里的 `Authorization`、`Cookie`、
+原始地址（含 `/mock-<项目ID>` 前缀与查询串）、查询参数、请求头、请求体预览、命中了哪个
+接口的哪条期望（`matched: null` 表示在 `/mock-<项目ID>` 下根本没有命中，这正是地址写错时
+最需要看到的）、状态码与耗时。请求头里的 `Authorization`、`Cookie`、
 `Proxy-Authorization` 一律打码成 `***`，请求体与响应体各只留前 4KB。
 
 **日志只存在内存里**：每个项目保留最近 200 条，服务重启后清空；多个进程共用同一个库时，
@@ -249,13 +258,15 @@ slug 拼错时最需要看到的）、状态码与耗时。请求头里的 `Auth
 | `GET /meta` | 占位符、字段类型、响应模板、方法列表、当前用户与根项目、mock 前缀 |
 | `POST /preview` | 渲染一次响应体，返回 warnings 和 JSON 校验结果 |
 | `POST /import/curl` | 解析 cURL |
-| `POST /import/openapi` | 解析 OpenAPI / Swagger |
+| `POST /import/openapi` | 解析 OpenAPI / Swagger（JSON 或 YAML）：`{ text }`，或 `{ url }` 由服务端去拉（本机网关上就是本机拉，内网地址也行；15 秒超时、最大 20MB） |
 
 ## 安装包下载（G3）
 
 安装包放在 **`<数据目录>/downloads/`**（Docker 下就是宿主机的 `./data/downloads/`，
-不进镜像）。文件名必须是 `apiloop-gateway-<三段版本号>-<arm64|x64>.pkg`，别的文件一律
-不列、也不能下；同一架构有多个版本时只列最新的。
+不进镜像）。文件名必须是 `apiloop-gateway-<三段版本号>-<arm64|x64>.pkg`（Mac）或
+`apiloop-gateway-<三段版本号>-win-x64.exe`（Windows），别的文件一律不列、也不能下；
+同一平台有多个版本时只列最新的。云端每个管理台响应都带 `X-Apiloop-Version` 头，
+客户端拿它判断有没有新版本。
 
 | 方法与路径 | 说明 |
 | --- | --- |
@@ -265,3 +276,16 @@ slug 拼错时最需要看到的）、状态码与耗时。请求头里的 `Auth
 > 下载挂在 `/__admin/downloads`（不是 `/__admin/api`）下面，因为 `/__admin/api/*`
 > 整体在 `requireLogin` 之后。网关**不转发**这条路径，在网关页面上打开时用的是云端的
 > 绝对地址。
+
+## 本机网关自己的接口
+
+只在客户端里的本机网关（`127.0.0.1:47321`）上有，前缀是 `/__apiloop`；非 GET 请求要带 `X-Apiloop: 1`。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /__apiloop/status` | 空间状态（未绑定 / 已登录 / 已退出）、同步状态（待同步数、冲突数、上次同步）、云端是否可达、云端版本 `cloudVersion`、一键更新进度 `update` |
+| `POST /__apiloop/update/start` | 下载云端当前版本的安装包并打开安装程序（只在云端版本比本机新时可用） |
+| `POST /__apiloop/space/delete` | 删除这台电脑上的数据（可同时退出登录） |
+| `GET /__apiloop/sync/pending` | 还没同步上去的改动 |
+| `GET /__apiloop/sync/conflicts` | 冲突列表 |
+| `POST /__apiloop/sync/conflicts/resolve` | 处理一条冲突：`{ entity, id, choice: 'mine'\|'theirs'\|'copy' }`（`copy` 只对接口） |
