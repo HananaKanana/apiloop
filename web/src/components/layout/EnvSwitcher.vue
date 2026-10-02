@@ -13,7 +13,7 @@ import { useUiStore } from '@/stores/ui';
  * 2026-09-30 合并进来，EnvQuickView 删掉。
  *
  * 列表里除了「无环境」和真实环境，还有一项**内置的 Mock 环境**（带「内置」小标签）：
- * 选中后 `host` 变量就是本项目的 mock 地址。它不存库，本机模式下用不了（置灰）。
+ * 选中后 `host` 变量就是本项目的 mock 地址（变量可以改，存在项目上）；本机模式下用不了（置灰）。
  */
 const projects = useProjectStore();
 const envs = useEnvStore();
@@ -63,8 +63,8 @@ function selectMock() {
 }
 
 function editCurrent() {
-  // 内置的 Mock 环境不存库，没有可编辑的东西
-  if (!envs.selected || envs.selected.builtin) return;
+  // 内置的 Mock 环境也能编辑（用户 2026-10-02），它的 id 就是 MOCK_ENV_ID，编辑区是 MockEnvTab
+  if (!envs.selected) return;
   envs.edit(envs.selected.id);
   ui.setSidebarTab('env');
   show.value = false;
@@ -133,8 +133,7 @@ function manage() {
       <div v-if="envs.selected" class="section vars">
         <div class="vars-head">
           <span class="section-title flat">「{{ envs.selected.name }}」的变量</span>
-          <!-- 内置的 Mock 环境不存库，没有「编辑」 -->
-          <button v-if="!envs.selected.builtin" class="text-button" @click="editCurrent">
+          <button class="text-button" @click="editCurrent">
             <n-icon size="13" :component="Pencil" />
             编辑
           </button>
