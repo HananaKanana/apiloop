@@ -18,6 +18,7 @@ import MockEnvTab from '@/components/env/MockEnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
+import HelpDrawer from '@/components/help/HelpDrawer.vue';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
@@ -465,6 +466,7 @@ onBeforeUnmount(function () {
     />
 
     <mock-log-drawer />
+    <help-drawer />
     <import-dialog />
     <quick-open />
     <about-dialog v-model:show="showAbout" />

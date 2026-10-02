@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { NButton, NDropdown, NRadioButton, NRadioGroup } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import { SCRIPT_SNIPPETS } from './snippets';
+import { useUiStore } from '@/stores/ui';
 
 /**
  * 可编辑的脚本编辑器（契约第 16 节）。接口、目录、项目三处共用。
@@ -22,6 +23,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+const ui = useUiStore();
 
 /** 叫法跟 Postman 的 Before request / After response 一致，比「前置脚本 / 测试」直白（用户 2026-10-02） */
 const PHASES = [
@@ -122,6 +124,7 @@ function insertSnippet(label) {
 
     <p class="hint">
       {{ hint }}
+      <a class="help-link" @click="ui.openHelp('scripts')">怎么写？看帮助和用例</a>
       <span v-if="disabled" class="readonly">当前角色是只读，不能修改脚本。</span>
     </p>
   </div>
@@ -163,6 +166,12 @@ function insertSnippet(label) {
 
 .readonly {
   margin-left: 6px;
+}
+
+.help-link {
+  margin-left: 6px;
+  color: var(--apiloop-primary);
+  cursor: pointer;
 }
 
 /* 写了脚本的那一段标个绿点，和请求页签上的标记一致 */

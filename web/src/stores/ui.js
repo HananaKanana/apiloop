@@ -19,6 +19,15 @@ export const useUiStore = defineStore('ui', function () {
   const importVisible = ref(false);
   const mockLogVisible = ref(false);
   const quickOpenVisible = ref(false);
+
+  /** 帮助抽屉（用户 2026-10-02 要的帮助页）；helpSection 是打开时要跳到的那一节 */
+  const helpVisible = ref(false);
+  const helpSection = ref('');
+
+  function openHelp(section) {
+    helpSection.value = section || '';
+    helpVisible.value = true;
+  }
   const sidebarTab = ref(readSidebarTab());
 
   /**
@@ -61,6 +70,9 @@ export const useUiStore = defineStore('ui', function () {
   }
 
   return {
+    helpVisible: helpVisible,
+    helpSection: helpSection,
+    openHelp: openHelp,
     importVisible: importVisible,
     mockLogVisible: mockLogVisible,
     quickOpenVisible: quickOpenVisible,
