@@ -1,4 +1,6 @@
 <script setup>
+// 和 Mac / Windows 客户端同一个图标：make-icon.swift 画的 1024 图裁掉四周留白、缩到 96px
+import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
 import { Activity, Search, Settings } from '@vicons/tabler';
@@ -124,7 +126,7 @@ onBeforeUnmount(function () {
 <template>
   <n-layout-header bordered class="topbar">
     <div class="group left">
-      <span class="logo">a</span>
+      <img class="logo" :src="logoUrl" alt="" />
       <span class="brand">{{ session.appName || 'apiloop' }}</span>
 
       <slot name="project" />
@@ -190,20 +192,12 @@ onBeforeUnmount(function () {
   justify-content: center;
 }
 
-/* 主色方块里一个白色的 a */
+/* 和客户端一样的应用图标 */
 .logo {
   flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  background: var(--apiloop-primary);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
 .brand {
