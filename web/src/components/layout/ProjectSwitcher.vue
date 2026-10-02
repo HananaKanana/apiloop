@@ -72,7 +72,7 @@ const options = computed(function () {
 
   items.push({ type: 'divider', key: '__divider' });
   items.push({ key: '__settings', label: '项目设置', name: '项目设置' });
-  items.push({ key: '__export', label: '导出为 Postman 集合', name: '导出为 Postman 集合' });
+  items.push({ key: '__export', label: '导出为 JSON', name: '导出为 JSON' });
   items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
