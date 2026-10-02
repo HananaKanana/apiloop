@@ -4,6 +4,14 @@ export function listUsers() {
   return get('/users');
 }
 
+export function pendingCount() {
+  return get('/users/pending-count');
+}
+
+export function approveUser(id) {
+  return put('/users/' + encodeURIComponent(id), { approve: true });
+}
+
 export function createUser(payload) {
   return post('/users', payload);
 }
