@@ -1,9 +1,16 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { NAlert, NButton, NRadioButton, NRadioGroup } from 'naive-ui';
+import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
+import { Braces, ChevronDown, Copy, Download, Eye, Search, TextWrap } from '@vicons/tabler';
+import CodeEditor from '@/components/common/CodeEditor.vue';
 
 /**
- * 响应体查看器：美化 / 原文 / 预览三种视图。
+ * 响应体查看器（2026-10-01 按 Postman 重做：用户觉得原来的「太素」）。
+ *
+ * - **代码视图**：只读的 CodeMirror —— 语法高亮、行号、JSON 可折叠、⌘F / 搜索按钮查找；
+ *   左上角选格式（自动识别 / JSON / XML / HTML / JavaScript / 原文），JSON 自动美化；
+ * - **预览**：HTML 放进沙箱 iframe 渲染、图片直接显示；
+ * - 右边：自动换行、搜索、复制、下载。
  *
  * 预览一定放在 <iframe sandbox=""> 里渲染 —— 空 sandbox 表示禁掉脚本、表单和同源，
  * 所以被调试接口返回的恶意 HTML 也动不了管理台。**这里绝对不能用 v-html**，
@@ -22,8 +29,33 @@ const props = defineProps({
 });
 
 const FORMAT_LIMIT = 1024 * 1024;
+const WRAP_KEY = 'apiloop.responseWrap';
 
-const view = ref('pretty');
+const message = useMessage();
+
+/** code：代码视图；preview：预览 */
+const view = ref('code');
+/** auto 表示按 content-type 和内容自己认 */
+const format = ref('auto');
+const editorRef = ref(null);
+
+function readWrap() {
+  try {
+    return localStorage.getItem(WRAP_KEY) !== '0';
+  } catch (err) {
+    return true;
+  }
+}
+const wrap = ref(readWrap());
+
+function toggleWrap() {
+  wrap.value = !wrap.value;
+  try {
+    localStorage.setItem(WRAP_KEY, wrap.value ? '1' : '0');
+  } catch (err) {
+    // 存不下就只在这次生效
+  }
+}
 
 function headerValue(headers, name) {
   const target = String(name).toLowerCase();
@@ -74,9 +106,56 @@ const tooBigToFormat = computed(function () {
   return size.value > FORMAT_LIMIT;
 });
 
+/** 按 content-type 认格式；没写或写得不准（不少接口 JSON 也回 text/plain）再看内容 */
+const detected = computed(function () {
+  const type = lowerType.value;
+  if (type.indexOf('json') !== -1) return 'json';
+  if (type.indexOf('html') !== -1) return 'html';
+  if (type.indexOf('xml') !== -1) return 'xml';
+  if (type.indexOf('javascript') !== -1) return 'javascript';
+
+  const head = body.value.trimStart().slice(0, 200).toLowerCase();
+  if (head.charAt(0) === '{' || head.charAt(0) === '[') {
+    try {
+      JSON.parse(body.value);
+      return 'json';
+    } catch (err) {
+      // 不是合法 JSON：往下按文本
+    }
+  }
+  if (head.indexOf('<!doctype html') === 0 || head.indexOf('<html') === 0) return 'html';
+  if (head.indexOf('<?xml') === 0) return 'xml';
+  return 'text';
+});
+
+/** 实际用的格式：选了就用选的，否则自动识别的 */
+const language = computed(function () {
+  return format.value === 'auto' ? detected.value : format.value;
+});
+
+const FORMAT_LABELS = { json: 'JSON', xml: 'XML', html: 'HTML', javascript: 'JavaScript', text: '原文' };
+
+const formatOptions = computed(function () {
+  return [
+    { label: '自动识别（' + FORMAT_LABELS[detected.value] + '）', key: 'auto' },
+    { type: 'divider', key: 'd1' },
+    { label: 'JSON', key: 'json' },
+    { label: 'XML', key: 'xml' },
+    { label: 'HTML', key: 'html' },
+    { label: 'JavaScript', key: 'javascript' },
+    { label: '原文（不格式化、不高亮）', key: 'text' }
+  ];
+});
+
+function onFormat(key) {
+  format.value = key;
+  view.value = 'code';
+}
+
+/** 代码视图里显示的文字：JSON 美化（太大的不美化），其余原样 */
 const prettyText = computed(function () {
   if (!isText.value) return '';
-  if (!isJson.value || tooBigToFormat.value) return body.value;
+  if (language.value !== 'json' || tooBigToFormat.value) return body.value;
   try {
     return JSON.stringify(JSON.parse(body.value), null, 2);
   } catch (err) {
@@ -84,6 +163,25 @@ const prettyText = computed(function () {
     return body.value;
   }
 });
+
+/** 编辑器的语言：原文不高亮 */
+const editorLanguage = computed(function () {
+  return language.value === 'text' ? 'text' : language.value;
+});
+
+async function copyBody() {
+  try {
+    await navigator.clipboard.writeText(isText.value ? prettyText.value : body.value);
+    message.success('已复制响应体');
+  } catch (err) {
+    message.warning('复制失败，请手动选中复制');
+  }
+}
+
+function openSearch() {
+  if (view.value !== 'code') view.value = 'code';
+  if (editorRef.value) editorRef.value.openSearch();
+}
 
 const dataUrl = computed(function () {
   if (!isImage.value) return '';
@@ -162,10 +260,13 @@ const previewHtml = computed(function () {
 });
 
 const availableViews = computed(function () {
-  if (isText.value) return ['pretty', 'raw', 'preview'];
+  if (isText.value) return ['code', 'preview'];
   if (isImage.value) return ['preview'];
   return [];
 });
+
+// 新的一次响应：格式回到自动识别（上一个接口选的 XML 不该带到下一个 JSON 接口上）
+watch(body, function () { format.value = 'auto'; });
 
 watch(
   availableViews,
@@ -255,15 +356,42 @@ function formatSize(bytes) {
 <template>
   <div class="body-viewer">
     <div class="toolbar">
-      <n-radio-group v-if="availableViews.length > 1" v-model:value="view" size="small">
-        <n-radio-button v-if="availableViews.indexOf('pretty') !== -1" value="pretty">美化</n-radio-button>
-        <n-radio-button v-if="availableViews.indexOf('raw') !== -1" value="raw">原文</n-radio-button>
-        <n-radio-button v-if="availableViews.indexOf('preview') !== -1" value="preview">预览</n-radio-button>
-      </n-radio-group>
-      <span v-else class="spacer" />
+      <template v-if="isText">
+        <!-- 格式：左边像 Postman 的「{ } JSON ▾」 -->
+        <n-dropdown trigger="click" :options="formatOptions" @select="onFormat">
+          <button class="tool format" :class="{ active: view === 'code' }" @click="view = 'code'">
+            <n-icon size="14" :component="Braces" />
+            <span>{{ FORMAT_LABELS[language] }}</span>
+            <n-icon size="12" :component="ChevronDown" />
+          </button>
+        </n-dropdown>
+        <button class="tool" :class="{ active: view === 'preview' }" @click="view = view === 'preview' ? 'code' : 'preview'">
+          <n-icon size="14" :component="Eye" />
+          <span>预览</span>
+        </button>
+      </template>
+      <span v-else-if="isImage" class="tool active static">
+        <n-icon size="14" :component="Eye" />
+        <span>图片</span>
+      </span>
 
+      <span class="spacer" />
       <span class="size">{{ formatSize(size) }}</span>
-      <n-button size="tiny" quaternary @click="download">下载</n-button>
+
+      <template v-if="isText">
+        <button class="icon-tool" :class="{ on: wrap }" title="自动换行" @click="toggleWrap">
+          <n-icon size="16" :component="TextWrap" />
+        </button>
+        <button class="icon-tool" title="在响应里查找（⌘F / Ctrl+F）" @click="openSearch">
+          <n-icon size="16" :component="Search" />
+        </button>
+        <button class="icon-tool" title="复制响应体" @click="copyBody">
+          <n-icon size="16" :component="Copy" />
+        </button>
+      </template>
+      <button class="icon-tool" title="下载响应体" @click="download">
+        <n-icon size="16" :component="Download" />
+      </button>
     </div>
 
     <n-alert v-if="truncated" type="warning" :show-icon="false" class="notice">
@@ -271,12 +399,12 @@ function formatSize(bytes) {
     </n-alert>
 
     <n-alert
-      v-if="isJson && tooBigToFormat"
+      v-if="language === 'json' && tooBigToFormat && view === 'code'"
       type="info"
       :show-icon="false"
       class="notice"
     >
-      响应超过 1 MB，为了不卡住界面就不做格式化高亮了，直接显示原文。
+      响应超过 1 MB，为了不卡住界面就不做美化了，直接显示原文。
     </n-alert>
 
     <!-- 骨架页在预览里是空白的，说清楚原因，并给一条能走的路 -->
@@ -295,12 +423,17 @@ function formatSize(bytes) {
     </n-alert>
 
     <div class="content">
-      <template v-if="isText && view === 'pretty'">
-        <pre class="text">{{ prettyText }}</pre>
-      </template>
-
-      <template v-else-if="isText && view === 'raw'">
-        <pre class="text">{{ body }}</pre>
+      <template v-if="isText && view === 'code'">
+        <code-editor
+          ref="editorRef"
+          :key="editorLanguage"
+          class="code"
+          :model-value="prettyText"
+          :language="editorLanguage"
+          :wrap="wrap"
+          readonly
+          min-height="120px"
+        />
       </template>
 
       <template v-else-if="isText && view === 'preview'">
@@ -341,7 +474,64 @@ function formatSize(bytes) {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+
+/* 左边两个「文字 + 图标」的按钮：格式、预览。选中的那个浅底 */
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tool:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.tool.active {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.14);
+  font-weight: 500;
+}
+
+.tool.static {
+  cursor: default;
+}
+
+/* 右边的图标按钮：换行、搜索、复制、下载 */
+.icon-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.icon-tool:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+/* 换行开着：常亮 + 浅底，和 Postman 一样能看出状态 */
+.icon-tool.on {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.14);
 }
 
 .spacer {
@@ -349,6 +539,7 @@ function formatSize(bytes) {
 }
 
 .size {
+  margin-right: 4px;
   font-size: 12px;
   opacity: 0.6;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -372,16 +563,8 @@ function formatSize(bytes) {
   overflow: auto;
 }
 
-.text {
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.6;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
+.code {
+  height: 100%;
 }
 
 .preview {

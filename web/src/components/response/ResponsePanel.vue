@@ -117,6 +117,44 @@ const displayHeaders = computed(function () {
   return response.value ? response.value.headers : null;
 });
 
+/**
+ * 响应设置的 Cookie（Cookies 页签，参考 Postman）：把每个 Set-Cookie 头拆成
+ * 名字、值、Domain、Path、过期时间、HttpOnly、Secure、SameSite。
+ */
+const responseCookies = computed(function () {
+  const list = [];
+  (displayHeaders.value || []).forEach(function (pair) {
+    if (String(pair[0]).toLowerCase() !== 'set-cookie') return;
+    const parts = String(pair[1]).split(';');
+    const first = parts.shift() || '';
+    const eq = first.indexOf('=');
+    const cookie = {
+      name: (eq === -1 ? first : first.slice(0, eq)).trim(),
+      value: eq === -1 ? '' : first.slice(eq + 1).trim(),
+      domain: '',
+      path: '',
+      expires: '',
+      httpOnly: false,
+      secure: false,
+      sameSite: ''
+    };
+    parts.forEach(function (attr) {
+      const index = attr.indexOf('=');
+      const key = (index === -1 ? attr : attr.slice(0, index)).trim().toLowerCase();
+      const value = index === -1 ? '' : attr.slice(index + 1).trim();
+      if (key === 'domain') cookie.domain = value;
+      else if (key === 'path') cookie.path = value;
+      else if (key === 'expires') cookie.expires = value;
+      else if (key === 'max-age') cookie.expires = cookie.expires || ('Max-Age ' + value + ' 秒');
+      else if (key === 'httponly') cookie.httpOnly = true;
+      else if (key === 'secure') cookie.secure = true;
+      else if (key === 'samesite') cookie.sameSite = value;
+    });
+    if (cookie.name) list.push(cookie);
+  });
+  return list;
+});
+
 const redirects = computed(function () {
   if (live.value) return live.value.redirects || [];
   return (result.value && result.value.redirects) || [];
@@ -466,7 +504,34 @@ function requestBodyText() {
               </div>
             </n-tab-pane>
 
-            <n-tab-pane name="headers" tab="Headers" :disabled="!displayHeaders">
+            <n-tab-pane name="cookies" :disabled="!displayHeaders">
+              <template #tab>
+                <span>Cookies<span v-if="responseCookies.length" class="tab-count">{{ responseCookies.length }}</span></span>
+              </template>
+              <div v-if="responseCookies.length" class="cookie-table">
+                <div class="cookie-row head">
+                  <span>名称</span><span>值</span><span>Domain</span><span>Path</span><span>过期</span><span>属性</span>
+                </div>
+                <div v-for="(cookie, index) in responseCookies" :key="index" class="cookie-row">
+                  <span class="mono strong" :title="cookie.name">{{ cookie.name }}</span>
+                  <span class="mono" :title="cookie.value">{{ cookie.value }}</span>
+                  <span :title="cookie.domain">{{ cookie.domain || '—' }}</span>
+                  <span>{{ cookie.path || '—' }}</span>
+                  <span :title="cookie.expires">{{ cookie.expires || '会话' }}</span>
+                  <span class="flags">
+                    <span v-if="cookie.httpOnly" class="flag">HttpOnly</span>
+                    <span v-if="cookie.secure" class="flag">Secure</span>
+                    <span v-if="cookie.sameSite" class="flag">SameSite={{ cookie.sameSite }}</span>
+                  </span>
+                </div>
+              </div>
+              <div v-else class="empty-tab">这次响应没有设置 Cookie</div>
+            </n-tab-pane>
+
+            <n-tab-pane name="headers" :disabled="!displayHeaders">
+              <template #tab>
+                <span>Headers<span v-if="displayHeaders && displayHeaders.length" class="tab-count">{{ displayHeaders.length }}</span></span>
+              </template>
               <headers-table v-if="displayHeaders" :headers="displayHeaders" />
             </n-tab-pane>
 
@@ -697,6 +762,75 @@ function requestBodyText() {
 }
 
 /* 页签标题上的通过数：全通过才绿，有失败就红 */
+.tab-count {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  display: inline-block;
+  background: rgba(128, 128, 128, 0.16);
+  opacity: 0.85;
+}
+
+.cookie-table {
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.cookie-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(120px, 2fr) minmax(80px, 1fr) 70px minmax(110px, 1.2fr) minmax(120px, 1.2fr);
+  gap: 10px;
+  padding: 7px 10px;
+  align-items: center;
+}
+
+.cookie-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cookie-row + .cookie-row {
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.cookie-row.head {
+  font-weight: 600;
+  opacity: 0.6;
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.flags {
+  display: flex;
+  gap: 4px;
+}
+
+.flag {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.empty-tab {
+  padding: 20px 0;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
 .tests-pass {
   color: #18a058;
 }
