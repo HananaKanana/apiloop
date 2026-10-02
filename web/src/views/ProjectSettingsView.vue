@@ -224,7 +224,7 @@ watch(function () { return route.params.pid; }, load);
 
           <n-card :bordered="false" size="small" title="项目脚本" class="card">
             <p class="tip">
-              这个项目里所有接口发送时都会执行：前置脚本在请求发出之前，测试脚本在响应回来之后。
+              这个项目里所有接口发送时都会执行：「请求前」脚本在请求发出之前，「响应后」脚本在响应回来之后。
               顺序是「项目 → 目录（从外到内）→ 接口」。
             </p>
             <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />

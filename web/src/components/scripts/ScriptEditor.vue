@@ -23,9 +23,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+/** 叫法跟 Postman 的 Before request / After response 一致，比「前置脚本 / 测试」直白（用户 2026-10-02） */
 const PHASES = [
-  { key: 'prerequest', label: '前置脚本' },
-  { key: 'test', label: '测试' }
+  { key: 'prerequest', label: '请求前' },
+  { key: 'test', label: '响应后' }
 ];
 
 const PHASE_HINT = {
@@ -33,7 +34,10 @@ const PHASE_HINT = {
   test: '响应回来之后执行。用 pm.test 写断言，结果显示在响应面板的「测试结果」里。'
 };
 
-const activePhase = ref('prerequest');
+/** 默认打开「响应后」（Postman 也这样，常用的取 token、写断言都在这儿）；只有请求前写了脚本、响应后是空的，才打开「请求前」 */
+const activePhase = ref(
+  execOf(props.modelValue, 'prerequest') && !execOf(props.modelValue, 'test') ? 'prerequest' : 'test'
+);
 const editorRef = ref(null);
 
 function execOf(list, phase) {
@@ -90,7 +94,7 @@ function insertSnippet(label) {
     <div class="toolbar">
       <n-radio-group v-model:value="activePhase" size="small">
         <n-radio-button v-for="phase in PHASES" :key="phase.key" :value="phase.key">
-          {{ phase.label }}
+          {{ phase.label }}<span v-if="execOf(modelValue, phase.key)" class="dot" />
         </n-radio-button>
       </n-radio-group>
 
@@ -159,5 +163,16 @@ function insertSnippet(label) {
 
 .readonly {
   margin-left: 6px;
+}
+
+/* 写了脚本的那一段标个绿点，和请求页签上的标记一致 */
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: #18a058;
+  vertical-align: middle;
 }
 </style>

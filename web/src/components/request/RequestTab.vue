@@ -1046,7 +1046,7 @@ onBeforeUnmount(function () {
               <div class="option-text">
                 <span class="option-title">执行脚本</span>
                 <span class="option-desc">
-                  这次请求执行项目和目录上的脚本，以及接口自己的前置脚本和测试脚本。
+                  这次请求执行项目和目录上的脚本，以及接口自己的「请求前」「响应后」脚本。
                   关掉就一段都不执行，适合脚本写坏了一时改不回来的情况。
                 </span>
               </div>
