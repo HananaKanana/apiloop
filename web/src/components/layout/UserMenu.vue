@@ -8,11 +8,13 @@ import {
   NDropdown,
   NForm,
   NFormItem,
+  NIcon,
   NInput,
   NModal,
   NSpace,
   useMessage
 } from 'naive-ui';
+import { User } from '@vicons/tabler';
 import { useDialog } from '@/utils/dialog';
 import { changePassword, logout as logoutApi } from '@/api/auth';
 import { isLoginRequired } from '@/api/client';
@@ -68,6 +70,20 @@ onBeforeUnmount(function () {
 });
 
 /** 头像里那个字：显示名的第一个字 */
+/**
+ * 本机网关上没登录（还没登录过 / 已退出）：头像显示成灰色的人形图标，不显示名字的字。
+ * 退出登录后本机库里那个用户行还在（数据要留着用），session 里的名字仍是上一个账号的，
+ * 照着它显示就会让人以为还登录着（用户 2026-10-02 报的 bug）。
+ */
+const signedOutLook = computed(function () {
+  return gateway.isGateway && !gateway.signedIn;
+});
+
+const avatarTitle = computed(function () {
+  if (signedOutLook.value) return '未登录';
+  return session.displayName || '未登录';
+});
+
 const avatarText = computed(function () {
   const name = String(session.displayName || session.username || '').trim();
   return name ? name.charAt(0).toUpperCase() : '?';
@@ -280,7 +296,10 @@ async function onSelect(key) {
     @update:show="(open) => { if (open) refreshPending(); }"
   >
     <n-badge :show="pendingUsers > 0" dot :offset="[-3, 3]">
-      <button class="avatar" :title="session.displayName || '未登录'">{{ avatarText }}</button>
+      <button class="avatar" :class="{ anonymous: signedOutLook }" :title="avatarTitle">
+        <n-icon v-if="signedOutLook" size="16" :component="User" />
+        <template v-else>{{ avatarText }}</template>
+      </button>
     </n-badge>
   </n-dropdown>
 
@@ -333,6 +352,11 @@ async function onSelect(key) {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.avatar.anonymous {
+  background: rgba(128, 128, 128, 0.22);
+  color: inherit;
 }
 
 .avatar:hover {
