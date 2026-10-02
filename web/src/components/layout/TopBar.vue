@@ -3,7 +3,7 @@
 import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
-import { Activity, Search, Settings } from '@vicons/tabler';
+import { Activity, Help, Search, Settings } from '@vicons/tabler';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
@@ -151,6 +151,15 @@ onBeforeUnmount(function () {
           </button>
         </template>
         Mock 日志
+      </n-tooltip>
+
+      <n-tooltip trigger="hover">
+        <template #trigger>
+          <button class="icon-button" @click="ui.openHelp()">
+            <n-icon size="18" :component="Help" />
+          </button>
+        </template>
+        帮助：变量、脚本、Mock 怎么用
       </n-tooltip>
 
       <n-tooltip v-if="session.isAdmin" trigger="hover">
