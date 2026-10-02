@@ -21,7 +21,7 @@ test
 *.db-wal
 *.db-shm
 routes.json
-server-mock-*.tgz
+apiloop-*.tgz
 apiloop-*.tgz
 npm-debug.log
 

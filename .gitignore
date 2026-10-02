@@ -1,7 +1,7 @@
 .DS_Store
 node_modules
 .router.js
-server-mock-*.tgz
+apiloop-*.tgz
 
 # 接口数据库是运行时生成的，不入库
 routes.db
@@ -16,11 +16,6 @@ web/dist-check
 data/
 workspace/
 .env
-
-# 桌面版（D0）：依赖、暂存的 app、打包产物都不入库
-desktop/node_modules/
-desktop/app/
-desktop/dist/
 
 # 本地网关（G0）的安装包：产物不入库。中间产物在 /tmp/apiloop-agent-build（见 build.sh），
 # 这里再留一条是防有人用 APILOOP_BUILD_WORK 指到仓库里

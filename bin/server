@@ -85,7 +85,7 @@ function handleCli(opts) {
 module.exports = handleCli;
 
 /**
- * 用户可能通过 server / mock / server-mock 任一 bin 名调用，帮助信息里显示实际用的那个
+ * 用户可能通过 apiloop / mock 任一 bin 名调用，帮助信息里显示实际用的那个
  * @returns {string}
  */
 function getScriptName() {

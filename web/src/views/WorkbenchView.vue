@@ -96,7 +96,7 @@ function onBeforeUnload(event) {
 
 /**
  * 给 Mac 原生壳留的钩子：壳子关窗口、退出、刷新之前会问一句，
- * 返回 true 就弹「还有没保存的修改」（见 docs/superpowers/plans/2026-10-01-mac-shell.md）。
+ * 返回 true 就弹「还有没保存的修改」（壳子代码在 agent-installer/mac/shell/）。
  *
  * **只在工作台挂着的时候存在** —— 离开工作台（比如回登录页）就删掉。
  * 壳子那边拿不到这个对象、或者调用报错，一律当「没有未保存的修改」直接关，
@@ -104,7 +104,7 @@ function onBeforeUnload(event) {
  */
 function mountShellHook() {
   window.apiloopShell = {
-    /** 壳子关窗口、退出、刷新之前问一句（Mac 原生壳，见 docs/superpowers/plans/2026-10-01-mac-shell.md） */
+    /** 壳子关窗口、退出、刷新之前问一句（Mac 原生壳） */
     hasUnsavedChanges: function () { return Boolean(tabs.hasDirty); }
   };
 }

@@ -47,7 +47,7 @@
     装到 `%LOCALAPPDATA%\Programs\apiloop`，不需要管理员。
 - 前端只有一份（`web/` → 构建到 `lib/web/`），云端和网关用同一份。
 
-`desktop/` 是早期 Electron 方案的试验（D0），已经放弃（macOS 上未签名的 app 拿不到局域网权限），可以删。
+早期试过 Electron 方案（D0），已经放弃（macOS 上未签名的 app 拿不到局域网权限），试验代码已删。
 
 ## 3. 关键机制与容易踩的坑
 
@@ -141,25 +141,21 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 产品名早就是 apiloop（`lib/app-info.js` 统一管名字，数据目录 `~/.apiloop`、cookie、环境变量都已是 apiloop），
 剩下的是仓库层面：
 
-- [ ] 本地目录 `/Users/kana/code/server-mock` → `apiloop`（用户自己挪）。
-- [ ] git 远端：现在是 `http://leonaz.top:3000/liuxiuqi/server-mock.git`（用户的 Gitea）。仓库改名后
-      `git remote set-url origin <新地址>`。
-- [ ] `package.json` 的 `repository` / `bugs` / `homepage` 三个地址跟着改。
+- [x] 本地目录 `/Users/kana/code/server-mock` → `/Users/kana/code/apiloop`。
+- [x] git 远端已改为 `http://leonaz.top:3000/liuxiuqi/apiloop.git`（用户的 Gitea）。
+- [x] `package.json` 的 `repository` / `bugs` / `homepage` 三个地址跟着改。
 - [ ] 服务器上的部署目录如果也叫 server-mock，改不改都行。Compose 项目名早已固定为 `apiloop`（`deploy.sh` 里 `-p apiloop`），
       数据在 `./data`。整个目录挪走时连 `data/` 和 `.env` 一起带上，挪完 `./deploy.sh up --cn`。
-- [ ] `.gitignore`、`.dockerignore` 里的 `server-mock-*.tgz` 改成 `apiloop-*.tgz`。
-- [ ] `bin/server` 第 88 行注释、`test/*.test.js` 里临时目录前缀 `server-mock-`（无功能影响，顺手改）。
-- [ ] `docs/design/`、`docs/superpowers/`（设计稿、计划、审阅记录）里大量出现 server-mock 和 Postman，
-      属于历史档案。用户还没决定留、删还是挪走，先问。
-- [ ] Claude 记忆：新路径下第一次会话，把第 1 节的规矩写进新的记忆目录（或者把这份文档改成仓库根目录的 `CLAUDE.md`，
-      每次会话自动加载）。
+- [x] `.gitignore`、`.dockerignore` 里的 `server-mock-*.tgz` 改成 `apiloop-*.tgz`。
+- [x] `bin/server` 第 88 行注释、`test/*.test.js` 里临时目录前缀改成 `apiloop-`。
+- [x] `docs/design/`、`docs/superpowers/`（已实现的设计稿、计划、审阅记录）已删除，要查看翻 git 历史（`46d1d56` 及以前）。
+- [x] 第 1 节的规矩已抄成仓库根目录的 `CLAUDE.md`，每次会话自动加载。
 
 ## 7. 延后 / 待用户决定的事
 
 - Windows 代码签名、线上换 https（都延后了）。
 - 命令行帮助还是英文，还列着 `open` / `start` / `init` 这些老命令（带 `router.js` 的旧玩法）。要不要整理，用户没定。
 - 客户端退出登录后，顶栏仍显示「系统设置」齿轮（本机那个用户是管理员）。只是本机代理设置，没改，问过用户。
-- `desktop/`（Electron 试验）可以删。
 
 ## 8. 文档地图
 
@@ -169,8 +165,5 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 | `CHANGELOG.md` | 用户看得到的版本变化 |
 | `docs/api.md` | 管理台接口参考（含本机网关 `/__apiloop/*`） |
 | `web/README.md` | 前端目录与约定 |
-| `docs/design/2026-10-01-local-first.md` | 本机空间 + 同步的设计（最新的总体设计） |
-| `docs/design/2026-10-01-local-agent.md` | 本机网关的由来（为什么不用 Electron、为什么用官方 Node） |
-| `docs/design/2026-09-30-admin-api-v2.md` | 接口契约（字段、状态码、规则的完整定义） |
-| `docs/superpowers/reviews/2026-10-01-local-first-review.md` | 同步与壳子的审阅记录（第 1–14 轮） |
+| `CLAUDE.md` | 协作规矩（本文第 1 节的副本，每次会话自动加载） |
 | 应用内「?」帮助 | 给最终用户的用法：变量、脚本、Mock 函数、导入导出 |

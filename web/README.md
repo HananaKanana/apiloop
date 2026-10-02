@@ -79,5 +79,5 @@ rm -rf web/dist-check
 
 ## 接口契约
 
-所有管理台接口的形状以 `docs/design/2026-09-30-admin-api-v2.md` 为准。
+所有管理台接口的形状以 `docs/api.md` 为准。
 实现中觉得契约有问题，先提出来改文档，不要各自改代码。
