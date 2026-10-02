@@ -1,8 +1,9 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   NButton,
+  NCheckbox,
   NDropdown,
   NForm,
   NFormItem,
@@ -42,7 +43,7 @@ const avatarText = computed(function () {
  * 账号菜单（设计稿第 7 节）。网关上按空间状态分三种，直接打开云端时和以前一样。
  *
  * 未绑定：还没登录过，只能去登录；
- * 已登录：改密码 / 用户管理 / 退出登录 / 退出并删除本机数据；
+ * 已登录：改密码 / 用户管理 / 退出登录（确认框里可以勾「同时删除本机数据」）；
  * 已退出：数据还在本机、照常能用，所以给的是「登录」和「删除本机数据」。
  */
 const options = computed(function () {
@@ -68,8 +69,8 @@ const options = computed(function () {
   // 系统设置不放这里：顶栏已经有齿轮按钮直达，两处入口重复（2026-10-01 用户反馈）
   if (session.isAdmin) items.push({ label: '用户管理', key: 'users' });
   items.push({ type: 'divider', key: 'd1' });
+  // 只有一个「退出登录」：要不要顺带删本机数据，在确认框里勾（用户 2026-10-02）
   items.push({ label: '退出登录', key: 'logout' });
-  if (gateway.isGateway) items.push({ label: '退出并删除本机数据', key: 'logout-delete' });
   return items;
 });
 
@@ -97,6 +98,53 @@ function confirmDelete(title, withLogout) {
 }
 
 /**
+ * 本机 apiloop 上的「退出登录」确认框，带一个勾选「同时删除这台电脑上的数据」。
+ * 不勾就是普通退出（数据留在本机、照常能用）；勾了走删除本机数据那条路。
+ *
+ * @returns {Promise<'cancel'|'logout'|'delete'>}
+ */
+function confirmSignOut() {
+  const removeLocal = ref(false);
+  const pending = (gateway.sync && gateway.sync.pending) || 0;
+
+  return new Promise(function (resolve) {
+    let settled = false;
+    function done(value) {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    }
+
+    const instance = dialog.warning({
+      title: '退出登录',
+      content: function () {
+        return h('div', { class: 'logout-confirm' }, [
+          h('p', { style: 'margin: 0 0 12px' }, '退出后不再和云端同步。本机的数据还在，照常能用，下次登录会接着同步。'),
+          h(NCheckbox, {
+            checked: removeLocal.value,
+            'onUpdate:checked': function (value) {
+              removeLocal.value = value;
+              instance.positiveText = value ? '退出并删除' : '退出登录';
+              instance.type = value ? 'error' : 'warning';
+            }
+          }, { default: function () { return '同时删除这台电脑上的数据（项目、历史、Cookie）'; } }),
+          removeLocal.value && pending > 0
+            ? h('p', { style: 'margin: 8px 0 0 24px; color: #d03050; font-size: 12px' },
+                '还有 ' + pending + ' 项没同步到云端，删除后会丢失。')
+            : null
+        ]);
+      },
+      positiveText: '退出登录',
+      negativeText: '取消',
+      onPositiveClick: function () { done(removeLocal.value ? 'delete' : 'logout'); },
+      onNegativeClick: function () { done('cancel'); },
+      onClose: function () { done('cancel'); },
+      onMaskClick: function () { done('cancel'); }
+    });
+  });
+}
+
+/**
  * 退出登录（网关上）：只表示「不同步了」——**不跳登录页，也不关标签页**。
  * 本机的会话和数据一个都不动，页面照常能用，开着的东西就还开着。
  *
@@ -113,9 +161,12 @@ async function signOut() {
   await gateway.refresh();
 }
 
-/** 删本机数据（可选先退出登录），删完整页刷新 —— 页面里装的都是刚被删掉的那份数据 */
-async function deleteLocal(withLogout) {
-  if (!(await confirmDelete(withLogout ? '退出并删除本机数据' : '删除本机数据', withLogout))) return;
+/**
+ * 删本机数据（可选先退出登录），删完整页刷新 —— 页面里装的都是刚被删掉的那份数据。
+ * `confirmed`：退出登录的确认框里已经勾过、问过了，不再问第二遍。
+ */
+async function deleteLocal(withLogout, confirmed) {
+  if (!confirmed && !(await confirmDelete(withLogout ? '退出并删除本机数据' : '删除本机数据', withLogout))) return;
 
   tabs.closeAll();
   try {
@@ -163,13 +214,17 @@ async function onSelect(key) {
   if (key === 'users') return router.push('/users');
   if (key === 'about') return emit('about');
   if (key === 'delete') return deleteLocal(false);
-  if (key === 'logout-delete') return deleteLocal(true);
 
   if (key === 'logout') {
     // 标签页里揣着这个用户正在编辑的请求和上一次的响应（很可能带 token），
     // 不清掉的话，换个人在同一个浏览器登录还能看见。
     // closeAll 顺带会 abort 在飞的请求、销毁服务端的 WebSocket 会话。
-    if (gateway.isGateway) return signOut();
+    if (gateway.isGateway) {
+      const choice = await confirmSignOut();
+      if (choice === 'delete') return deleteLocal(true, true);
+      if (choice === 'logout') return signOut();
+      return;
+    }
 
     tabs.closeAll();
     await session.logout();
