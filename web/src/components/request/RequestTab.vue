@@ -44,6 +44,7 @@ import { encodeQueryPart } from '@/utils/query';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
+import { copyText } from '@/utils/clipboard';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -525,7 +526,7 @@ function loadCurl() {
 async function copyCurl() {
   try {
     const data = await loadCurl();
-    await navigator.clipboard.writeText(data.curl || '');
+    await copyText(data.curl || '');
     message.success(data.missing && data.missing.length
       ? '已复制 cURL（有未定义的变量：' + data.missing.join('、') + '）'
       : '已复制 cURL');

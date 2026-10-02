@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { NAlert, NButton, NDrawer, NDrawerContent, NSpin, useMessage } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
+import { copyText } from '@/utils/clipboard';
 
 /**
  * 代码片段面板（参考 Postman 右侧的 Code snippet）：当前请求的 cURL 命令 + 一键复制。
@@ -53,7 +54,7 @@ watch(
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(curl.value);
+    await copyText(curl.value);
     message.success('已复制 cURL');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');

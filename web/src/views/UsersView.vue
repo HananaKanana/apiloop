@@ -20,6 +20,7 @@ import {
 import { isLoginRequired } from '@/api/client';
 import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';
+import { copyText } from '@/utils/clipboard';
 
 const router = useRouter();
 const session = useSessionStore();
@@ -173,7 +174,7 @@ function removeUser(row) {
 async function copyPassword() {
   const text = issuedPassword.value ? issuedPassword.value.password : '';
   try {
-    await navigator.clipboard.writeText(text);
+    await copyText(text);
     message.success('已复制');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');

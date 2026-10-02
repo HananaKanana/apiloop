@@ -61,6 +61,7 @@
     "@vicons/tabler": "^0.13.0",
     "@vitejs/plugin-vue": "^6.0.9",
     "codemirror": "^6.0.2",
+    "handlebars": "^4.7.9",
     "naive-ui": "^2.45.3",
     "pinia": "^4.0.3",
     "vite": "^7.3.6",

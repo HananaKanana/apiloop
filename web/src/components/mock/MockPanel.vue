@@ -20,6 +20,7 @@ import { usePrompt } from '@/utils/prompt';
 import { conditionSummary } from '@/utils/expectation';
 import ExampleEditor from './ExampleEditor.vue';
 import ExpectationEditor from './ExpectationEditor.vue';
+import { copyText } from '@/utils/clipboard';
 
 /**
  * Mock 页签：mock 配置 + 示例列表 + 期望列表 + 各自的编辑器。
@@ -347,7 +348,7 @@ async function useAsMock(example) {
 
 async function copyMockUrl() {
   try {
-    await navigator.clipboard.writeText(mockUrl.value);
+    await copyText(mockUrl.value);
     message.success('已复制 mock 地址');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');

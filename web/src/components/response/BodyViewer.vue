@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { Braces, ChevronDown, Copy, Download, Eye, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
+import { copyText } from '@/utils/clipboard';
 
 /**
  * 响应体查看器（2026-10-01 按 Postman 重做：用户觉得原来的「太素」）。
@@ -171,7 +172,7 @@ const editorLanguage = computed(function () {
 
 async function copyBody() {
   try {
-    await navigator.clipboard.writeText(isText.value ? prettyText.value : body.value);
+    await copyText(isText.value ? prettyText.value : body.value);
     message.success('已复制响应体');
   } catch (err) {
     message.warning('复制失败，请手动选中复制');
