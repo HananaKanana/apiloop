@@ -68,7 +68,7 @@ async function copy() {
       <div class="snippet">
         <div class="bar">
           <span class="hint">
-            变量按{{ envName ? '环境「' + envName + '」' : '「无环境」' }}解析成了实际值；前置脚本不运行。
+            变量按{{ envName ? '环境「' + envName + '」' : '「无环境」' }}解析成了实际值；「请求前」脚本不运行。
           </span>
           <n-button size="small" type="primary" :disabled="!curl" @click="copy">复制</n-button>
         </div>

@@ -43,7 +43,7 @@ const ERROR_TEXT = {
   INVALID_HEADER: '请求头不合法。',
   FILE: '读取本地文件失败。',
   PROXY: '代理不可用：连不上代理，或者 CONNECT 隧道被拒绝了。检查系统设置里的代理地址，或者关掉这次请求的「使用系统代理」。',
-  SCRIPT: '前置脚本出错，请求没有发送。改完脚本再发，或者在「设置」页签里关掉这次请求的「执行脚本」。',
+  SCRIPT: '「请求前」脚本出错，请求没有发送。改完脚本再发，或者在「设置」页签里关掉这次请求的「执行脚本」。',
   OTHER: '请求失败。'
 };
 
@@ -275,7 +275,7 @@ const testTabClass = computed(function () {
 });
 
 function scriptErrorTitle(item) {
-  return item.phase === 'prerequest' ? '前置脚本出错' : '测试脚本出错';
+  return item.phase === 'prerequest' ? '「请求前」脚本出错' : '「响应后」脚本出错';
 }
 
 /** 只有文本响应能存成示例；二进制存下来没意义 */

@@ -198,8 +198,8 @@ onBeforeUnmount(function () {
 
         <n-card :bordered="false" size="small" title="脚本" class="card">
           <p class="tip">
-            这个目录下的接口发送时，会先按「项目 → 目录（从外到内）→ 接口」执行前置脚本，
-            响应回来后再按同样的顺序执行测试脚本。
+            这个目录下的接口发送时，会先按「项目 → 目录（从外到内）→ 接口」执行「请求前」脚本，
+            响应回来后再按同样的顺序执行「响应后」脚本。
           </p>
           <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="180px" />
         </n-card>
