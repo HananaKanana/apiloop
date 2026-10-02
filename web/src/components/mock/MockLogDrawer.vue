@@ -15,7 +15,7 @@ import * as mockLogApi from '@/api/mockLog';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
-import { mockPrefix } from '@/utils/mock';
+import { mockBaseUrl } from '@/utils/mock';
 
 /**
  * Mock 调用日志抽屉。
@@ -69,11 +69,15 @@ const visible = computed({
   set: function (value) { ui.mockLogVisible = value; }
 });
 
-/** 空状态里要显示的 mock 地址前缀，和 Mock 页签里那条保持一致 */
+/**
+ * 空状态里要显示的 mock 地址前缀，和 Mock 页签里那条保持一致。
+ * 用 mockBaseUrl：客户端里 mock 跑在云端，原来拼 window.location.origin 会显示成
+ * 127.0.0.1:47321，那个地址根本不提供 mock（用户 2026-10-02 问到）。
+ */
 const mockPrefixText = computed(function () {
   const project = projects.current;
   if (!project) return '';
-  return window.location.origin + mockPrefix(project);
+  return mockBaseUrl(project);
 });
 
 /* ---------------- 轮询 ---------------- */

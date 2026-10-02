@@ -15,7 +15,7 @@ import * as expectationsApi from '@/api/expectations';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
-import { mockPrefix } from '@/utils/mock';
+import { mockBaseUrl } from '@/utils/mock';
 import { usePrompt } from '@/utils/prompt';
 import { conditionSummary } from '@/utils/expectation';
 import ExampleEditor from './ExampleEditor.vue';
@@ -142,12 +142,10 @@ const mockUrl = computed(function () {
   // mock 是 computed，脚本里必须写 .value；只有模板里才会自动解包。
   // 写成 mock.path 会拿到 undefined，拼出来就是 http://host/mock-<ID>undefined
   //
-  // WS 接口给的是 WebSocket 地址。http → ws / https → wss 正好是一次前缀替换，
-  // 端口也能跟着一起带过来（window.location.origin 里含端口）。
-  const origin = isWs.value
-    ? window.location.origin.replace(/^http/, 'ws')
-    : window.location.origin;
-  return origin + mockPrefix(projects.current) + mock.value.path;
+  // WS 接口给的是 WebSocket 地址。http → ws / https → wss 正好是一次前缀替换。
+  // 地址用 mockBaseUrl：客户端里 mock 跑在云端，不是本机的 127.0.0.1:47321（用户 2026-10-02）
+  const base = mockBaseUrl(projects.current);
+  return (isWs.value ? base.replace(/^http/, 'ws') : base) + mock.value.path;
 });
 
 watch(
