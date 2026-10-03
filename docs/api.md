@@ -154,6 +154,20 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `GET /notifications/unread-count` | `{ count }` |
 | `POST /notifications/read` | `{ ids }` 或 `{ all: true }` |
 
+## 可视化断言、提取变量、响应字段说明
+
+接口 DTO 顶层多 `assertions`、`extracts`、`responseFields`，都存在接口的 `extra` 里、跟着同步，`PUT /apis/:id` 传即可保存。
+发送时请求体里的 `request.assertions` / `request.extracts` 优先（没保存的修改也生效）；断言在「响应后」脚本之前执行，
+结果并进 `result.scripts.tests`（`source: '断言'`），提取的值和脚本写回的变量一样落库。里面的正则最多跑 2 秒。
+
+## 跨项目复制 / 移动
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /apis/:id/copy` | `{ projectId, folderId?, move? }`，复制（源项目 viewer）或移动（源项目 editor，原来的进回收站）到另一个项目，目标项目要 editor。目标不能是同一个项目 |
+| `POST /folders/:id/copy` | 同上，连同整棵子树 |
+| `POST /projects/:pid/duplicate` | `{ name }`，复制整个项目为新项目（成员、历史、分享、评论、保密值不复制） |
+
 ## 内置 Mock 环境
 
 项目 DTO 带 `mockVariables`：内置「Mock」环境改过的变量表，没改过是 `null`（默认只有 `host`）。
