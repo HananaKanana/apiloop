@@ -220,6 +220,7 @@ function statusType(status) {
         <n-tree
           v-if="nodes.length"
           block-line
+          expand-on-click
           :data="nodes"
           :expanded-keys="expandedKeys"
           :selected-keys="selectedKeys"
