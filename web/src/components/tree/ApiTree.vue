@@ -9,8 +9,10 @@ import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
+import { useDialog } from '@/utils/dialog';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import ContextMenu from '@/components/common/ContextMenu.vue';
+import ShareDialog from '@/components/share/ShareDialog.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
@@ -21,6 +23,7 @@ const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
 const prompt = usePrompt();
+const dialog = useDialog();
 
 /**
  * 行高 28px（计划里的全局约束）。naive-ui 的树高走 `nodeHeight` 主题变量，
@@ -65,6 +68,32 @@ const menu = ref({ show: false, x: 0, y: 0, node: null, options: [] });
 
 const deleteTarget = ref(null);
 const showDelete = ref(false);
+
+/* ---------------- 分享文档（第 4 节） ---------------- */
+
+/**
+ * 分享依赖云端：网关里没登录（本机空间）时项目还没上过云端，生成出来的链接也打不开，
+ * 所以这两个入口干脆不显示。和成员管理、Mock 日志用的是同一个判断
+ * （`cloudFeaturesAvailable`）。
+ *
+ * 另外只有 editor 及以上才给 —— 生成链接是写操作，只读角色点进去也只会拿到 403。
+ * 撤销和查看已生成的链接在「项目设置 → 分享链接」里，viewer 在那里能看到列表。
+ */
+const canShare = computed(function () {
+  return projects.canEdit && gateway.cloudFeaturesAvailable;
+});
+
+const showShare = ref(false);
+const shareFolderId = ref(null);
+const shareScopeName = ref('');
+
+function openShare(folderId) {
+  shareFolderId.value = folderId || null;
+  const folder = folderId ? tree.folderById.get(folderId) : null;
+  shareScopeName.value =
+    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+  showShare.value = true;
+}
 
 const displayTree = computed(function () {
   return filterTree(tree.nodes, searchText.value);
@@ -263,6 +292,10 @@ function openBlankMenu(event) {
   // 「运行全部」放最上面：发请求 viewer 也能做（服务端 /send 就是 viewer 权限）
   const options = [{ label: '运行全部', key: 'blank-run' }];
 
+  if (canShare.value) {
+    options.push({ label: '分享整个项目的文档', key: 'blank-share' });
+  }
+
   if (projects.canEdit) {
     options.push({ type: 'divider', key: 'blank-d' });
     options.push({ label: '新建接口', key: 'blank-new-api' });
@@ -283,17 +316,21 @@ function folderMenuOptions() {
     ];
   }
 
-  return [
+  const options = [
     { label: '目录设置', key: 'folder-settings' },
     { type: 'divider', key: 'd0' },
-    { label: '运行', key: 'run' },
+    { label: '运行', key: 'run' }
+  ];
+  if (canShare.value) options.push({ label: '分享文档', key: 'share' });
+
+  return options.concat([
     { type: 'divider', key: 'd1' },
     { label: '新建子目录', key: 'new-folder' },
     { label: '新建接口', key: 'new-api' },
     { type: 'divider', key: 'd2' },
     { label: '重命名', key: 'rename' },
     { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
-  ];
+  ]);
 }
 
 function apiMenuOptions() {
@@ -319,12 +356,14 @@ async function onMenuSelect(key) {
     return;
   }
   if (key === 'blank-run') return emit('run', null);
+  if (key === 'blank-share') return openShare(null);
   if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
 
   try {
     if (key === 'folder-settings') return emit('open-folder', node.id);
     if (key === 'run') return emit('run', node.id);
+    if (key === 'share') return openShare(node.id);
     if (key === 'new-folder') return await createFolder(node.id);
     if (key === 'new-api') return emit('new-api', node.id);
     if (key === 'rename') return await rename(node);
@@ -417,12 +456,21 @@ async function confirmDeleteFolder(mode) {
 }
 
 async function removeApi(node) {
-  try {
-    await tree.removeApi(node.id);
-    message.success('已删除');
-  } catch (err) {
-    message.error(err.message);
-  }
+  const name = node.name || '未命名接口';
+  dialog.error({
+    title: '删除接口',
+    content: '删除「' + name + '」后可以在回收站里恢复（保留 30 天）。确定删除吗？',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async function () {
+      try {
+        await tree.removeApi(node.id);
+        message.success('已删除');
+      } catch (err) {
+        message.error(err.message);
+      }
+    }
+  });
 }
 
 /* ---------------- 拖拽 ---------------- */
@@ -613,6 +661,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         <p class="delete-desc">
           该目录下有 {{ deleteTarget.counts.folders }} 个子目录、{{ deleteTarget.counts.apis }} 个接口。请选择如何处理这些子项：
         </p>
+        <p class="delete-desc recycle">删除后可以在回收站里恢复（保留 30 天）。</p>
         <n-space vertical size="small">
           <n-button block @click="confirmDeleteFolder('move')">
             仅删除目录（子项移到上一级）
@@ -629,6 +678,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         </n-space>
       </template>
     </n-modal>
+
+    <!-- 生成分享链接（第 4 节）。生成完的链接在「项目设置 → 分享链接」里撤销 -->
+    <share-dialog
+      v-model:show="showShare"
+      :pid="projects.currentId"
+      :folder-id="shareFolderId"
+      :scope-name="shareScopeName"
+    />
   </div>
 </template>
 
