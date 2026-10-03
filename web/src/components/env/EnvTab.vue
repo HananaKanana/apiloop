@@ -161,7 +161,7 @@ function removeEnv() {
 
   dialog.error({
     title: '删除环境',
-    content: '确定删除「' + saved.name + '」吗？用了它里面变量的请求会变成未定义。',
+    content: '确定删除「' + saved.name + '」吗？用了它里面变量的请求会变成未定义。删除后可以在回收站里恢复（保留 30 天）。',
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async function () {
