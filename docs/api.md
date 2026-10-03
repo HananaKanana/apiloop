@@ -129,6 +129,31 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `POST /projects/:pid/openapi/diff` | `{ url?, text?, folderId? }`，和文档比对，返回 `{ added, changed, removed, source }`，不改数据（editor） |
 | `POST /projects/:pid/openapi/apply` | `{ url?, text?, folderId?, add: [key], update: [apiId], remove: [apiId] }`，服务端重新拉取、重新比对后只执行勾选的；删除的进回收站（editor） |
 
+## 公共请求头
+
+项目、目录的 DTO 顶层多 `headers`（行数组，和接口请求头同一个形状），存在 `extra` 里、跟着同步，保存接口传 `headers` 即可。
+发送时按「项目 → 外层目录 → 内层目录 → 接口」合并，后面覆盖前面同名的（不区分大小写），停用的行不参与。
+
+## 全局查找替换
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/search` | `{ query, caseSensitive?, wholeWord?, regex?, fields, folderId? }` → `{ matches, total, truncated }`，最多 500 处（viewer）。正则最多跑 3 秒，超时返回 400 |
+| `POST /projects/:pid/replace` | 同上的条件 + `{ replacement, targets: [{ apiId, field, location }], skipApiIds }`，服务端重新查找后只替换列出的位置（editor） |
+
+## 接口评论和提醒（只在云端）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /apis/:id/comments` | 评论列表（viewer）。接口还没同步到云端时 404 + `code: 'API_NOT_SYNCED'` |
+| `POST /apis/:id/comments` | `{ body, mentions }` 发评论（viewer），只给项目成员发提醒 |
+| `PUT /comments/:id` | 改自己的评论；新 @ 的人才发提醒 |
+| `DELETE /comments/:id` | 删除（作者本人或管理员），楼层保留 |
+| `GET /projects/:pid/comment-counts` | `{ counts: { apiId: n } }` |
+| `GET /notifications?limit=` | 自己的提醒（最多 50 条），只含现在还能看到的项目 |
+| `GET /notifications/unread-count` | `{ count }` |
+| `POST /notifications/read` | `{ ids }` 或 `{ all: true }` |
+
 ## 内置 Mock 环境
 
 项目 DTO 带 `mockVariables`：内置「Mock」环境改过的变量表，没改过是 `null`（默认只有 `host`）。
