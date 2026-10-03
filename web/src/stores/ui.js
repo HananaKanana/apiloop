@@ -51,6 +51,23 @@ export const useUiStore = defineStore('ui', function () {
     importVisible.value = true;
   }
 
+  /**
+   * 「打开某个接口的评论面板，并滚到哪一条」：`{ apiId, commentId }` 或 null。
+   *
+   * 铃铛点一条提醒时用 —— 评论面板挂在请求标签页里，跨组件只能这么告诉它。
+   * 请求标签页匹配到自己的 apiId 就打开面板，然后把它清掉（免得切回来又弹一次）。
+   */
+  const commentsTarget = ref(null);
+
+  function openComments(apiId, commentId) {
+    if (!apiId) return;
+    commentsTarget.value = { apiId: apiId, commentId: commentId || '' };
+  }
+
+  function clearCommentsTarget() {
+    commentsTarget.value = null;
+  }
+
   function openMockLog() {
     mockLogVisible.value = true;
   }
@@ -80,6 +97,9 @@ export const useUiStore = defineStore('ui', function () {
     conflictTarget: conflictTarget,
     openConflict: openConflict,
     closeConflict: closeConflict,
+    commentsTarget: commentsTarget,
+    openComments: openComments,
+    clearCommentsTarget: clearCommentsTarget,
     openImport: openImport,
     openMockLog: openMockLog,
     openQuickOpen: openQuickOpen,
