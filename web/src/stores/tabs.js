@@ -107,6 +107,8 @@ export function folderSpecFrom(folder) {
     description: folder.description || '',
     auth: folder.auth ? JSON.parse(JSON.stringify(folder.auth)) : { type: 'inherit' },
     variables: JSON.parse(JSON.stringify(folder.variables || [])),
+    // 公共请求头（第五轮第 1 节）：这个目录下的接口发送时都会带上
+    headers: JSON.parse(JSON.stringify(folder.headers || [])),
     scripts: JSON.parse(JSON.stringify(folder.scripts || []))
   };
 }
@@ -502,6 +504,56 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
+   * 打开「环境对比」标签页（第五轮第 3 节）：把所有环境的变量并排放在一张表里。
+   *
+   * 草稿放在 `tab.spec` 上，所以「有没保存的修改」「关标签页要确认」那套机制白拿。
+   * 同一个项目只开一个（key 不带项目 id —— 切项目时标签页本来就会全清掉）。
+   * **内置的 Mock 环境不进对比表**（它不存库，`envs.environments` 里本来也没有）。
+   */
+  function openEnvDiff() {
+    const key = 'envdiff';
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const spec = { envs: snapshotEnvs() };
+    const tab = {
+      key: key,
+      kind: 'envdiff',
+      apiId: null,
+      folderId: null,
+      title: '环境对比',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    };
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 环境对比的草稿：真实的那些环境，深拷贝一份（改了不能直接动 store 里的） */
+  function snapshotEnvs() {
+    return useEnvStore().environments.map(function (env) {
+      return {
+        id: env.id,
+        name: env.name,
+        variables: JSON.parse(JSON.stringify(env.variables || []))
+      };
+    });
+  }
+
+  /**
    * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
    * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
    */
@@ -847,6 +899,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openWs: openWs,
     openFolder: openFolder,
     openRunner: openRunner,
+    openEnvDiff: openEnvDiff,
     openHistory: openHistory,
     activate: activate,
     close: close,
