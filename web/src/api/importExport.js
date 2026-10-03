@@ -57,6 +57,19 @@ export function exportCollection(pid) {
   return get('/projects/' + encodeURIComponent(pid) + '/export/json');
 }
 
+/**
+ * 导出 OpenAPI（第四轮第 2 节）。返回 `{ filename, format, text }`。
+ *
+ * @param {string} pid
+ * @param {{folderId?: string|null, format?: 'json'|'yaml'}} [options] 不传 folderId 就是整个项目
+ */
+export function exportOpenapi(pid, options) {
+  const opts = options || {};
+  const params = ['format=' + encodeURIComponent(opts.format || 'yaml')];
+  if (opts.folderId) params.push('folderId=' + encodeURIComponent(opts.folderId));
+  return get('/projects/' + encodeURIComponent(pid) + '/export/openapi?' + params.join('&'));
+}
+
 export function exportEnvironment(environmentId) {
   return get('/environments/' + encodeURIComponent(environmentId) + '/export/json');
 }
