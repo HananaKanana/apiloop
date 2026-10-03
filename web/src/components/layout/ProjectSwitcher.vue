@@ -77,6 +77,8 @@ const options = computed(function () {
   items.push({ key: '__settings', label: '项目设置', name: '项目设置' });
   items.push({ key: '__export', label: '导出为 JSON', name: '导出为 JSON' });
   items.push({ key: '__export-openapi', label: '导出为 OpenAPI', name: '导出为 OpenAPI' });
+  // 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口
+  items.push({ key: '__envdiff', label: '环境对比', name: '环境对比' });
   items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
@@ -126,6 +128,11 @@ function onSelect(key) {
   if (key === '__export') return exportCollection();
   if (key === '__export-openapi') {
     showOpenapi.value = true;
+    return;
+  }
+  // 环境对比（第五轮第 3 节）：开一个「环境对比」标签页
+  if (key === '__envdiff') {
+    tabs.openEnvDiff();
     return;
   }
   if (key === projects.currentId) return;

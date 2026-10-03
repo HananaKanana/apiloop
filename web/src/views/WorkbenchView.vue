@@ -14,6 +14,7 @@ import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
+import EnvDiffTab from '@/components/env/EnvDiffTab.vue';
 import EnvTab from '@/components/env/EnvTab.vue';
 import MockEnvTab from '@/components/env/MockEnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
@@ -222,8 +223,8 @@ function onRun(folderId) {
 function tabMethod(tab) {
   if (!tab) return '';
   if (tab.kind === 'ws') return 'WS';
-  // 目录页签和「运行」页签都没有「方法」这一说，不显示缩写
-  if (tab.kind === 'folder' || tab.kind === 'runner') return '';
+  // 目录页签、「运行」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
+  if (tab.kind === 'folder' || tab.kind === 'runner' || tab.kind === 'envdiff') return '';
   return String((tab.spec && tab.spec.method) || 'GET').toUpperCase();
 }
 
@@ -453,6 +454,11 @@ onBeforeUnmount(function () {
           />
           <runner-tab
             v-else-if="tabs.active && tabs.active.kind === 'runner'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <env-diff-tab
+            v-else-if="tabs.active && tabs.active.kind === 'envdiff'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

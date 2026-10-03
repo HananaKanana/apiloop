@@ -1,10 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { NIcon, NPopover } from 'naive-ui';
-import { Bolt, Check, ChevronDown, Pencil, Server, Settings } from '@vicons/tabler';
+import { Bolt, Check, ChevronDown, Pencil, Server, Settings, Table } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
+import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 
 /**
@@ -73,6 +74,12 @@ function editCurrent() {
 function manage() {
   // 环境管理没有弹窗：切到侧栏的「环境」页，在那里点开某个环境
   ui.setSidebarTab('env');
+  show.value = false;
+}
+
+/** 对比所有环境：开一个「环境对比」标签页（同一个项目只开一个） */
+function compareAll() {
+  useTabsStore().openEnvDiff();
   show.value = false;
 }
 </script>
@@ -148,6 +155,11 @@ function manage() {
       </div>
 
       <div class="section foot">
+        <!-- 环境对比（第五轮第 3 节）：所有环境的变量并排看，找「少了一个变量」这种问题 -->
+        <div class="item" @click="compareAll">
+          <n-icon class="item-icon" size="15" :component="Table" />
+          <span class="item-name">对比所有环境</span>
+        </div>
         <div class="item" @click="manage">
           <n-icon class="item-icon" size="15" :component="Settings" />
           <span class="item-name">管理环境…</span>
