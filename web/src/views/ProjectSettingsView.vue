@@ -22,6 +22,7 @@ import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MembersPanel from '@/components/members/MembersPanel.vue';
 import ShareLinksPanel from '@/components/share/ShareLinksPanel.vue';
+import MockFaultPanel from '@/components/mock/MockFaultPanel.vue';
 
 /**
  * 项目设置。按角色收口：
@@ -63,7 +64,9 @@ const form = ref({
   variables: [],
   auth: { type: 'inherit' },
   headers: [],
-  scripts: []
+  scripts: [],
+  // Mock 故障模拟（第七轮第 1 节）：`projects.extra.mockFaults`，没设过是 null
+  mockFaults: null
 });
 
 const projectId = ref('');
@@ -83,7 +86,8 @@ function fillFrom(project) {
     variables: JSON.parse(JSON.stringify(project.variables || [])),
     auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' },
     headers: JSON.parse(JSON.stringify(project.headers || [])),
-    scripts: JSON.parse(JSON.stringify(project.scripts || []))
+    scripts: JSON.parse(JSON.stringify(project.scripts || [])),
+    mockFaults: project.mockFaults ? JSON.parse(JSON.stringify(project.mockFaults)) : null
   };
 }
 
@@ -120,7 +124,9 @@ async function save() {
       variables: form.value.variables,
       auth: form.value.auth,
       headers: form.value.headers,
-      scripts: form.value.scripts
+      scripts: form.value.scripts,
+      // Mock 故障模拟（第七轮第 1 节）：没开过、也没加过规则时给 null，服务端会把这块清掉
+      mockFaults: form.value.mockFaults
     };
     if (isOwner.value) {
       patch.name = form.value.name.trim();
@@ -256,6 +262,18 @@ watch(function () { return route.params.pid; }, load);
               顺序是「项目 → 目录（从外到内）→ 接口」。
             </p>
             <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />
+          </n-card>
+
+          <!--
+            Mock 故障模拟（第七轮第 1 节）：让 Mock 按比例故意出错，
+            给前端测「报错提示对不对」「慢的时候有没有加载状态」。
+          -->
+          <n-card :bordered="false" size="small" title="Mock 故障模拟" class="card">
+            <mock-fault-panel
+              v-model="form.mockFaults"
+              :pid="projectId"
+              :disabled="!canEdit"
+            />
           </n-card>
         </n-tab-pane>
 

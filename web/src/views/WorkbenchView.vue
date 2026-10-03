@@ -196,6 +196,16 @@ function onProjectChange(id) {
   // 切了项目：环境由 EnvSwitcher 的 watcher 重新拉，目录树由 ApiTree 的 watcher 重新拉
 }
 
+/** 这个项目的 Mock 故障模拟开着吗（第七轮第 1 节）：开着就在项目名旁边挂个橙色小标 */
+const mockFaultsOn = computed(function () {
+  const faults = projects.current && projects.current.mockFaults;
+  return Boolean(faults && faults.enabled === true);
+});
+
+function openFaultSettings() {
+  if (projects.currentId) router.push('/projects/' + projects.currentId + '/settings');
+}
+
 async function onOpenApi(api, options) {
   try {
     await tabs.openApi(api.id, options);
@@ -365,6 +375,13 @@ onBeforeUnmount(function () {
     <top-bar @about="showAbout = true">
       <template #project>
         <project-switcher @change="onProjectChange" />
+        <!--
+          Mock 故障模拟开着时的橙色小标（第七轮第 1 节）：这个项目的 Mock 会按比例故意出错，
+          所有调它的人都受影响 —— 放个显眼的标记免得忘了关，点了去设置。
+        -->
+        <button v-if="mockFaultsOn" class="fault-badge" title="这个项目的 Mock 正在按规则故意出错，点一下去设置" @click="openFaultSettings">
+          故障模拟中
+        </button>
       </template>
     </top-bar>
 
@@ -507,6 +524,24 @@ onBeforeUnmount(function () {
 </template>
 
 <style scoped>
+/* 「故障模拟中」小标：橙色、低饱和，别抢项目名的注意力但要看得见 */
+.fault-badge {
+  flex: none;
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(240, 160, 32, 0.18);
+  color: #d9821a;
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fault-badge:hover {
+  background: rgba(240, 160, 32, 0.3);
+}
 .shell {
   height: 100%;
   display: flex;

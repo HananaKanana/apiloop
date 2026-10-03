@@ -290,6 +290,10 @@ function clearAll() {
               <n-tag size="tiny" :bordered="false" :type="statusType(item)">
                 {{ item.status || '—' }}
               </n-tag>
+              <!-- Mock 故障模拟命中的那条（第七轮第 1 节）：橙色，一眼能看出这不是接口本身的行为 -->
+              <n-tag v-if="item.fault" size="tiny" :bordered="false" type="warning" class="fault">
+                故障：{{ item.fault }}
+              </n-tag>
               <span class="ms">{{ formatMs(item.durationMs) }}</span>
             </div>
 
@@ -393,6 +397,15 @@ function clearAll() {
 .ms {
   width: 62px;
   text-align: right;
+}
+
+/* 故障标签：让它自己撑开、不要被挤掉（名字可能有点长） */
+.fault {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .method {
