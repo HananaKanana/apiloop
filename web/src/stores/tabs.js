@@ -7,6 +7,7 @@ import { createSseParser } from '@/utils/sse';
 import { encodeQueryPart } from '@/utils/query';
 import { MOCK_ENV_ID, mockBaseFor } from '@/utils/mock';
 import { byteLength } from '@/utils/bytes';
+import { emptyRunner } from '@/utils/runner';
 import { useWsStore } from '@/stores/ws';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
@@ -447,6 +448,52 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
+   * 打开一个「运行」标签页（第 2 节 批量运行）：把某个目录（或整个项目）里的接口
+   * 按顺序跑一遍。
+   *
+   * 它和接口标签页并列，但没有 spec / 没有 dirty —— 运行结果只在这个标签页里活着
+   * （关掉就没了，不落库）。跑的状态放在 `tab.runner` 上，见 `utils/runner.js`。
+   *
+   * key 里带目录 id，所以**同一个目录只会有一个运行标签页**；`folderId` 为 null
+   * 是「整个项目」，和某个目录的运行页互不影响。
+   */
+  function openRunner(folderId) {
+    const key = 'runner:' + (folderId || 'root');
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const folder = folderId ? useTreeStore().folderById.get(folderId) : null;
+    const project = useProjectStore().current;
+    const name = (folder && folder.name) || (project && project.name) || '项目';
+
+    const tab = {
+      key: key,
+      kind: 'runner',
+      apiId: null,
+      folderId: folderId || null,
+      title: '运行：' + name,
+      spec: null,
+      savedSnapshot: null,
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null,
+      runner: emptyRunner()
+    };
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
    * 从历史打开一个临时标签页：请求用当时保存的 spec，响应面板直接显示当时的结果。
    * 历史里的 request 还额外带了一个 environmentId，取出来单独放，别混进 spec。
    */
@@ -519,9 +566,14 @@ export const useTabsStore = defineStore('tabs', function () {
   /**
    * WebSocket 标签页要连带把服务端的会话销毁掉（DELETE /ws/:id）。
    * 切换项目时 ProjectSwitcher 会 closeAll，所以这条路径也一起覆盖了。
+   *
+   * 「运行」标签页要连带中断批量运行：**运行中切走标签页不中断，关掉才中断**。
+   * 在途的那个请求直接 abort，后面的不再发（跑的那一段在 `stores/runner.js`，
+   * 它自己会发现这个标签页已经不在列表里）。
    */
   function dropTab(tab) {
     abortTab(tab);
+    if (tab && tab.runner && tab.runner.controller) tab.runner.controller.abort();
     if (tab && tab.kind === 'ws') useWsStore().closeFor(tab.key);
   }
 
@@ -786,6 +838,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openDraft: openDraft,
     openWs: openWs,
     openFolder: openFolder,
+    openRunner: openRunner,
     openHistory: openHistory,
     activate: activate,
     close: close,

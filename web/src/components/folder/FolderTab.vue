@@ -24,6 +24,9 @@ const props = defineProps({
   tab: { type: Object, required: true }
 });
 
+/** 「运行」：打开这个目录的批量运行标签页（第 2 节），由工作台去开 */
+const emit = defineEmits(['run']);
+
 const projects = useProjectStore();
 const tree = useTreeStore();
 const tabs = useTabsStore();
@@ -143,6 +146,16 @@ onBeforeUnmount(function () {
       </span>
       <span v-if="parentPath" class="path">位置：{{ parentPath }}</span>
       <span class="spacer" />
+      <!-- 只读角色也能运行：发请求本来就是 viewer 要做的事 -->
+      <n-button
+        size="small"
+        secondary
+        :disabled="!folder"
+        title="按顺序运行这个目录下的接口"
+        @click="emit('run', tab.folderId)"
+      >
+        运行
+      </n-button>
       <n-button
         v-if="canEdit"
         size="small"
