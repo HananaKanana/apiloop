@@ -17,6 +17,7 @@ import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
 import { downloadJson } from '@/utils/download';
+import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
 
 const emit = defineEmits(['change']);
 
@@ -27,6 +28,8 @@ const dialog = useDialog();
 
 const showCreate = ref(false);
 const creating = ref(false);
+/* 导出 OpenAPI 的小弹窗（第四轮第 2 节）：范围是整个项目 */
+const showOpenapi = ref(false);
 // 没有「标识」这一项了：mock 地址改成 /mock-<项目ID>/，标识不再用于 mock（L1）。
 // 服务端仍然会自动生成一个唯一标识，只是界面上不用管它。
 const form = ref({ name: '', description: '' });
@@ -73,6 +76,7 @@ const options = computed(function () {
   items.push({ type: 'divider', key: '__divider' });
   items.push({ key: '__settings', label: '项目设置', name: '项目设置' });
   items.push({ key: '__export', label: '导出为 JSON', name: '导出为 JSON' });
+  items.push({ key: '__export-openapi', label: '导出为 OpenAPI', name: '导出为 OpenAPI' });
   items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
@@ -120,6 +124,10 @@ function onSelect(key) {
   if (key === '__create') return openCreate();
   if (key === '__settings') return emit('change', '__settings');
   if (key === '__export') return exportCollection();
+  if (key === '__export-openapi') {
+    showOpenapi.value = true;
+    return;
+  }
   if (key === projects.currentId) return;
 
   // 切项目会把标签页全清掉，有没保存的修改就先问一句
@@ -175,6 +183,14 @@ function onSelect(key) {
       </n-space>
     </template>
   </n-modal>
+
+  <!-- 导出 OpenAPI（第四轮第 2 节）：默认 YAML，下载 <项目名>.openapi.yaml -->
+  <openapi-export-dialog
+    v-model:show="showOpenapi"
+    :pid="projects.currentId"
+    :folder-id="null"
+    :scope-name="projects.current ? projects.current.name : ''"
+  />
 </template>
 
 <style scoped>

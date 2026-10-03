@@ -303,6 +303,7 @@ const EXAMPLES = [
             </table>
             <ul>
               <li>导出：项目菜单「导出为 JSON」，环境「…」菜单「导出为 JSON」。</li>
+              <li>导出为 OpenAPI：项目菜单「导出为 OpenAPI」，或者目录右键「导出为 OpenAPI」（只导这个目录连同子目录）。格式可选 YAML / JSON。</li>
               <li>复制为 cURL：接口右上角的「&lt;/&gt;」，变量会替换成当前环境的实际值。</li>
             </ul>
           </section>

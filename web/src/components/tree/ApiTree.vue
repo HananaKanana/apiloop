@@ -24,6 +24,7 @@ import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import ShareDialog from '@/components/share/ShareDialog.vue';
 import SyncDialog from '@/components/openapi/SyncDialog.vue';
+import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
@@ -105,6 +106,25 @@ function openShare(folderId) {
   shareScopeName.value =
     (folder && folder.name) || (projects.current && projects.current.name) || '项目';
   showShare.value = true;
+}
+
+/* ---------------- 导出 OpenAPI（第四轮第 2 节） ---------------- */
+
+/**
+ * 目录右键「导出为 OpenAPI」：范围是这个目录**连同子目录**。
+ * 导的是看数据，viewer 也能用（服务端 `GET /projects/:pid/export/openapi` 就是 viewer 权限）。
+ * 整个项目的导出在顶栏的项目菜单里。
+ */
+const showOpenapiExport = ref(false);
+const exportFolderId = ref(null);
+const exportScopeName = ref('');
+
+function openOpenapiExport(folderId) {
+  exportFolderId.value = folderId || null;
+  const folder = folderId ? tree.folderById.get(folderId) : null;
+  exportScopeName.value =
+    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+  showOpenapiExport.value = true;
 }
 
 /* ---------------- 从 OpenAPI 同步更新（第四轮第 3 节） ---------------- */
@@ -395,11 +415,13 @@ function openBlankMenu(event) {
 }
 
 function folderMenuOptions() {
-  // viewer 也能「运行」：发请求本来就是只读角色要做的事（服务端 /send 是 viewer 权限）
+  // viewer 也能「运行」和「导出为 OpenAPI」：发请求和导出都是只读角色要做的事
+  // （服务端 `/send` 和 `/export/openapi` 都是 viewer 权限）
   if (!projects.canEdit) {
     return [
       { label: '目录设置', key: 'folder-settings' },
-      { label: '运行', key: 'run' }
+      { label: '运行', key: 'run' },
+      { label: '导出为 OpenAPI', key: 'export-openapi' }
     ];
   }
 
@@ -407,6 +429,7 @@ function folderMenuOptions() {
     { label: '目录设置', key: 'folder-settings' },
     { type: 'divider', key: 'd0' },
     { label: '运行', key: 'run' },
+    { label: '导出为 OpenAPI', key: 'export-openapi' },
     // 计划里这条本来想只在「这个目录是从 OpenAPI 导入的、或者里面有从 OpenAPI 导入的
     // 接口时」显示 —— 那需要目录树接口带上 extra.openapi（dto.js 的 toApiSummary），
     // 而这一轮 dto.js / tree.js 是 session1 在改（第 1 节的 status / ownerId 就要动它）。
@@ -457,6 +480,7 @@ async function onMenuSelect(key) {
   try {
     if (key === 'folder-settings') return emit('open-folder', node.id);
     if (key === 'run') return emit('run', node.id);
+    if (key === 'export-openapi') return openOpenapiExport(node.id);
     if (key === 'sync-openapi') return openSync(node.id);
     if (key === 'share') return openShare(node.id);
     if (key === 'new-folder') return await createFolder(node.id);
@@ -807,6 +831,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       :pid="projects.currentId"
       :folder-id="syncFolderId"
       :folder-name="syncFolderName"
+    />
+
+    <!-- 导出为 OpenAPI（第四轮第 2 节）：目录连同子目录 -->
+    <openapi-export-dialog
+      v-model:show="showOpenapiExport"
+      :pid="projects.currentId"
+      :folder-id="exportFolderId"
+      :scope-name="exportScopeName"
     />
   </div>
 </template>
