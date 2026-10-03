@@ -1303,7 +1303,12 @@ onBeforeUnmount(function () {
             </span>
           </template>
           <div class="pane">
-            <body-editor :spec="spec" :project-id="projects.currentId" :scope="scope" />
+            <body-editor
+              :spec="spec"
+              :project-id="projects.currentId"
+              :api-id="tab.apiId || ''"
+              :scope="scope"
+            />
           </div>
         </n-tab-pane>
 

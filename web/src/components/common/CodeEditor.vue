@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState } from '@codemirror/state';
+import { EditorState, StateEffect } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { xml } from '@codemirror/lang-xml';
@@ -30,7 +30,15 @@ const props = defineProps({
    * mock 占位符（`/meta` 的 placeholders）。传了它，输入 `{{@` 就补全占位符 ——
    * 只在 mock 示例编辑器里传；请求区不补，因为发送请求时不会渲染它们。
    */
-  placeholders: { type: Array, default: function () { return []; } }
+  placeholders: { type: Array, default: function () { return []; } },
+  /**
+   * GraphQL 的 introspection 结果（`{ __schema: {...} }`）。传了它 + `language="graphql"`
+   * 才有补全 / 校验 / 悬停提示（第七轮第 3 节）。
+   *
+   * 它是**异步**加载的：`graphql` 和 `cm6-graphql` 两个包加起来不小，
+   * 只有真的在写 GraphQL 查询时才动态 import（见下面的 ensureGraphql）。
+   */
+  schema: { type: Object, default: null }
 });
 
 const emit = defineEmits(['update:modelValue', 'format-error']);
@@ -39,12 +47,75 @@ const host = ref(null);
 let view = null;
 let applying = false;
 
+/** GraphQL 的补全扩展（动态加载好之后放这儿）；没加载好或没 schema 时是 null */
+let graphqlExtension = null;
+/** 正在加载 / 加载的是哪一份 schema（schema 换了要重建扩展） */
+let graphqlLoading = null;
+let graphqlFor = null;
+
 function languageExtension(name) {
   if (name === 'json') return json();
   if (name === 'html') return html();
   if (name === 'xml') return xml();
   if (name === 'javascript') return javascript();
+  // graphql 的扩展要等动态 import（见 ensureGraphql），这里不给
   return [];
+}
+
+/* ---------------- GraphQL：动态加载 cm6-graphql ---------------- */
+
+let graphqlModules = null;
+
+/**
+ * `cm6-graphql` 和 `graphql` 两个包加起来几百 KB，只有真的在写 GraphQL 查询时才需要。
+ * 静态 import 会把它们塞进主包（每个打开管理台的人都要下），所以这里动态 import ——
+ * vite 会单独切一个 chunk，第一次用的时候才拉。
+ */
+async function loadGraphqlModules() {
+  if (!graphqlModules) {
+    graphqlModules = Promise.all([import('cm6-graphql'), import('graphql')])
+      .then(function (loaded) {
+        return { cm6: loaded[0], gql: loaded[1] };
+      });
+  }
+  return graphqlModules;
+}
+
+/**
+ * 保证 `graphqlExtension` 和当前 schema 对得上。
+ *
+ * @returns {Promise<boolean>} 扩展有没有变化（变了要 reconfigure）
+ */
+async function ensureGraphql() {
+  if (props.language !== 'graphql' || !props.schema) {
+    const had = Boolean(graphqlExtension);
+    graphqlExtension = null;
+    graphqlFor = null;
+    return had;
+  }
+
+  if (graphqlExtension && graphqlFor === props.schema) return false;
+
+  graphqlLoading = loadGraphqlModules().then(function (modules) {
+    // 加载期间 schema 可能又换了，认最后一次
+    graphqlExtension = modules.cm6.graphql(modules.gql.buildClientSchema(props.schema));
+    graphqlFor = props.schema;
+    return true;
+  }, function (err) {
+    console.warn('[apiloop] GraphQL 补全加载失败：' + ((err && err.message) || err));
+    graphqlExtension = null;
+    graphqlFor = null;
+    return false;
+  });
+
+  return graphqlLoading;
+}
+
+/** schema 变了：重新建扩展并就地换掉（不重建编辑器，光标和滚动位置都留着） */
+async function reloadGraphql() {
+  const changed = await ensureGraphql();
+  if (!changed || !view) return;
+  view.dispatch({ effects: StateEffect.reconfigure.of(buildExtensions()) });
 }
 
 /* ---------------- `{{@占位符}}` 的补全与高亮 ---------------- */
@@ -186,9 +257,8 @@ const theme = EditorView.theme({
   }
 });
 
-function createView() {
-  if (!host.value) return;
-
+/** 当前的扩展列表。reconfigure 要**整份**，所以抽成一个函数，别在两处各写一份 */
+function buildExtensions() {
   const extensions = [
     basicSetup,
     theme,
@@ -205,6 +275,9 @@ function createView() {
 
   if (props.wrap) extensions.push(EditorView.lineWrapping);
 
+  // GraphQL 的补全 / 校验 / 悬停（动态加载好的那份扩展）
+  if (graphqlExtension) extensions.push(graphqlExtension);
+
   // 只有传了占位符才挂：请求区、脚本编辑器都不需要
   if (props.placeholders && props.placeholders.length) {
     extensions.push(placeholderDecorations);
@@ -215,16 +288,26 @@ function createView() {
   // 一直挂着，语言在事件里判 —— 见 formatKeyHandler 的注释（审阅 N3）
   extensions.push(formatKeyHandler);
 
+  return extensions;
+}
+
+function createView() {
+  if (!host.value) return;
+
   view = new EditorView({
     parent: host.value,
     state: EditorState.create({
       doc: props.modelValue || '',
-      extensions: extensions
+      extensions: buildExtensions()
     })
   });
 }
 
-onMounted(createView);
+onMounted(function () {
+  createView();
+  // GraphQL 的扩展是异步来的：加载好了就 reconfigure 上去
+  reloadGraphql();
+});
 
 onBeforeUnmount(function () {
   if (view) {
@@ -257,7 +340,15 @@ watch(
     if (view.state.doc.toString() !== doc) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc } });
     }
+    // 切到 / 切出 GraphQL：补全扩展要跟着来或去掉
+    reloadGraphql();
   }
+);
+
+// schema 换了（重新拉过、或者切到别的接口）：重建扩展，不动文档
+watch(
+  function () { return props.schema; },
+  function () { reloadGraphql(); }
 );
 
 watch(

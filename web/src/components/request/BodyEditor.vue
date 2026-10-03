@@ -1,11 +1,27 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { NButton, NCheckbox, NIcon, NInput, NSelect, NSpace, NTooltip, useMessage } from 'naive-ui';
-import { File, Trash } from '@vicons/tabler';
+import { computed, ref, watch } from 'vue';
+import {
+  NButton,
+  NCheckbox,
+  NIcon,
+  NInput,
+  NSelect,
+  NSpace,
+  NSwitch,
+  NTooltip,
+  useMessage
+} from 'naive-ui';
+import { Book, File, Refresh, Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import VarInput from '@/components/common/VarInput.vue';
+import GraphqlDocs from '@/components/request/GraphqlDocs.vue';
 import * as sendApi from '@/api/send';
+import * as graphqlApi from '@/api/graphql';
+import { useEnvStore } from '@/stores/env';
+import { useProjectStore } from '@/stores/project';
+import { mockBaseFor } from '@/utils/mock';
+import { cachedSchema, formatLoadedAt, putSchema, typeCount } from '@/utils/graphqlSchema';
 
 /**
  * 请求体编辑器。
@@ -17,11 +33,15 @@ import * as sendApi from '@/api/send';
 const props = defineProps({
   spec: { type: Object, required: true },
   projectId: { type: String, default: '' },
+  /** 这个请求属于哪个接口（拉 GraphQL schema 时服务端要用它做鉴权继承和目录变量） */
+  apiId: { type: String, default: '' },
   /** resolveScope() 的结果，给表单值的变量高亮和补全用 */
   scope: { type: Map, default: null }
 });
 
 const message = useMessage();
+const envs = useEnvStore();
+const projects = useProjectStore();
 
 const MODE_OPTIONS = [
   { label: '无', value: 'none' },
@@ -61,6 +81,86 @@ const body = computed(function () {
   if (!props.spec.body) props.spec.body = { mode: 'none' };
   return props.spec.body;
 });
+
+/* ---------------- GraphQL：schema 与文档（第七轮第 3 节） ---------------- */
+
+/**
+ * 拉一份 introspection 交给编辑器做补全。
+ *
+ * schema **按地址缓存在内存里**（`utils/graphqlSchema.js`）：同一个地址的不同标签页
+ * 共用一份，关掉标签页就没了 —— 一份 schema 可能几百 KB，落库 / 进 localStorage 都不合适，
+ * 而且换个后端就作废。
+ */
+const gqlSchema = ref(null);
+const gqlLoading = ref(false);
+const gqlError = ref('');
+const gqlLoadedAt = ref(0);
+/** 右边那个文档面板展开着没有 */
+const showDocs = ref(false);
+
+/** 缓存键就是这个接口的地址（没做变量替换的原始地址） */
+const gqlUrl = computed(function () {
+  return String(props.spec.url || '').trim();
+});
+
+const gqlTypeCount = computed(function () { return typeCount(gqlSchema.value); });
+
+const gqlStatus = computed(function () {
+  if (gqlLoading.value) return 'Schema：加载中…';
+  if (gqlError.value) return 'Schema：加载失败';
+  if (!gqlSchema.value) return 'Schema：未加载';
+  return 'Schema：已加载（' + gqlTypeCount.value + ' 个类型）· ' +
+    formatLoadedAt(gqlLoadedAt.value);
+});
+
+/** 切到别的接口 / 改了地址：从缓存里取那一份（没有就是未加载） */
+function syncGqlFromCache() {
+  const hit = cachedSchema(gqlUrl.value);
+  gqlSchema.value = hit ? hit.schema : null;
+  gqlLoadedAt.value = hit ? hit.loadedAt : 0;
+  gqlError.value = '';
+}
+
+watch(gqlUrl, syncGqlFromCache, { immediate: true });
+
+/** 切到 GraphQL 模式时也同步一次（地址可能没变但缓存里有） */
+watch(mode, function (value) {
+  if (value === 'graphql') syncGqlFromCache();
+});
+
+async function loadGqlSchema() {
+  if (!props.projectId) {
+    message.warning('还没有选中项目');
+    return;
+  }
+  if (!gqlUrl.value) {
+    message.warning('先填接口地址');
+    return;
+  }
+
+  gqlLoading.value = true;
+  gqlError.value = '';
+  try {
+    // 和发送用的是同一个请求体形状：服务端把 body 换成 introspection 查询再发
+    const data = await graphqlApi.fetchSchema(props.projectId, {
+      request: JSON.parse(JSON.stringify(props.spec)),
+      apiId: props.apiId || undefined,
+      environmentId: envs.selectedId || undefined,
+      mockBase: mockBaseFor(envs.selectedId, projects.current)
+    });
+
+    putSchema(gqlUrl.value, data.schema);
+    gqlSchema.value = data.schema;
+    gqlLoadedAt.value = Date.now();
+    message.success('Schema 已加载');
+  } catch (err) {
+    gqlSchema.value = null;
+    gqlLoadedAt.value = 0;
+    gqlError.value = err.message;
+  } finally {
+    gqlLoading.value = false;
+  }
+}
 
 const mode = computed(function () {
   return body.value.mode || 'none';
@@ -309,15 +409,57 @@ async function onFilePicked(event) {
 
       <template v-else-if="mode === 'graphql'">
         <div class="gql">
-          <div class="gql-block">
-            <p class="label">Query</p>
-            <code-editor
-              :model-value="(body.graphql && body.graphql.query) || ''"
-              language="javascript"
-              min-height="160px"
-              @update:model-value="(v) => { body.graphql = Object.assign({ variables: '' }, body.graphql, { query: v }); }"
-            />
+          <!--
+            Schema 那一行（第七轮第 3 节）：拉的是这个接口地址的 introspection，
+            拉到了就有字段补全 / 校验 / 悬停提示。加载失败时把原因显示出来
+            （「这个地址不支持 introspection」这种），别只给一句「失败」。
+          -->
+          <div class="gql-schema">
+            <span class="gql-status" :class="{ error: Boolean(gqlError) }" :title="gqlError">
+              {{ gqlError || gqlStatus }}
+            </span>
+            <n-button
+              size="tiny"
+              secondary
+              :loading="gqlLoading"
+              @click="loadGqlSchema"
+            >
+              <template #icon>
+                <n-icon :component="Refresh" />
+              </template>
+              {{ gqlSchema ? '刷新' : '获取 Schema' }}
+            </n-button>
+            <n-button
+              v-if="gqlSchema"
+              size="tiny"
+              quaternary
+              :type="showDocs ? 'primary' : 'default'"
+              @click="showDocs = !showDocs"
+            >
+              <template #icon>
+                <n-icon :component="Book" />
+              </template>
+              文档
+            </n-button>
           </div>
+
+          <div class="gql-main" :class="{ 'with-docs': showDocs && gqlSchema }">
+            <div class="gql-block">
+              <p class="label">Query</p>
+              <code-editor
+                :model-value="(body.graphql && body.graphql.query) || ''"
+                language="graphql"
+                :schema="gqlSchema"
+                min-height="160px"
+                @update:model-value="(v) => { body.graphql = Object.assign({ variables: '' }, body.graphql, { query: v }); }"
+              />
+            </div>
+
+            <div v-if="showDocs && gqlSchema" class="gql-docs">
+              <graphql-docs :schema="gqlSchema" />
+            </div>
+          </div>
+
           <div class="gql-block">
             <p class="label">Variables（JSON）</p>
             <code-editor
@@ -516,6 +658,46 @@ async function onFilePicked(event) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Schema 那一行：状态文字 + 获取 / 刷新 + 文档开关 */
+.gql-schema {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.gql-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.gql-status.error {
+  color: #d03050;
+  opacity: 1;
+}
+
+/* 文档面板展开时，编辑器和文档左右分栏 */
+.gql-main {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gql-main.with-docs .gql-block {
+  flex: 1.6;
+  min-width: 0;
+}
+
+.gql-docs {
+  flex: 1;
+  min-width: 0;
+  min-height: 200px;
+  display: flex;
 }
 
 .label {
