@@ -37,7 +37,14 @@ export function emptySpec() {
     // 状态与负责人（第四轮第 1 节）：存在 apis.extra 里，但放进 spec 才能直接复用
     // 「和快照比出 dirty」那套机制 —— 改了它们同样算接口有改动，走「保存」
     status: null,
-    ownerId: null
+    ownerId: null,
+    // 可视化断言与提取变量（第六轮第 1 节）：同样存在 extra 里、同样进 spec。
+    // 发送时服务端从请求体里读（和 scripts 一样），所以没保存的改动也生效
+    assertions: [],
+    extracts: [],
+    // 响应字段说明（第六轮第 2 节）：同样存在 extra 里、同样进 spec 走「保存」。
+    // `[{ path, type, desc, required }]`，path 形如 `data.list[].id`；只给文档用，不参与发送
+    responseFields: []
   };
 }
 
@@ -163,7 +170,12 @@ export function specFromApi(api) {
     // 状态与负责人（第四轮第 1 节）。原样带过来：服务端不认识的旧值也留着，
     // 用户不动它就不会被写回去覆盖掉
     status: api.status === undefined || api.status === null ? null : String(api.status),
-    ownerId: api.ownerId === undefined || api.ownerId === null ? null : String(api.ownerId)
+    ownerId: api.ownerId === undefined || api.ownerId === null ? null : String(api.ownerId),
+    // 可视化断言与提取变量（第六轮第 1 节）：整份深拷贝，编辑区和 tab.api（原件）分开
+    assertions: copy(api.assertions || []),
+    extracts: copy(api.extracts || []),
+    // 响应字段说明（第六轮第 2 节）：整份深拷贝，编辑区和 tab.api 那份不能共用对象
+    responseFields: copy(api.responseFields || [])
   };
 }
 
