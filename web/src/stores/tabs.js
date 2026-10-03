@@ -13,6 +13,7 @@ import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
+import { usePrefsStore } from '@/stores/prefs';
 
 let draftSeq = 0;
 let wsSeq = 0;
@@ -259,6 +260,17 @@ export const useTabsStore = defineStore('tabs', function () {
   const pendingOpens = new Map();
 
   /**
+   * 记一笔「最近打开」（第七轮第 2 节）：⌘K 里没输入时列的就是它。
+   *
+   * 只属于自己（存个人偏好、不进项目数据），写库防抖 2 秒 —— 连着开好几个接口只写一次。
+   * 拿不到 projectId 就算了（接口 DTO 里是有的，兜底只为不出错）。
+   */
+  function markOpened(api, apiId) {
+    const projectId = api && api.projectId;
+    if (projectId && apiId) usePrefsStore().rememberOpened(projectId, apiId);
+  }
+
+  /**
    * @param {string} apiId
    * @param {{ preview?: boolean }} [options] preview：用预览标签页打开（目录树单击），见 placeTab
    */
@@ -270,6 +282,8 @@ export const useTabsStore = defineStore('tabs', function () {
       // 不是预览方式再打开一次（双击目录树、⌘K 等）＝ 把它固定下来
       if (!preview) existing.preview = false;
       activeKey.value = key;
+      // 又打开了一次：在「最近打开」里挪到最前
+      markOpened(existing.api, apiId);
       return Promise.resolve(existing);
     }
 
@@ -291,6 +305,9 @@ export const useTabsStore = defineStore('tabs', function () {
   async function loadApiTab(apiId, preview) {
     const key = 'api:' + apiId;
     const data = await apisApi.getApi(apiId);
+
+    // 记「最近打开」（第七轮第 2 节）：WS 接口也算 —— 它同样是「打开过的接口」
+    markOpened(data.api, apiId);
 
     // 等数据的这段时间里，别的路径可能已经把它开出来了，那就直接切过去
     const opened = tabs.value.find(function (tab) { return tab.key === key; });

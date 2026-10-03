@@ -24,6 +24,7 @@ import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
 import HelpDrawer from '@/components/help/HelpDrawer.vue';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import { useProjectStore } from '@/stores/project';
+import { usePrefsStore } from '@/stores/prefs';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
@@ -37,6 +38,7 @@ const COLLAPSE_BREAKPOINT = 1024;
 
 const router = useRouter();
 const projects = useProjectStore();
+const prefs = usePrefsStore();
 const tree = useTreeStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
@@ -139,6 +141,8 @@ watch(
     if (version === undefined || previous === undefined || version === previous) return;
     try {
       await projects.load();
+      // 偏好也要重拉：别的设备改了分组 / 收藏，或者这边推上去的被合并过
+      await prefs.load();
       await tree.refresh();
       if (projects.currentId) await envs.load(projects.currentId);
     } catch (err) {
@@ -351,6 +355,10 @@ onMounted(async function () {
   } catch (err) {
     message.error(err.message);
   }
+
+  // 个人偏好（第七轮第 2 节）：分组、收藏、最近打开。拉不到不影响主流程 ——
+  // 顶多是没有分组、没有收藏，项目照常能切
+  prefs.load().catch(function () {});
 
   // 探测「是不是在网关上」。放在项目加载之后：它不影响主流程，慢一点没关系
   gateway.load().catch(function () {}).finally(function () {

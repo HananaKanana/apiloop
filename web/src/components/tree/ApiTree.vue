@@ -1,8 +1,9 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
 import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
-import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
+import { ChevronDown, ChevronRight, FileImport, Filter, Fold, FoldDown, Plus, Star } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
+import { usePrefsStore } from '@/stores/prefs';
 import { useTreeStore } from '@/stores/tree';
 import { useGatewayStore } from '@/stores/gateway';
 import { useTabsStore } from '@/stores/tabs';
@@ -30,6 +31,7 @@ import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
+const prefs = usePrefsStore();
 const tree = useTreeStore();
 const gateway = useGatewayStore();
 const tabs = useTabsStore();
@@ -424,6 +426,45 @@ function openNode(event, node, preview) {
   emit('open-folder', node.id, { preview: preview });
 }
 
+/* ---------------- 收藏（第七轮第 2 节） ---------------- */
+
+/** 收藏区折叠起来了没有。只在这次会话里记着，没进偏好那三个 key */
+const starredCollapsed = ref(false);
+
+/**
+ * 这个项目里收藏的接口。
+ *
+ * 只认目录树里还找得到的 —— 被删掉的收藏直接不显示（计划里说了不用专门去清），
+ * 所以这里不用管「找不到的那个要不要从偏好里删掉」。
+ */
+const starredApis = computed(function () {
+  const list = [];
+  prefs.favoriteApiIdsOf(tree.projectId).forEach(function (id) {
+    const api = tree.apiById.get(id);
+    if (api) list.push(api);
+  });
+  return list;
+});
+
+function toggleStar(api) {
+  prefs.toggleApiFavorite(tree.projectId, api.id).catch(function (err) {
+    message.error(err.message);
+  });
+}
+
+/** 收藏区里右键：走和目录树里一样的接口菜单（node 从树里找回来，菜单项要用的字段才齐） */
+function openStarredMenu(event, api) {
+  const node = findNode(tree.nodes, 'a:' + api.id) ||
+    { kind: 'api', id: api.id, name: api.name || '' };
+  menu.value = {
+    show: true,
+    x: event.clientX,
+    y: event.clientY,
+    node: node,
+    options: apiMenuOptions(node)
+  };
+}
+
 /* ---------------- 选中与右键 ---------------- */
 
 function onSelectedChange(keys) {
@@ -442,16 +483,19 @@ function onSelectedChange(keys) {
 }
 
 function openMenu(event, node) {
-  // viewer 没有任何写权限，但「目录设置」是能看的（打开后只读），所以目录上只给它这一项。
-  // 接口节点上没有任何 viewer 能用的项，那就不弹 —— 弹一个全是灰项的菜单比不弹更让人困惑
-  if (!projects.canEdit && node.kind !== 'folder') return;
+  /**
+   * viewer 没有任何写权限，但「目录设置」和「收藏 / 取消收藏」是能用的：收藏只属于自己、
+   * 不改项目数据（第七轮第 2 节），所以接口上也要弹 —— 弹出来只有收藏那一项。
+   * 别的节点类型上仍然没有 viewer 能用的项，那就不弹：弹一个全是灰项的菜单比不弹更让人困惑。
+   */
+  if (!projects.canEdit && node.kind !== 'folder' && node.kind !== 'api') return;
 
   menu.value = {
     show: true,
     x: event.clientX,
     y: event.clientY,
     node: node,
-    options: node.kind === 'folder' ? folderMenuOptions() : apiMenuOptions()
+    options: node.kind === 'folder' ? folderMenuOptions() : apiMenuOptions(node)
   };
 }
 
@@ -522,8 +566,19 @@ function folderMenuOptions() {
   ]);
 }
 
-function apiMenuOptions() {
+function apiMenuOptions(node) {
+  // 接口收藏（第七轮第 2 节）：只属于自己，viewer 也能用，所以单独放在最上面。
+  // **node 必须由调用方传进来**：下面 openMenu 是先算 options 再赋值给 menu.value 的，
+  // 这时候从 menu.value.node 读到的还是上一次右键的那个节点。
+  const starred = Boolean(node && prefs.isApiFavorite(tree.projectId, node.id));
+  const favorite = { label: starred ? '取消收藏' : '收藏', key: 'favorite' };
+
+  // viewer 只给这一项（其余全是写操作，服务端会 403）
+  if (!projects.canEdit) return [favorite];
+
   return [
+    favorite,
+    { type: 'divider', key: 'd0' },
     { label: '复制', key: 'duplicate' },
     { label: '重命名', key: 'rename' },
     { type: 'divider', key: 'd2' },
@@ -553,6 +608,9 @@ async function onMenuSelect(key) {
   if (key === 'blank-share') return openShare(null);
   if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
+
+  // 收藏只在当前项目里记（偏好里存的就是「项目 + 接口」这一对）
+  if (key === 'favorite') return toggleStar({ id: node.id });
 
   try {
     if (key === 'folder-settings') return emit('open-folder', node.id);
@@ -828,6 +886,35 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       </n-button>
     </div>
 
+    <!--
+      收藏（第七轮第 2 节）：这个项目里收藏的接口，放在目录树最上面。
+      一个收藏都没有时整块不显示 —— 空着一个「收藏」标题只是占地方。
+    -->
+    <div v-if="starredApis.length" class="starred">
+      <div class="starred-head" @click="starredCollapsed = !starredCollapsed">
+        <n-icon size="13" :component="starredCollapsed ? ChevronRight : ChevronDown" />
+        <span class="starred-title">收藏</span>
+        <span class="starred-count">{{ starredApis.length }}</span>
+      </div>
+
+      <template v-if="!starredCollapsed">
+        <div
+          v-for="api in starredApis"
+          :key="'star-' + api.id"
+          class="starred-row"
+          :title="api.url || ''"
+          @click="emit('open', api, { preview: false })"
+          @contextmenu.prevent.stop="openStarredMenu($event, api)"
+        >
+          <span class="starred-method" :style="{ color: methodColor(api.method) }">{{ api.method }}</span>
+          <span class="starred-name">{{ api.name || '(未命名接口)' }}</span>
+          <button class="starred-star" title="取消收藏" @click.stop="toggleStar(api)">
+            <n-icon size="14" :component="Star" />
+          </button>
+        </div>
+      </template>
+    </div>
+
     <div class="group-title">目录</div>
 
     <div class="body" @contextmenu.prevent="openBlankMenu">
@@ -962,6 +1049,96 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   letter-spacing: 0.6px;
   opacity: 0.6;
   text-transform: uppercase;
+}
+
+/* ---------------- 收藏区（第七轮第 2 节） ---------------- */
+
+/* 收藏区自己限高：收藏多了不能把目录树挤没 */
+.starred {
+  flex: none;
+  max-height: 30%;
+  overflow: auto;
+  padding: 0 4px 2px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.starred-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 6px;
+  cursor: pointer;
+}
+
+.starred-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  opacity: 0.6;
+  text-transform: uppercase;
+}
+
+.starred-count {
+  font-size: 11px;
+  opacity: 0.4;
+}
+
+/* 和目录树的行一样高（28px），两栏连在一起看不出接缝 */
+.starred-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.starred-row:hover {
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.starred-method {
+  flex: none;
+  width: 40px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.starred-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.starred-star {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--apiloop-primary);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.starred-row:hover .starred-star {
+  opacity: 1;
+}
+
+.starred-star :deep(svg) {
+  fill: currentColor;
 }
 
 .body {

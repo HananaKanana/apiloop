@@ -2,6 +2,9 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { NIcon, NInput, NModal } from 'naive-ui';
 import { Search } from '@vicons/tabler';
+import { useDialog } from '@/utils/dialog';
+import { usePrefsStore } from '@/stores/prefs';
+import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import { useUiStore } from '@/stores/ui';
@@ -10,11 +13,17 @@ import { folderChain } from '@/utils/tree';
 
 /**
  * 快速打开（⌘K / Ctrl+K，或者点顶栏那个搜索框）。
- * 数据就是目录树 store 里的接口，按名字和地址做模糊匹配；回车打开标签页。
+ *
+ * 没输入时列出**最近打开的 20 个接口**（跨项目，显示「项目名 / 接口名」，点了切到那个项目
+ * 并打开）；开始打字就换成当前项目的接口模糊匹配，回车打开。
+ * 数据就是目录树 store 里的接口。最近打开来自个人偏好（第七轮第 2 节）。
  */
 const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
+const prefs = usePrefsStore();
+const projects = useProjectStore();
+const dialog = useDialog();
 
 const MAX_ROWS = 50;
 
@@ -22,10 +31,26 @@ const keyword = ref('');
 const cursor = ref(0);
 const inputRef = ref(null);
 
+/** 最近打开（跨项目）。打开弹窗时拉一次 */
+const recents = ref([]);
+
 const visible = computed({
   get: function () { return ui.quickOpenVisible; },
   set: function (value) { ui.quickOpenVisible = value; }
 });
+
+const searching = computed(function () { return Boolean(keyword.value.trim()); });
+
+/** 项目 id → 名字（最近打开要显示「项目名 / 接口名」） */
+const projectNameById = computed(function () {
+  const map = new Map();
+  projects.projects.forEach(function (project) { map.set(project.id, project.name); });
+  return map;
+});
+
+function projectNameOf(id) {
+  return projectNameById.value.get(id) || '（项目已不存在）';
+}
 
 /** 目录树里所有接口，带上级目录的路径 */
 const allApis = computed(function () {
@@ -105,8 +130,13 @@ function segments(text, query) {
   ].filter(function (part) { return part.text; });
 }
 
+/** 键盘现在在操作哪一份列表：没输入时是「最近打开」，输入了是搜索结果 */
+const activeList = computed(function () {
+  return searching.value ? results.value : recents.value;
+});
+
 function move(step) {
-  const total = results.value.length;
+  const total = activeList.value.length;
   if (!total) return;
   cursor.value = (cursor.value + step + total) % total;
 }
@@ -118,6 +148,52 @@ async function open(item) {
     await tabs.openApi(item.id);
   } catch (err) {
     // 打开失败（接口刚被删掉之类）不弹提示，下次刷新目录树就同步了
+  }
+}
+
+/** 切换项目前问一句（打开着的标签页会全关掉） */
+function confirmSwitchProject() {
+  return new Promise(function (resolve) {
+    dialog.warning({
+      title: '切换项目',
+      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
+      positiveText: '切换',
+      negativeText: '取消',
+      onPositiveClick: function () { resolve(true); },
+      onNegativeClick: function () { resolve(false); },
+      onClose: function () { resolve(false); },
+      onMaskClick: function () { resolve(false); }
+    });
+  });
+}
+
+/** 打开「最近」里的一条：可能在别的项目里，先切到那个项目再开 */
+async function openRecent(item) {
+  if (!item) return;
+
+  if (item.projectId !== projects.currentId) {
+    if (tabs.hasDirty && !(await confirmSwitchProject())) return;
+    visible.value = false;
+    tabs.closeAll();
+    projects.setCurrent(item.projectId);
+  } else {
+    visible.value = false;
+  }
+
+  try {
+    await tabs.openApi(item.apiId);
+  } catch (err) {
+    // 同上：接口可能刚被删掉
+  }
+}
+
+/** 拉一次「最近打开」。拉不到就空着 —— ⌘K 主要是拿来搜索的，别为这个弹错 */
+async function loadRecents() {
+  recents.value = [];
+  try {
+    recents.value = await prefs.visibleRecent();
+  } catch (err) {
+    recents.value = [];
   }
 }
 
@@ -141,7 +217,8 @@ function onKeydown(event) {
   }
   if (event.key === 'Enter') {
     event.preventDefault();
-    open(results.value[cursor.value]);
+    if (searching.value) open(results.value[cursor.value]);
+    else openRecent(recents.value[cursor.value]);
     return;
   }
   if (event.key === 'Escape') {
@@ -156,11 +233,12 @@ watch(visible, async function (value) {
   cursor.value = 0;
   await nextTick();
   if (inputRef.value) inputRef.value.focus();
+  loadRecents();
 });
 
-// 结果集变了（打字）之后，光标回到第一条
-watch(results, function () {
-  if (cursor.value >= results.value.length) cursor.value = 0;
+// 列表变了（打字、或者最近打开拉回来了）之后，光标回到第一条
+watch(activeList, function () {
+  if (cursor.value >= activeList.value.length) cursor.value = 0;
 });
 </script>
 
@@ -186,38 +264,65 @@ watch(results, function () {
       </n-input>
 
       <div class="list">
-        <div
-          v-for="(item, index) in results"
-          :key="item.id"
-          class="item"
-          :class="{ active: index === cursor }"
-          @mouseenter="cursor = index"
-          @click="open(item)"
-        >
-          <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
-          <!-- 两行：上面是名字和所在目录，下面是地址 —— 只看名字分不清是不是要找的那个 -->
-          <div class="main">
-            <div class="line">
-              <span class="name">
+        <!-- 没输入时：最近打开的 20 个接口（跨项目），点了切到那个项目并打开 -->
+        <template v-if="!searching">
+          <div class="hint">最近打开</div>
+
+          <div
+            v-for="(item, index) in recents"
+            :key="item.projectId + ':' + item.apiId"
+            class="item"
+            :class="{ active: index === cursor }"
+            @mouseenter="cursor = index"
+            @click="openRecent(item)"
+          >
+            <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
+            <div class="main">
+              <!-- 跨项目的，光看接口名分不清是哪个项目里的 -->
+              <div class="line">
+                <span class="name">{{ projectNameOf(item.projectId) }} / {{ item.name }}</span>
+              </div>
+              <div class="url">{{ item.url || '(没有地址)' }}</div>
+            </div>
+          </div>
+
+          <div v-if="!recents.length" class="empty">还没有打开过接口</div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="(item, index) in results"
+            :key="item.id"
+            class="item"
+            :class="{ active: index === cursor }"
+            @mouseenter="cursor = index"
+            @click="open(item)"
+          >
+            <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
+            <!-- 两行：上面是名字和所在目录，下面是地址 —— 只看名字分不清是不是要找的那个 -->
+            <div class="main">
+              <div class="line">
+                <span class="name">
+                  <span
+                    v-for="(part, i) in segments(item.name, keyword)"
+                    :key="i"
+                    :class="{ hit: part.hit }"
+                  >{{ part.text }}</span>
+                </span>
+                <span v-if="item.path" class="path">{{ item.path }}</span>
+              </div>
+              <div class="url">
                 <span
-                  v-for="(part, i) in segments(item.name, keyword)"
+                  v-for="(part, i) in segments(item.url || '(没有地址)', keyword)"
                   :key="i"
                   :class="{ hit: part.hit }"
                 >{{ part.text }}</span>
-              </span>
-              <span v-if="item.path" class="path">{{ item.path }}</span>
-            </div>
-            <div class="url">
-              <span
-                v-for="(part, i) in segments(item.url || '(没有地址)', keyword)"
-                :key="i"
-                :class="{ hit: part.hit }"
-              >{{ part.text }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="!results.length" class="empty">没有匹配的接口</div>
+          <div v-if="!results.length" class="empty">没有匹配的接口</div>
+        </template>
       </div>
 
       <div class="foot">
@@ -243,6 +348,14 @@ watch(results, function () {
   max-height: 46vh;
   overflow: auto;
   padding: 4px 0;
+}
+
+/* 「最近打开」的小标题（只有没输入时才有这一行） */
+.hint {
+  padding: 4px 12px 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.5;
 }
 
 .item {
