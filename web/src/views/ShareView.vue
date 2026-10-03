@@ -304,7 +304,9 @@ function statusType(status) {
               </thead>
               <tbody>
                 <tr v-for="(row, index) in current.headers" :key="'h' + index">
-                  <td class="key">{{ row.key }}</td>
+                  <td class="key">
+                    {{ row.key }}<span v-if="row.common" class="where">公共</span>
+                  </td>
                   <td class="value">{{ row.value }}</td>
                   <td class="desc">{{ row.desc }}</td>
                 </tr>
