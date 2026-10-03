@@ -17,6 +17,7 @@ import { useDialog } from '@/utils/dialog';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
 import VarTable from '@/components/common/VarTable.vue';
+import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MembersPanel from '@/components/members/MembersPanel.vue';
@@ -61,6 +62,7 @@ const form = ref({
   description: '',
   variables: [],
   auth: { type: 'inherit' },
+  headers: [],
   scripts: []
 });
 
@@ -80,6 +82,7 @@ function fillFrom(project) {
     description: project.description || '',
     variables: JSON.parse(JSON.stringify(project.variables || [])),
     auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' },
+    headers: JSON.parse(JSON.stringify(project.headers || [])),
     scripts: JSON.parse(JSON.stringify(project.scripts || []))
   };
 }
@@ -116,6 +119,7 @@ async function save() {
       description: form.value.description,
       variables: form.value.variables,
       auth: form.value.auth,
+      headers: form.value.headers,
       scripts: form.value.scripts
     };
     if (isOwner.value) {
@@ -227,6 +231,23 @@ watch(function () { return route.params.pid; }, load);
               接口自己的鉴权留空或选了「继承父级」时，就沿用到这里。
             </p>
             <auth-editor v-model="form.auth" :disabled="!canEdit" />
+          </n-card>
+
+          <!--
+            公共请求头（第五轮第 1 节）：这个项目里所有接口发送时都会带上。
+            目录 / 接口自己写了同名的，以更靠近接口的那一层为准。
+          -->
+          <n-card :bordered="false" size="small" title="公共请求头" class="card">
+            <p class="tip">
+              这个项目下的所有接口发送时都会带上这些请求头；接口里有同名的请求头时，用接口自己的。
+            </p>
+            <key-value-table
+              v-model="form.headers"
+              :disabled="!canEdit"
+              kind="common-headers"
+              key-placeholder="请求头"
+              value-placeholder="值"
+            />
           </n-card>
 
           <n-card :bordered="false" size="small" title="项目脚本" class="card">

@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import VarTable from '@/components/common/VarTable.vue';
+import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
@@ -104,6 +105,7 @@ async function save() {
       description: spec.value.description,
       auth: spec.value.auth,
       variables: spec.value.variables,
+      headers: spec.value.headers,
       scripts: spec.value.scripts
     });
     tabs.markFolderSaved(props.tab, saved);
@@ -207,6 +209,23 @@ onBeforeUnmount(function () {
             这个目录下的接口和子目录选了「继承父级」时，就沿用到这一级。
           </p>
           <auth-editor v-model="spec.auth" :disabled="!canEdit" :inherit-hint="authHint" />
+        </n-card>
+
+        <!--
+          公共请求头（第五轮第 1 节）：这个目录下的接口发送时都会带上。
+          内层目录 / 接口自己写了同名的，以更靠近接口的那一层为准。
+        -->
+        <n-card :bordered="false" size="small" title="公共请求头" class="card">
+          <p class="tip">
+            这个目录下的所有接口发送时都会带上这些请求头；接口里有同名的请求头时，用接口自己的。
+          </p>
+          <key-value-table
+            v-model="spec.headers"
+            :disabled="!canEdit"
+            kind="common-headers"
+            key-placeholder="请求头"
+            value-placeholder="值"
+          />
         </n-card>
 
         <n-card :bordered="false" size="small" title="脚本" class="card">

@@ -36,6 +36,7 @@ import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
+import { headerLayers, resolveHeaders } from '@/utils/commonHeaders';
 import { inheritHint } from '@/utils/auth';
 import { clampReplayDelay } from '@/utils/replay';
 import { resolveScope, missingVariables } from '@/utils/variables';
@@ -261,6 +262,38 @@ watch(
 function openComments() {
   focusCommentId.value = '';
   showComments.value = true;
+}
+
+/* ---------------- 继承的请求头（第五轮第 1 节） ---------------- */
+
+/**
+ * 项目 / 目录上配的公共请求头，发送时会自动带上（服务端按同一套规则合并，
+ * 见 `lib/common-headers.js`）。这里只负责显示：
+ *  - `shadowed` 的那几行被接口自己的同名请求头盖掉了，画成删除线；
+ *  - 停用的行照样列出来（它表示「内层明确不要这个头」），画成灰的。
+ */
+const inheritedHeaders = computed(function () {
+  const layers = headerLayers(projects.current, tree.folders, props.tab.folderId);
+  return resolveHeaders(spec.value.params.headers, layers).inherited;
+});
+
+/** 「在这里覆盖」：把这一行复制到接口自己的请求头表里，用户接着改值就行 */
+function overrideHeader(row) {
+  const list = (spec.value.params.headers || []).slice();
+  const lower = String(row.key).toLowerCase();
+
+  if (list.some(function (item) { return String(item.key).toLowerCase() === lower; })) return;
+
+  list.push({
+    key: row.key,
+    value: row.value,
+    type: 'string',
+    required: false,
+    desc: row.desc || '',
+    enabled: true
+  });
+  spec.value.params.headers = list;
+  message.success('已复制到接口自己的请求头，改完记得保存');
 }
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
@@ -1154,6 +1187,50 @@ onBeforeUnmount(function () {
               key-placeholder="请求头"
               value-placeholder="值"
             />
+
+            <!--
+              继承的请求头（第五轮第 1 节）：项目 / 目录上配的那些，发送时自动带上。
+              只读 —— 想改值就点「在这里覆盖」，复制到上面自己的表里再改。
+            -->
+            <div v-if="inheritedHeaders.length" class="inherited">
+              <p class="label">
+                继承的请求头
+                <span class="inherited-note">（来自项目 / 目录，发送时自动带上）</span>
+              </p>
+
+              <div class="inherited-table">
+                <div class="row head">
+                  <div class="cell name">请求头</div>
+                  <div class="cell value">值</div>
+                  <div class="cell from">来自</div>
+                  <div class="cell action" />
+                </div>
+
+                <div
+                  v-for="(row, index) in inheritedHeaders"
+                  :key="index"
+                  class="row"
+                  :class="{ shadowed: row.shadowed, off: row.enabled === false }"
+                  :title="row.shadowed
+                    ? '已被接口里的同名请求头覆盖'
+                    : (row.enabled === false ? '这一行在来源处被停用了，不会发出去' : '')"
+                >
+                  <div class="cell name">{{ row.key }}</div>
+                  <div class="cell value">{{ row.value }}</div>
+                  <div class="cell from">{{ row.from }}</div>
+                  <div class="cell action">
+                    <button
+                      v-if="!row.shadowed"
+                      class="override-button"
+                      title="复制到接口自己的请求头里，方便改值"
+                      @click="overrideHeader(row)"
+                    >
+                      在这里覆盖
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </n-tab-pane>
 
@@ -1557,6 +1634,103 @@ onBeforeUnmount(function () {
 
 .pane .label + * {
   margin-bottom: 14px;
+}
+
+/* ---------------- 继承的请求头 ---------------- */
+
+.inherited {
+  margin-top: 14px;
+}
+
+.inherited-note {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.inherited-table {
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  border-radius: 4px;
+  overflow: hidden;
+  /* 只读的块：整体压暗一点，和上面那张能编辑的表区分开 */
+  opacity: 0.75;
+}
+
+.inherited-table .row {
+  display: grid;
+  grid-template-columns: minmax(0, 26%) minmax(0, 1fr) minmax(0, 22%) 96px;
+  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.inherited-table .row:last-child {
+  border-bottom: none;
+}
+
+.inherited-table .row.head {
+  background: rgba(128, 128, 128, 0.08);
+  font-size: 12px;
+}
+
+.inherited-table .cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+  border-right: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+
+.inherited-table .cell:last-child {
+  border-right: none;
+}
+
+.inherited-table .cell.name,
+.inherited-table .cell.value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inherited-table .cell.from {
+  font-size: 12px;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inherited-table .cell.action {
+  justify-content: center;
+  padding: 0;
+}
+
+/* 被接口自己的同名请求头盖掉：画成删除线，说明它不会发出去 */
+.inherited-table .row.shadowed .cell.name,
+.inherited-table .row.shadowed .cell.value,
+.inherited-table .row.shadowed .cell.from {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+/* 来源处停用了的行（连自己那一层都不发） */
+.inherited-table .row.off .cell.name,
+.inherited-table .row.off .cell.value {
+  opacity: 0.45;
+}
+
+.override-button {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--apiloop-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.override-button:hover {
+  background: rgba(255, 108, 55, 0.12);
 }
 
 .option-row {
