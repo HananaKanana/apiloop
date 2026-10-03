@@ -3,11 +3,16 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { NCheckbox, NIcon, NInput } from 'naive-ui';
 import { Eye, EyeOff, Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
+import { useDialog } from '@/utils/dialog';
 
 /**
  * 变量表格：启用 | 变量名 | 值 | 保密 | 描述 | 删除。
  * 「值」后面那个眼睛就是保密开关：点成闭眼，这一行的值就遮成圆点（password 输入框）；
  * 再点一下改回明文。想临时看一眼保密值，也是点这个眼睛。
+ *
+ * **保密变量的值只属于填它的人**（第三轮第 3 节）：共享数据里、同步出去的都是空串，
+ * 值存在服务端的 `secret_values` 里、按人生效（见 lib/secrets.js）。所以打开开关时
+ * 提示一句、并在值那一格给个悬停说明。
  *
  * 最后永远留一行空行，在空行里一输入就自动变成真行并再补一行空的。
  */
@@ -148,6 +153,40 @@ function removeRow(index) {
   list.splice(index, 1);
   commit(list);
 }
+
+/* ---------------- 保密开关 ---------------- */
+
+const dialog = useDialog();
+
+const SECRET_HINT = '只保存在你自己这里，不会同步给别人';
+
+/**
+ * 点眼睛：
+ *   - 已经是保密 → 直接改回明文（值会跟着回到共享数据里）；
+ *   - 要设成保密、而且这一行**已经有值** → 先提示一句再改：那个值会从共享数据里
+ *     拿掉、存成自己的，同事那边看到的就是空。
+ * 没有值的行没什么可搬的，直接开，不打扰。
+ */
+function toggleSecret(item) {
+  const row = item.row;
+
+  if (row.secret) {
+    updateRow(item.index, { secret: false });
+    return;
+  }
+  if (!row.value) {
+    updateRow(item.index, { secret: true });
+    return;
+  }
+
+  dialog.create({
+    title: '设为保密变量',
+    content: '设为保密后，这个值只保存在你这里，其他成员需要各自填写。',
+    positiveText: '设为保密',
+    negativeText: '取消',
+    onPositiveClick: function () { updateRow(item.index, { secret: true }); }
+  });
+}
 </script>
 
 <template>
@@ -199,13 +238,14 @@ function removeRow(index) {
           :type="item.row.secret ? 'password' : 'text'"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
-          placeholder="值"
+          :placeholder="item.row.secret ? '只保存在你自己这里' : '值'"
+          :title="item.row.secret ? SECRET_HINT : ''"
           @update:value="(v) => { updateRow(item.index, { value: v }); }"
         />
       </div>
 
       <!--
-        保密开关：睁眼 = 明文显示，闭眼 = 保密（值遮成圆点）。
+        保密开关：睁眼 = 明文显示，闭眼 = 保密（值只保存在自己这里）。
         用户要的就是一个眼睛图标，不要「类型」下拉（2026-09-30）。
       -->
       <div class="cell secret">
@@ -214,8 +254,8 @@ function removeRow(index) {
           class="icon-button"
           :class="{ on: item.row.secret }"
           :disabled="disabled"
-          :title="item.row.secret ? '已保密，点一下改回明文显示' : '点一下设为保密（值遮住显示）'"
-          @click="updateRow(item.index, { secret: !item.row.secret })"
+          :title="item.row.secret ? SECRET_HINT + '，点一下改回明文' : '点一下设为保密（值只保存在你自己这里）'"
+          @click="toggleSecret(item)"
         >
           <n-icon size="15" :component="item.row.secret ? EyeOff : Eye" />
         </button>
