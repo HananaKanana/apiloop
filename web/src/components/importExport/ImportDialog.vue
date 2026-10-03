@@ -328,7 +328,13 @@ async function importParsed(routes) {
       tree.selectedFolderId
     );
     await tree.refresh();
-    message.success('已导入 ' + ((data.apis && data.apis.length) || 0) + ' 个接口');
+    // 这段提示只服务 OpenAPI 页签（importParsed 只有它在调）：导入之后最常问的就是
+    // 「后端改了接口怎么办」，顺手把「从 OpenAPI 同步更新」这条路指出来
+    message.success(
+      '已导入 ' + ((data.apis && data.apis.length) || 0) + ' 个接口。' +
+      '以后后端改了接口，可以在目录树右键「从 OpenAPI 同步更新」',
+      { duration: 8000 }
+    );
     visible.value = false;
     openapiRoutes.value = null;
     openapiText.value = '';
