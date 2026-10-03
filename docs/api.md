@@ -71,7 +71,14 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 项目、目录、环境的变量行带 `secret: true` 时，值**只属于当前用户**：保存时值存进不同步的
 `secret_values` 表，共享数据（也就是同步出去、导出、别人读到的）里这一行的值是空串；读的时候
 把当前用户自己的值填回去。发送时用自己的值，写历史时这次用到的保密值（≥ 4 个字符）换成 `******`。
-脚本写回（`pm.environment.set`）一个保密变量时同样只写自己的值。没有新接口，语义加在现有的读写接口里。
+脚本写回（`pm.environment.set`）一个保密变量时同样只写自己的值。
+
+保密值在**同一个人的设备之间**同步（只在云端提供，客户端的同步引擎在调，页面不用）：
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /secrets?since=<seq>` | 当前用户 `seq > since` 的保密值（含删除记录），按 seq 升序，最多 500 行：`{ items, nextSeq, hasMore }` |
+| `POST /secrets` | `{ items: [{ scope, scopeId, key, value, deleted, updatedAt }] }`，最多 500 行，按「updatedAt 大的为准」合并进当前用户的行 |
 
 ## 回收站
 
@@ -104,9 +111,23 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `GET /projects/:pid/shares` | 这个项目已生成的分享链接（viewer） |
 | `POST /projects/:pid/shares` | 生成链接（editor）。`{ folderId?, expiresInDays? }`，`expiresInDays` 只能是 `7`、`30`（默认）或 `null`（永久） |
 | `DELETE /shares/:id` | 撤销（editor） |
+| `GET /shares` | 当前用户能看到的所有项目的分享链接（「我的分享」），每条多给 `projectId`、`projectName`、`canRevoke` |
 | `GET /public/shares/:id` | **不用登录**。只读文档数据，服务端已脱敏：不含变量值、鉴权的值、脚本、Cookie；敏感请求头、地址里的敏感参数、请求体和示例里敏感字段的值都换成 `******`。过期、撤销、不存在一律 404 |
 
 页面地址是 `<云端地址>/#/share/<id>`。客户端里的管理接口由网关转给云端。
+
+## 接口状态和负责人
+
+接口 DTO 和目录树的接口节点上多 `status`（`designing` / `developing` / `done` / `deprecated`）和 `ownerId`，
+存在接口的 `extra` 里、跟着同步。`PUT /apis/:id` 传这两个字段即可修改，传空串清掉。
+
+## OpenAPI 导出与同步更新
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/export/openapi?folderId=&format=yaml\|json` | 导出 OpenAPI 3.0.3，返回 `{ filename, format, text }`（viewer） |
+| `POST /projects/:pid/openapi/diff` | `{ url?, text?, folderId? }`，和文档比对，返回 `{ added, changed, removed, source }`，不改数据（editor） |
+| `POST /projects/:pid/openapi/apply` | `{ url?, text?, folderId?, add: [key], update: [apiId], remove: [apiId] }`，服务端重新拉取、重新比对后只执行勾选的；删除的进回收站（editor） |
 
 ## 内置 Mock 环境
 
