@@ -1,7 +1,7 @@
 <script setup>
 import { computed, h, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { NButton, NIcon, NSpin, NTag, useMessage } from 'naive-ui';
+import { NButton, NIcon, NSpin, NTag, NTree, useMessage } from 'naive-ui';
 import { AlertTriangle, Copy } from '@vicons/tabler';
 import logoUrl from '@/assets/logo.png';
 import * as sharesApi from '@/api/shares';
