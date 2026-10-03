@@ -26,13 +26,14 @@ import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
 import CurlSnippet from '@/components/request/CurlSnippet.vue';
-import { mockBaseFor } from '@/utils/mock';
+import { mockBaseFor, MOCK_ENV_ID } from '@/utils/mock';
 import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
 import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
+import AssertionsPane from '@/components/assertions/AssertionsPane.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
@@ -44,6 +45,7 @@ import { HEADER_NAMES } from '@/utils/suggestions';
 import { parseCurl } from '@/utils/curl';
 import { encodeQueryPart } from '@/utils/query';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
+import { assertionFromField, extractFromField, hasEnabled } from '@/utils/assertions';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
 import { copyText } from '@/utils/clipboard';
@@ -51,6 +53,7 @@ import { API_STATUSES, statusMeta } from '@/utils/apiStatus';
 import { loadMembers } from '@/utils/projectMembers';
 import * as commentsApi from '@/api/comments';
 import CommentsDrawer from '@/components/comments/CommentsDrawer.vue';
+import ResponseFieldsTab from '@/components/fields/ResponseFieldsTab.vue';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -294,6 +297,51 @@ function overrideHeader(row) {
   });
   spec.value.params.headers = list;
   message.success('已复制到接口自己的请求头，改完记得保存');
+}
+
+/* ---------------- 断言与提取变量（第六轮第 1 节） ---------------- */
+
+/**
+ * 提取到「环境」的变量要有环境才存得下来（内置的 Mock 环境不存库）。
+ * 没选环境时在表格上方先说一句 —— 不然用户会以为是提取失败了。
+ */
+const hasEnvironment = computed(function () {
+  return Boolean(envs.selectedId) && envs.selectedId !== MOCK_ENV_ID;
+});
+
+/** 刚加进来的那一行：滚过去、闪一下。过一会儿清掉，再加同一行还会闪 */
+const highlightRowId = ref('');
+let highlightTimer = null;
+
+function flashRow(id) {
+  highlightRowId.value = id;
+  if (highlightTimer) clearTimeout(highlightTimer);
+  highlightTimer = setTimeout(function () { highlightRowId.value = ''; }, 1600);
+}
+
+/**
+ * 响应面板里点了「为这个字段加断言」：在那张表里加一行、切到断言页签、闪一下。
+ * 改的是 `spec`，所以接口自动变成「有未保存的修改」，用户按「保存」落库。
+ */
+function onAddAssertion(payload) {
+  if (!projects.canEdit) return;
+
+  const row = assertionFromField(payload && payload.path, payload && payload.value);
+  spec.value.assertions = (spec.value.assertions || []).concat([row]);
+  activePane.value = 'assertions';
+  flashRow(row.id);
+  message.success('已加一条断言，记得保存');
+}
+
+/** 同上，加的是提取变量那一张表 */
+function onAddExtract(payload) {
+  if (!projects.canEdit) return;
+
+  const row = extractFromField(payload && payload.path);
+  spec.value.extracts = (spec.value.extracts || []).concat([row]);
+  activePane.value = 'assertions';
+  flashRow(row.id);
+  message.success('已加一条提取变量，记得保存');
 }
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
@@ -566,6 +614,17 @@ function changedFields(api, current) {
   // 状态与负责人（第四轮第 1 节）：和别的字段一样，**只提交改动过的**
   if ((current.status || null) !== (saved.status || null)) patch.status = current.status || null;
   if ((current.ownerId || null) !== (saved.ownerId || null)) patch.ownerId = current.ownerId || null;
+  // 响应字段说明（第六轮第 2 节）
+  if (JSON.stringify(current.responseFields || []) !== JSON.stringify(saved.responseFields || [])) {
+    patch.responseFields = current.responseFields || [];
+  }
+  // 断言与提取变量（第六轮第 1 节）：两张表都整份比、整份提交
+  if (JSON.stringify(current.assertions || []) !== JSON.stringify(saved.assertions || [])) {
+    patch.assertions = current.assertions || [];
+  }
+  if (JSON.stringify(current.extracts || []) !== JSON.stringify(saved.extracts || [])) {
+    patch.extracts = current.extracts || [];
+  }
 
   return patch;
 }
@@ -752,6 +811,8 @@ const paneStatus = computed(function () {
     hasScripts: (spec.scripts || []).some(function (item) {
       return item && String(item.exec || '').trim();
     }),
+    // 断言 / 提取变量（第六轮第 1 节）：两张表里有一条启用着的就点一个圆点
+    hasChecks: hasEnabled(spec.assertions) || hasEnabled(spec.extracts),
     auth: AUTH_LABELS[String(auth.type || 'inherit')] || '继承'
   };
 });
@@ -981,6 +1042,7 @@ onBeforeUnmount(function () {
   window.removeEventListener('mousemove', onSplitMove);
   window.removeEventListener('mouseup', stopSplitDrag);
   window.removeEventListener('resize', clampPanesHeight);
+  if (highlightTimer) clearTimeout(highlightTimer);
 });
 </script>
 
@@ -1261,6 +1323,27 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
+        <!--
+          断言与提取变量（第六轮第 1 节）：不用写脚本就能做的两件事，放在 Scripts 前面。
+          改的是 spec，所以按「保存」落库；没保存的改动发送时同样生效。
+        -->
+        <n-tab-pane name="assertions">
+          <template #tab>
+            <span class="pane-tab">
+              断言<span v-if="paneStatus.hasChecks" class="pane-dot" />
+            </span>
+          </template>
+          <assertions-pane
+            :assertions="spec.assertions || []"
+            :extracts="spec.extracts || []"
+            :disabled="!projects.canEdit"
+            :has-environment="hasEnvironment"
+            :highlight-id="highlightRowId"
+            @update:assertions="(v) => { spec.assertions = v; }"
+            @update:extracts="(v) => { spec.extracts = v; }"
+          />
+        </n-tab-pane>
+
         <n-tab-pane name="scripts">
           <template #tab>
             <span class="pane-tab">
@@ -1270,6 +1353,10 @@ onBeforeUnmount(function () {
           <div class="pane">
             <script-editor v-model="spec.scripts" :disabled="!projects.canEdit" />
           </div>
+        </n-tab-pane>
+
+        <n-tab-pane name="response-fields" tab="响应说明">
+          <response-fields-tab :tab="tab" />
         </n-tab-pane>
 
         <n-tab-pane name="settings" tab="设置">
@@ -1346,6 +1433,8 @@ onBeforeUnmount(function () {
         @save-example="openSaveExample"
         @save-sse-example="saveSseExample"
         @resend="onSend"
+        @add-assertion="onAddAssertion"
+        @add-extract="onAddExtract"
       />
     </div>
 
