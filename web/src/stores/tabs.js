@@ -748,6 +748,41 @@ export const useTabsStore = defineStore('tabs', function () {
     tab.dirty = false;
   }
 
+  /**
+   * 全局替换之后：把改到的那些接口的标签页重新拉一遍。
+   *
+   * **只动没有未保存修改的标签页** —— 有未保存修改的接口替换时已经跳过了
+   * （它们被放进 `skipApiIds`），这里再动就会把用户的改动抹掉。
+   * 标签页本身留在原处，只换掉内容（不重新打开，免得把位置和预览状态打乱）。
+   *
+   * @param {string[]} apiIds 这次替换到过的接口
+   */
+  async function reloadApis(apiIds) {
+    const wanted = new Set(apiIds || []);
+    if (!wanted.size) return;
+
+    const list = tabs.value.filter(function (tab) {
+      return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
+        (tab.kind === 'api' || tab.kind === 'ws');
+    });
+    if (!list.length) return;
+
+    await Promise.all(list.map(async function (tab) {
+      try {
+        const data = await apisApi.getApi(tab.apiId);
+        const next = data.api.method === 'WS' ? wsSpecFromApi(data.api) : specFromApi(data.api);
+        tab.api = data.api;
+        tab.title = data.api.name || tab.title;
+        tab.folderId = data.api.folderId || null;
+        tab.spec = next;
+        tab.savedSnapshot = snapshot(next);
+        tab.dirty = false;
+      } catch (err) {
+        // 拉不到就保持原样：下一个动作（刷新目录树、重开标签页）会纠正
+      }
+    }));
+  }
+
   function touchActive() {
     if (active.value) touch(active.value);
   }
@@ -909,6 +944,7 @@ export const useTabsStore = defineStore('tabs', function () {
     syncWithFolders: syncWithFolders,
     markSaved: markSaved,
     markFolderSaved: markFolderSaved,
+    reloadApis: reloadApis,
     applyRename: applyRename,
     touch: touch,
     touchActive: touchActive,

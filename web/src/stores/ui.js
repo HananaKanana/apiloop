@@ -19,6 +19,8 @@ export const useUiStore = defineStore('ui', function () {
   const importVisible = ref(false);
   const mockLogVisible = ref(false);
   const quickOpenVisible = ref(false);
+  /** 全局查找替换（第五轮第 2 节）：入口在项目名下拉和 ⌘⇧F，弹窗挂在工作台 */
+  const findReplaceVisible = ref(false);
 
   /** 帮助抽屉（用户 2026-10-02 要的帮助页）；helpSection 是打开时要跳到的那一节 */
   const helpVisible = ref(false);
@@ -76,6 +78,10 @@ export const useUiStore = defineStore('ui', function () {
     quickOpenVisible.value = true;
   }
 
+  function openFindReplace() {
+    findReplaceVisible.value = true;
+  }
+
   function setSidebarTab(tab) {
     if (SIDEBAR_TABS.indexOf(tab) === -1) return;
     sidebarTab.value = tab;
@@ -93,6 +99,7 @@ export const useUiStore = defineStore('ui', function () {
     importVisible: importVisible,
     mockLogVisible: mockLogVisible,
     quickOpenVisible: quickOpenVisible,
+    findReplaceVisible: findReplaceVisible,
     sidebarTab: sidebarTab,
     conflictTarget: conflictTarget,
     openConflict: openConflict,
@@ -103,6 +110,7 @@ export const useUiStore = defineStore('ui', function () {
     openImport: openImport,
     openMockLog: openMockLog,
     openQuickOpen: openQuickOpen,
+    openFindReplace: openFindReplace,
     setSidebarTab: setSidebarTab
   };
 });

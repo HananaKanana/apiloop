@@ -9,6 +9,7 @@ import UpdateAction from '@/components/layout/UpdateAction.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
 import EnvSwitcher from '@/components/layout/EnvSwitcher.vue';
 import QuickOpen from '@/components/layout/QuickOpen.vue';
+import FindReplaceDialog from '@/components/search/FindReplaceDialog.vue';
 import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
@@ -56,6 +57,15 @@ function toggleSidebar() {
 
 function onKeydown(event) {
   if (!(event.metaKey || event.ctrlKey)) return;
+
+  // ⌘⇧F / Ctrl+Shift+F：全局查找替换（和编辑器的「项目内查找」一个键位）。
+  // 放在 ⌘\ 前面判，免得以后有人改 \\ 那段时漏掉 shift 这一路。
+  if (event.shiftKey && String(event.key).toLowerCase() === 'f') {
+    event.preventDefault();
+    ui.openFindReplace();
+    return;
+  }
+
   if (event.key !== '\\') return;
   event.preventDefault();
   toggleSidebar();
@@ -491,6 +501,7 @@ onBeforeUnmount(function () {
     <help-drawer />
     <import-dialog />
     <quick-open />
+    <find-replace-dialog />
     <about-dialog v-model:show="showAbout" />
   </div>
 </template>
