@@ -23,6 +23,7 @@ import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
 import { useGatewayStore } from '@/stores/gateway';
+import MySharesDialog from '@/components/share/MySharesDialog.vue';
 
 const emit = defineEmits(['about']);
 
@@ -36,6 +37,9 @@ const dialog = useDialog();
 const showPassword = ref(false);
 const saving = ref(false);
 const form = ref({ oldPassword: '', newPassword: '', confirm: '' });
+
+/** 「我的分享」弹窗（第 6 节）：跨项目列出自己能看到的所有分享链接 */
+const showShares = ref(false);
 
 /**
  * 注册了、等审核的人数。管理员才问；头像上一个红点、菜单里写明有几个（用户 2026-10-02 加注册审核）。
@@ -116,6 +120,11 @@ const options = computed(function () {
     { label: '修改密码', key: 'password' },
     { label: '关于', key: 'about' }
   ];
+  // 「我的分享」紧跟在「关于」下面。分享的数据在云端，所以只在能用云端时给这个入口
+  // （网页版一直有，客户端里要登录）—— 和项目设置里的分享页签是同一个判断。
+  if (gateway.cloudFeaturesAvailable) {
+    items.push({ label: '我的分享', key: 'shares' });
+  }
   // 系统设置不放这里：顶栏已经有齿轮按钮直达，两处入口重复（2026-10-01 用户反馈）
   if (session.isAdmin) {
     items.push({
@@ -268,6 +277,10 @@ async function onSelect(key) {
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
   if (key === 'about') return emit('about');
+  if (key === 'shares') {
+    showShares.value = true;
+    return undefined;
+  }
   if (key === 'delete') return deleteLocal(false);
 
   if (key === 'logout') {
@@ -333,6 +346,8 @@ async function onSelect(key) {
       </n-space>
     </template>
   </n-modal>
+
+  <my-shares-dialog v-model:show="showShares" />
 </template>
 
 <style scoped>

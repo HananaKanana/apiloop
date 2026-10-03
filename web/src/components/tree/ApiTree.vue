@@ -1,6 +1,5 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
 import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
 import { FileImport, Filter, Fold, FoldDown, Plus } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -18,7 +17,6 @@ import ShareDialog from '@/components/share/ShareDialog.vue';
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
-const router = useRouter();
 const tree = useTreeStore();
 const gateway = useGatewayStore();
 const tabs = useTabsStore();
@@ -297,10 +295,6 @@ function openBlankMenu(event) {
   if (canShare.value) {
     options.push({ label: '分享整个项目的文档', key: 'blank-share' });
   }
-  // 已生成的分享链接在项目设置里看、撤销；viewer 也能看列表
-  if (gateway.cloudFeaturesAvailable) {
-    options.push({ label: '管理分享链接', key: 'blank-shares' });
-  }
 
   if (projects.canEdit) {
     options.push({ type: 'divider', key: 'blank-d' });
@@ -363,9 +357,6 @@ async function onMenuSelect(key) {
   }
   if (key === 'blank-run') return emit('run', null);
   if (key === 'blank-share') return openShare(null);
-  if (key === 'blank-shares') {
-    return router.push({ path: '/projects/' + projects.currentId + '/settings', query: { tab: 'shares' } });
-  }
   if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
 

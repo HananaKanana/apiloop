@@ -13,6 +13,16 @@ export function listShares(pid) {
 }
 
 /**
+ * **当前用户能看到的全部项目**的分享链接（第 6 节「我的分享」）。
+ * 每条多带 `projectId` / `projectName` / `canRevoke`，按创建时间倒序。
+ *
+ * 它不在任何项目下面，所以网关转发时也要单独放行（见 `lib/gateway/account.js`）。
+ */
+export function listMyShares() {
+  return get('/shares');
+}
+
+/**
  * 生成一条分享链接。
  *
  * @param {string} pid
