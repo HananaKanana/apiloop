@@ -4,8 +4,7 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 请求要带上登录返回的 cookie。路径都省略前缀 `/__admin/api`，统一返回
 `{ ok: true, ... }` 或 `{ ok: false, error: "..." }`。
 
-字段名、状态码与各种规则的完整定义见 [管理台接口 v2 契约](design/2026-09-30-admin-api-v2.md)（内部设计文档）。
-下面的表只列路径与一句话说明。
+下面的表只列路径与一句话说明，字段细节以代码为准（`lib/api/*.js` 每个文件开头有说明）。
 
 ## 登录与用户
 
@@ -67,17 +66,47 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 > 「当前选中哪个环境」由前端存在 localStorage，服务端不存。
 
+## 保密变量
+
+项目、目录、环境的变量行带 `secret: true` 时，值**只属于当前用户**：保存时值存进不同步的
+`secret_values` 表，共享数据（也就是同步出去、导出、别人读到的）里这一行的值是空串；读的时候
+把当前用户自己的值填回去。发送时用自己的值，写历史时这次用到的保密值（≥ 4 个字符）换成 `******`。
+脚本写回（`pm.environment.set`）一个保密变量时同样只写自己的值。没有新接口，语义加在现有的读写接口里。
+
+## 回收站
+
+删除目录、接口、环境时，被删掉的数据整包存进回收站，保留 30 天。回收站会同步，团队成员都能看到和恢复。
+删除项目、单独删除示例不进回收站。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/trash` | 列表（viewer），按删除时间倒序：`{ items: [{ id, kind, name, location, deletedBy, deletedAt, count }] }` |
+| `POST /trash/:id/restore` | 恢复（editor）。换新 id 插回原目录，原目录不在了就放根目录；返回 `{ restoredTo, folderId? / apiId? / environmentId? }` |
+| `DELETE /trash/:id` | 彻底删除一条（editor） |
+| `DELETE /projects/:pid/trash` | 清空（editor），返回 `{ removed }` |
+
 ## 发送、历史与文件（契约第 5 节）
 
 | 方法与路径 | 说明 |
 | --- | --- |
-| `POST /projects/:pid/send` | 代发请求（网页版由云端发，客户端里由本机网关发），返回执行结果并写一条历史；浏览器断开时取消在途请求。会执行「请求前 / 响应后」脚本。`apiId` 指向 `WS` 接口时返回 400 |
+| `POST /projects/:pid/send` | 代发请求（网页版由云端发，客户端里由本机网关发），返回执行结果并写一条历史（`options.skipHistory: true` 时不写，批量运行默认带上）；浏览器断开时取消在途请求。会执行「请求前 / 响应后」脚本。`apiId` 指向 `WS` 接口时返回 400 |
 | `POST /projects/:pid/send/stream` | 同上，但响应是 NDJSON 事件流，见「流式发送与 WebSocket」。「响应后」脚本在 `end` 之前跑完，结果在 `end.result.scripts` 里 |
 | `POST /projects/:pid/send/curl` | 把请求转成 cURL 命令（变量按选中的环境解析），返回 `{ curl, missing }`；不发请求 |
 | `GET /projects/:pid/history` | 历史列表，`?limit=50&before=<id>` 翻页，`limit` 最大 200 |
 | `GET /history/:id` | 历史详情（原始的请求定义 + 完整执行结果）。查看者不是发起人时，`result.scripts` 的 `console` 为空、变量 `set` 的值为 `***` |
 | `DELETE /projects/:pid/history` | 清空该项目的历史 |
 | `POST /projects/:pid/files` | 上传文件（`application/octet-stream` + `X-Filename`），返回服务端绝对路径 |
+
+## 接口文档分享（只在云端）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/shares` | 这个项目已生成的分享链接（viewer） |
+| `POST /projects/:pid/shares` | 生成链接（editor）。`{ folderId?, expiresInDays? }`，`expiresInDays` 只能是 `7`、`30`（默认）或 `null`（永久） |
+| `DELETE /shares/:id` | 撤销（editor） |
+| `GET /public/shares/:id` | **不用登录**。只读文档数据，服务端已脱敏：不含变量值、鉴权的值、脚本、Cookie；敏感请求头、地址里的敏感参数、请求体和示例里敏感字段的值都换成 `******`。过期、撤销、不存在一律 404 |
+
+页面地址是 `<云端地址>/#/share/<id>`。客户端里的管理接口由网关转给云端。
 
 ## 内置 Mock 环境
 
