@@ -16,6 +16,7 @@ import { ChevronDown, Package } from '@vicons/tabler';
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
+import { useUiStore } from '@/stores/ui';
 import { downloadJson } from '@/utils/download';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
 
@@ -23,6 +24,7 @@ const emit = defineEmits(['change']);
 
 const projects = useProjectStore();
 const tabs = useTabsStore();
+const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -79,6 +81,8 @@ const options = computed(function () {
   items.push({ key: '__export-openapi', label: '导出为 OpenAPI', name: '导出为 OpenAPI' });
   // 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口
   items.push({ key: '__envdiff', label: '环境对比', name: '环境对比' });
+  // 查找替换（第五轮第 2 节）：快捷键 ⌘⇧F / Ctrl+Shift+F
+  items.push({ key: '__find', label: '查找替换', name: '查找替换' });
   items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
@@ -133,6 +137,11 @@ function onSelect(key) {
   // 环境对比（第五轮第 3 节）：开一个「环境对比」标签页
   if (key === '__envdiff') {
     tabs.openEnvDiff();
+    return;
+  }
+  // 查找替换（第五轮第 2 节）：弹窗挂在工作台（和 ⌘⇧F 走同一个开关）
+  if (key === '__find') {
+    ui.openFindReplace();
     return;
   }
   if (key === projects.currentId) return;
