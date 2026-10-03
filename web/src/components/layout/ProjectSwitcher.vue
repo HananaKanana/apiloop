@@ -19,6 +19,7 @@ import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { downloadJson } from '@/utils/download';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
+import * as copyApi from '@/api/copy';
 
 const emit = defineEmits(['change']);
 
@@ -83,6 +84,8 @@ const options = computed(function () {
   items.push({ key: '__envdiff', label: '环境对比', name: '环境对比' });
   // 查找替换（第五轮第 2 节）：快捷键 ⌘⇧F / Ctrl+Shift+F
   items.push({ key: '__find', label: '查找替换', name: '查找替换' });
+  // 复制为新项目（第六轮第 3 节）：拿现成的项目当模板
+  items.push({ key: '__duplicate', label: '复制为新项目…', name: '复制为新项目…' });
   items.push({ key: '__create', label: '新建项目', name: '新建项目' });
   return items;
 });
@@ -90,6 +93,44 @@ const options = computed(function () {
 function openCreate() {
   form.value = { name: '', description: '' };
   showCreate.value = true;
+}
+
+/* ---------------- 复制为新项目（第六轮第 3 节） ---------------- */
+
+const showDuplicate = ref(false);
+const duplicateName = ref('');
+const duplicating = ref(false);
+
+/** 默认名字「原名 副本」（和「新建项目」一样只填名字，别的都从源项目带） */
+function openDuplicate() {
+  const current = projects.current;
+  if (!current) return;
+  duplicateName.value = current.name + ' 副本';
+  showDuplicate.value = true;
+}
+
+async function submitDuplicate() {
+  const name = duplicateName.value.trim();
+  if (!name) {
+    message.warning('请填写项目名称');
+    return;
+  }
+
+  duplicating.value = true;
+  try {
+    const data = await copyApi.duplicateProject(projects.currentId, { name: name });
+    await projects.load();
+    showDuplicate.value = false;
+    message.success('已复制为新项目「' + data.project.name + '」');
+    // 直接切过去：用户点这个菜单多半就是为了在新项目里接着改
+    tabs.closeAll();
+    projects.setCurrent(data.project.id);
+    emit('change', data.project.id);
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    duplicating.value = false;
+  }
 }
 
 async function exportCollection() {
@@ -144,6 +185,8 @@ function onSelect(key) {
     ui.openFindReplace();
     return;
   }
+  // 复制为新项目（第六轮第 3 节）
+  if (key === '__duplicate') return openDuplicate();
   if (key === projects.currentId) return;
 
   // 切项目会把标签页全清掉，有没保存的修改就先问一句
@@ -207,9 +250,43 @@ function onSelect(key) {
     :folder-id="null"
     :scope-name="projects.current ? projects.current.name : ''"
   />
+
+  <!-- 复制为新项目（第六轮第 3 节） -->
+  <n-modal
+    v-model:show="showDuplicate"
+    preset="card"
+    title="复制为新项目"
+    style="width: 460px; max-width: 92vw"
+  >
+    <n-form>
+      <n-form-item label="新项目名称">
+        <n-input v-model:value="duplicateName" placeholder="新项目名称" @keyup.enter="submitDuplicate" />
+      </n-form-item>
+    </n-form>
+    <p class="duplicate-tip">
+      会把「{{ projects.current ? projects.current.name : '' }}」的目录、接口、示例、Mock 期望、
+      环境、项目变量、公共请求头、鉴权和脚本都复制一份。成员、历史、评论和分享链接不复制
+      （新项目里只有你一个 owner）；保密变量只复制名字，值是空的。
+    </p>
+
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showDuplicate = false">取消</n-button>
+        <n-button type="primary" :loading="duplicating" @click="submitDuplicate">复制</n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>
 
 <style scoped>
+/* 「复制为新项目」弹窗里那段说明 */
+.duplicate-tip {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  opacity: 0.6;
+}
+
 /* 项目切换：图标 + 名字 + ▾（只读标签由顶栏紧跟在后面） */
 .switcher {
   display: flex;
