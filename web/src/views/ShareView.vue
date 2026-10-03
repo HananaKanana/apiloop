@@ -353,6 +353,26 @@ function statusType(status) {
             </div>
           </section>
 
+          <!-- 响应字段说明（第六轮第 2 节）：没写过说明的接口不显示这一块 -->
+          <section v-if="current.responseFields && current.responseFields.length" class="section">
+            <h3 class="section-title">响应字段</h3>
+            <table class="kv">
+              <thead>
+                <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(field, index) in current.responseFields" :key="'f' + index">
+                  <td class="key">{{ field.path }}</td>
+                  <td class="type">{{ field.type }}</td>
+                  <td class="desc">
+                    {{ field.desc }}
+                    <span v-if="field.required" class="required">必有</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
           <section class="section">
             <h3 class="section-title">Mock 地址</h3>
             <div class="url-row">
@@ -594,6 +614,23 @@ function statusType(status) {
 
 .kv .desc {
   opacity: 0.7;
+}
+
+/* 类型列：窄一点、等宽 */
+.kv .type {
+  width: 90px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.75;
+}
+
+/* 「必有」小标记：中性灰底，别和状态色打架 */
+.kv .required {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  opacity: 0.7;
+  background: rgba(128, 128, 128, 0.16);
 }
 
 .where {
