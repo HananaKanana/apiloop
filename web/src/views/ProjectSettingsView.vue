@@ -20,6 +20,7 @@ import VarTable from '@/components/common/VarTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MembersPanel from '@/components/members/MembersPanel.vue';
+import ShareLinksPanel from '@/components/share/ShareLinksPanel.vue';
 
 /**
  * 项目设置。按角色收口：
@@ -37,10 +38,10 @@ const message = useMessage();
 const dialog = useDialog();
 
 /**
- * 成员管理的数据在云端（成员不同步到本机），没登录就没有这个页签。
+ * 成员管理和分享链接的数据都在云端（不同步到本机），没登录就没有这两个页签。
  * 整块不渲染，不是禁用。
  */
-const showMembers = computed(function () {
+const showCloudTabs = computed(function () {
   return gateway.cloudFeaturesAvailable;
 });
 
@@ -231,8 +232,16 @@ watch(function () { return route.params.pid; }, load);
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane v-if="showMembers" name="members" tab="成员">
+        <n-tab-pane v-if="showCloudTabs" name="members" tab="成员">
           <members-panel v-if="projectId" :pid="projectId" @left="onLeft" />
+        </n-tab-pane>
+
+        <!--
+          分享链接：数据在云端（分享是云端对外发布的东西），和成员管理一样，
+          未登录时整块不渲染。
+        -->
+        <n-tab-pane v-if="showCloudTabs" name="shares" tab="分享链接">
+          <share-links-panel v-if="projectId" :pid="projectId" />
         </n-tab-pane>
       </n-tabs>
     </div>

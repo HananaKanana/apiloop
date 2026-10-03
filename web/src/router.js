@@ -8,6 +8,7 @@ import UsersView from '@/views/UsersView.vue';
 import ProjectSettingsView from '@/views/ProjectSettingsView.vue';
 import SettingsView from '@/views/SettingsView.vue';
 import ChangePasswordView from '@/views/ChangePasswordView.vue';
+import ShareView from '@/views/ShareView.vue';
 
 /**
  * 用 hash 路由，后端的静态文件服务就不用为前端路由做任何特殊处理。
@@ -16,6 +17,11 @@ const routes = [
   { path: '/', redirect: '/workbench' },
   { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
   { path: '/change-password', name: 'change-password', component: ChangePasswordView },
+  /**
+   * 分享出去的接口文档（第 4 节）：`<云端地址>/#/share/<链接串>`。
+   * `meta.public` 让路由守卫直接放行 —— 打开链接的人不用登录，也不该被弹到登录页。
+   */
+  { path: '/share/:token', name: 'share', component: ShareView, meta: { public: true } },
   { path: '/workbench', name: 'workbench', component: WorkbenchView },
   { path: '/users', name: 'users', component: UsersView, meta: { admin: true } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { admin: true } },
