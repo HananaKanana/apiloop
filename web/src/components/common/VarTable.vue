@@ -10,9 +10,10 @@ import { useDialog } from '@/utils/dialog';
  * 「值」后面那个眼睛就是保密开关：点成闭眼，这一行的值就遮成圆点（password 输入框）；
  * 再点一下改回明文。想临时看一眼保密值，也是点这个眼睛。
  *
- * **保密变量的值只属于填它的人**（第三轮第 3 节）：共享数据里、同步出去的都是空串，
- * 值存在服务端的 `secret_values` 里、按人生效（见 lib/secrets.js）。所以打开开关时
- * 提示一句、并在值那一格给个悬停说明。
+ * **保密变量的值只属于填它的人**（第三轮第 3 / 7 节）：共享数据里、同步给队友的都是空串，
+ * 值存在服务端的 `secret_values` 里、按人生效，并**在这个人自己登录的设备之间同步**
+ * （见 lib/secrets.js、lib/gateway/sync/secrets.js）。所以打开开关时提示一句、
+ * 并在值那一格给个悬停说明。
  *
  * 最后永远留一行空行，在空行里一输入就自动变成真行并再补一行空的。
  */
@@ -158,13 +159,13 @@ function removeRow(index) {
 
 const dialog = useDialog();
 
-const SECRET_HINT = '只保存在你自己这里，不会同步给别人';
+const SECRET_HINT = '只有你自己能看到，会在你登录的设备之间同步，不会同步给其他成员';
 
 /**
  * 点眼睛：
- *   - 已经是保密 → 直接改回明文（值会跟着回到共享数据里）；
+ *   - 已经是保密 → 直接改回明文（值会跟着回到共享数据里，别的设备也会跟着取消保密）；
  *   - 要设成保密、而且这一行**已经有值** → 先提示一句再改：那个值会从共享数据里
- *     拿掉、存成自己的，同事那边看到的就是空。
+ *     拿掉、存成你自己的，同事那边看到的就是空。
  * 没有值的行没什么可搬的，直接开，不打扰。
  */
 function toggleSecret(item) {
@@ -181,7 +182,7 @@ function toggleSecret(item) {
 
   dialog.create({
     title: '设为保密变量',
-    content: '设为保密后，这个值只保存在你这里，其他成员需要各自填写。',
+    content: '设为保密后，这个值只有你自己能看到，会在你登录的设备之间同步，不会同步给其他成员。',
     positiveText: '设为保密',
     negativeText: '取消',
     onPositiveClick: function () { updateRow(item.index, { secret: true }); }
@@ -238,7 +239,7 @@ function toggleSecret(item) {
           :type="item.row.secret ? 'password' : 'text'"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
-          :placeholder="item.row.secret ? '只保存在你自己这里' : '值'"
+          :placeholder="item.row.secret ? '只有你自己能看到' : '值'"
           :title="item.row.secret ? SECRET_HINT : ''"
           @update:value="(v) => { updateRow(item.index, { value: v }); }"
         />
@@ -254,7 +255,7 @@ function toggleSecret(item) {
           class="icon-button"
           :class="{ on: item.row.secret }"
           :disabled="disabled"
-          :title="item.row.secret ? SECRET_HINT + '，点一下改回明文' : '点一下设为保密（值只保存在你自己这里）'"
+          :title="item.row.secret ? SECRET_HINT + '，点一下改回明文' : '点一下设为保密（只有你自己能看到，会在你的设备之间同步）'"
           @click="toggleSecret(item)"
         >
           <n-icon size="15" :component="item.row.secret ? EyeOff : Eye" />
