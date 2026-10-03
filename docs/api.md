@@ -168,6 +168,26 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `POST /folders/:id/copy` | 同上，连同整棵子树 |
 | `POST /projects/:pid/duplicate` | `{ name }`，复制整个项目为新项目（成员、历史、分享、评论、保密值不复制） |
 
+## Mock 故障模拟
+
+项目 DTO 顶层多 `mockFaults`：`{ enabled, scope: { type: 'all' | 'folders' | 'apis', ids }, rules: [{ id, enabled, type, percent, ... }] }`，
+`type` 是 `error` / `delay` / `timeout` / `disconnect` / `ratelimit`。存在项目的 `extra` 里，`PUT /projects/:pid` 保存。
+只对普通 HTTP 的 Mock 生效；请求头 `X-Apiloop-Fault: off` 绕过；Mock 日志的记录里多 `fault` 字段。
+
+## 个人偏好（分组、收藏、最近打开）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /me/prefs` | `{ prefs: { projectGroups, favorites, recent } }`。客户端里读写本机库，后台同步到云端 |
+| `PUT /me/prefs/:key` | `{ value }`，key 只能是 `projectGroups` / `favorites` / `recent` |
+| `GET /prefs?since=` / `POST /prefs` | 只在云端，客户端同步用，形状同 `/secrets` |
+
+## GraphQL Schema
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/graphql/schema` | 请求体同 `/send`；服务端把 body 换成 introspection 查询发出去（不跑脚本、不写历史、不写 Cookie），返回 `{ schema }`（viewer） |
+
 ## 内置 Mock 环境
 
 项目 DTO 带 `mockVariables`：内置「Mock」环境改过的变量表，没改过是 `null`（默认只有 `host`）。
