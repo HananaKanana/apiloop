@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
+  NBadge,
   NButton,
   NCheckbox,
   NDropdown,
@@ -16,7 +17,7 @@ import {
   NTabs,
   useMessage
 } from 'naive-ui';
-import { ChevronDown, Code, DeviceFloppy } from '@vicons/tabler';
+import { ChevronDown, Code, DeviceFloppy, Message } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useTabsStore, specFromApi, emptyOptions } from '@/stores/tabs';
@@ -47,6 +48,8 @@ import { useGatewayStore } from '@/stores/gateway';
 import { copyText } from '@/utils/clipboard';
 import { API_STATUSES, statusMeta } from '@/utils/apiStatus';
 import { loadMembers } from '@/utils/projectMembers';
+import * as commentsApi from '@/api/comments';
+import CommentsDrawer from '@/components/comments/CommentsDrawer.vue';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -194,6 +197,71 @@ function onOwnerChange(value) {
 
 // 换项目要重新拉成员（同一个项目里由 utils/projectMembers.js 缓存，不重复请求）
 watch(function () { return projects.currentId; }, loadProjectMembers);
+
+/* ---------------- 评论（第五轮第 4 节） ---------------- */
+
+const showComments = ref(false);
+/** 这个接口有几条评论（角标） */
+const commentCount = ref(0);
+/** 从提醒点进来时要滚到的那一条（手动点「评论」按钮时清掉） */
+const focusCommentId = ref('');
+
+/**
+ * `项目 id → { apiId: n }`。评论数用项目的 counts 接口**一个项目拉一次**，
+ * 标签页切来切去（组件是按 activeKey 卸载重建的）不重复请求。
+ * 发 / 删评论时由评论面板报回新的数，这里同步更新。
+ */
+const projectCommentCounts = new Map();
+
+async function loadCommentCount() {
+  const pid = projects.currentId;
+  if (!props.tab.apiId || !pid || !gateway.cloudFeaturesAvailable) return;
+
+  try {
+    if (!projectCommentCounts.has(pid)) {
+      const data = await commentsApi.commentCounts(pid);
+      projectCommentCounts.set(pid, data.counts || {});
+    }
+    commentCount.value = projectCommentCounts.get(pid)[props.tab.apiId] || 0;
+  } catch (err) {
+    // 拉不到就不显示角标（没登录、云端连不上都走这里）
+    commentCount.value = 0;
+  }
+}
+
+/** 评论面板报回来的条数：同步到角标和缓存 */
+function onCommentCount(value) {
+  commentCount.value = Number(value) || 0;
+  const pid = projects.currentId;
+  if (!pid) return;
+  const counts = projectCommentCounts.get(pid) || {};
+  counts[props.tab.apiId] = commentCount.value;
+  projectCommentCounts.set(pid, counts);
+}
+
+onMounted(loadCommentCount);
+watch(function () { return props.tab.apiId; }, loadCommentCount);
+
+/**
+ * 从铃铛点一条提醒进来：`ui.commentsTarget` 是 `{ apiId, commentId }`。
+ * 匹配到当前标签页就打开面板并滚到那一条，然后把它清掉（免得切回来又弹一次）。
+ */
+watch(
+  function () { return ui.commentsTarget; },
+  function (target) {
+    if (!target || target.apiId !== props.tab.apiId) return;
+    focusCommentId.value = target.commentId || '';
+    showComments.value = true;
+    nextTick(function () { ui.clearCommentsTarget(); });
+  },
+  { immediate: true }
+);
+
+/** 点「评论」按钮：手动打开时不要带着上一次的「滚到哪一条」 */
+function openComments() {
+  focusCommentId.value = '';
+  showComments.value = true;
+}
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
 
@@ -956,6 +1024,25 @@ onBeforeUnmount(function () {
           </template>
           代码
         </n-button>
+
+        <!--
+          评论（第五轮第 4 节）：评论只在云端，没登录（本机空间）时整个不显示。
+          还没保存过的新请求（没有 apiId）也没法评论。
+        -->
+        <n-badge
+          v-if="tab.apiId && gateway.cloudFeaturesAvailable"
+          :value="commentCount"
+          :max="99"
+          :show="commentCount > 0"
+          :offset="[-2, 2]"
+        >
+          <n-button size="small" quaternary title="评论" @click="openComments">
+            <template #icon>
+              <n-icon :component="Message" />
+            </template>
+            评论
+          </n-button>
+        </n-badge>
         <template v-if="projects.canEdit">
         <n-button
           size="small"
@@ -1238,6 +1325,17 @@ onBeforeUnmount(function () {
         </n-space>
       </template>
     </n-modal>
+
+    <!-- 评论面板（第五轮第 4 节）：右侧抽屉，不挡住请求编辑 -->
+    <comments-drawer
+      v-if="tab.apiId"
+      v-model:show="showComments"
+      :api-id="tab.apiId"
+      :api-name="tab.title"
+      :project-id="projects.currentId"
+      :focus-comment-id="focusCommentId"
+      @count="onCommentCount"
+    />
   </div>
 </template>
 

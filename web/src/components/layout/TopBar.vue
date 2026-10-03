@@ -11,6 +11,7 @@ import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
 import * as mockLogApi from '@/api/mockLog';
 import ConnectionStatus from './ConnectionStatus.vue';
+import NotificationBell from './NotificationBell.vue';
 import UserMenu from './UserMenu.vue';
 
 /**
@@ -172,6 +173,9 @@ onBeforeUnmount(function () {
       </n-tooltip>
 
       <connection-status />
+
+      <!-- @ 提醒的铃铛（第五轮第 4 节）：提醒只在云端，没登录时它自己不渲染 -->
+      <notification-bell />
 
       <user-menu @about="emit('about')" />
     </div>
