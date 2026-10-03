@@ -25,6 +25,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue';
 import ShareDialog from '@/components/share/ShareDialog.vue';
 import SyncDialog from '@/components/openapi/SyncDialog.vue';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
+import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
@@ -139,6 +140,74 @@ function openSync(folderId) {
   syncFolderName.value =
     (folder && folder.name) || (projects.current && projects.current.name) || '项目';
   showSync.value = true;
+}
+
+/* ---------------- 跨项目复制 / 移动（第六轮第 3 节） ---------------- */
+
+const showCopy = ref(false);
+const copyTarget = ref({ kind: 'api', id: '', name: '', move: false });
+
+function openCopy(node, move) {
+  copyTarget.value = { kind: node.kind, id: node.id, name: node.name || '', move: move };
+  showCopy.value = true;
+}
+
+/**
+ * 复制 / 移动完了：一句提示 + 一个「去看看」。
+ *
+ * 「去看看」会**切到目标项目**（有没保存的标签页先问一句），然后打开复制过去的第一个
+ * 接口 / 目录 —— 用户刚做完这件事，下一步十有八九就是去那边看一眼。
+ */
+function onCopied(result) {
+  const where = '「' + result.projectName + '」' + (result.folderName ? ' / ' + result.folderName : '');
+
+  message.success(
+    h('span', { class: 'copy-done' }, [
+      (result.move ? '已移动 ' : '已复制 ') + result.apiCount + ' 个接口到' + where,
+      h(NButton, {
+        size: 'tiny',
+        quaternary: true,
+        style: 'margin-left: 10px',
+        onClick: function () { goToCopied(result); }
+      }, { default: function () { return '去看看'; } })
+    ]),
+    { duration: 8000 }
+  );
+
+  // 移动会把当前项目里的东西挪走，目录树要跟着刷新
+  tree.refresh().catch(function () {});
+}
+
+function confirmSwitchProject() {
+  return new Promise(function (resolve) {
+    dialog.warning({
+      title: '切换项目',
+      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
+      positiveText: '切换',
+      negativeText: '取消',
+      onPositiveClick: function () { resolve(true); },
+      onNegativeClick: function () { resolve(false); },
+      onClose: function () { resolve(false); },
+      onMaskClick: function () { resolve(false); }
+    });
+  });
+}
+
+async function goToCopied(result) {
+  if (tabs.hasDirty && !(await confirmSwitchProject())) return;
+
+  tabs.closeAll();
+  projects.setCurrent(result.projectId);
+
+  if (result.apiIds && result.apiIds.length) {
+    try {
+      await tabs.openApi(result.apiIds[0]);
+    } catch (err) {
+      message.error(err.message);
+    }
+    return;
+  }
+  if (result.folderIds && result.folderIds.length) tabs.openFolder(result.folderIds[0]);
 }
 
 /* ---------------- 状态与负责人（第四轮第 1 节） ---------------- */
@@ -444,6 +513,10 @@ function folderMenuOptions() {
     { label: '新建子目录', key: 'new-folder' },
     { label: '新建接口', key: 'new-api' },
     { type: 'divider', key: 'd2' },
+    // 跨项目复制 / 移动（第六轮第 3 节）
+    { label: '复制到其他项目…', key: 'copy-to' },
+    { label: '移动到其他项目…', key: 'move-to' },
+    { type: 'divider', key: 'd3' },
     { label: '重命名', key: 'rename' },
     { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
   ]);
@@ -454,6 +527,10 @@ function apiMenuOptions() {
     { label: '复制', key: 'duplicate' },
     { label: '重命名', key: 'rename' },
     { type: 'divider', key: 'd2' },
+    // 跨项目复制 / 移动（第六轮第 3 节）
+    { label: '复制到其他项目…', key: 'copy-to' },
+    { label: '移动到其他项目…', key: 'move-to' },
+    { type: 'divider', key: 'd3' },
     { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
   ];
 }
@@ -483,6 +560,8 @@ async function onMenuSelect(key) {
     if (key === 'export-openapi') return openOpenapiExport(node.id);
     if (key === 'sync-openapi') return openSync(node.id);
     if (key === 'share') return openShare(node.id);
+    if (key === 'copy-to') return openCopy(node, false);
+    if (key === 'move-to') return openCopy(node, true);
     if (key === 'new-folder') return await createFolder(node.id);
     if (key === 'new-api') return emit('new-api', node.id);
     if (key === 'rename') return await rename(node);
@@ -839,6 +918,16 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       :pid="projects.currentId"
       :folder-id="exportFolderId"
       :scope-name="exportScopeName"
+    />
+
+    <!-- 复制 / 移动到其他项目（第六轮第 3 节） -->
+    <copy-node-dialog
+      v-model:show="showCopy"
+      :kind="copyTarget.kind"
+      :node-id="copyTarget.id"
+      :node-name="copyTarget.name"
+      :move="copyTarget.move"
+      @done="onCopied"
     />
   </div>
 </template>
