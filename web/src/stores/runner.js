@@ -152,8 +152,15 @@ export const useRunnerStore = defineStore('runner', function () {
             break;
           }
 
-          const row = runnerRow(round, list[index]);
-          runner.results.push(row);
+          runner.results.push(runnerRow(round, list[index]));
+
+          /**
+           * **必须拿数组里那一份（响应式代理）来填结果**，不能拿着 push 进去的原始对象改。
+           * `push` 存进去的是普通对象，`results[i]` 读出来才是被 `reactive()` 包过的代理；
+           * 直接改原始对象绕过了代理的 setter，**不会触发更新** —— 界面上的「…」
+           * 只能靠别的字段（done / push 本身）顺带刷出来，很容易变成一直停在「…」。
+           */
+          const row = runner.results[runner.results.length - 1];
 
           await runOne(pid, environmentId, list[index], row, runner, specCache);
           runner.done += 1;
