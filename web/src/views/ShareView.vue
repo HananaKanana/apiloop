@@ -10,6 +10,7 @@ import { methodColor } from '@/utils/method';
 import { authTypeName } from '@/utils/auth';
 import { formatJson } from '@/utils/jsonFormat';
 import { copyText } from '@/utils/clipboard';
+import { statusMeta } from '@/utils/apiStatus';
 import { mockUrlFor } from '@/utils/share';
 
 /**
@@ -45,6 +46,11 @@ const current = computed(function () {
 
 const selectedKeys = computed(function () {
   return selectedId.value ? ['a:' + selectedId.value] : [];
+});
+
+/** 状态标签（第四轮第 1 节）：认不出来的状态不显示，别在文档里留个空标签 */
+const currentStatus = computed(function () {
+  return current.value ? statusMeta(current.value.status) : null;
 });
 
 const mockUrl = computed(function () {
@@ -242,6 +248,16 @@ function statusType(status) {
               {{ String(current.method || 'GET').toUpperCase() }}
             </span>
             <span class="doc-title">{{ current.name || '(未命名接口)' }}</span>
+            <!-- 状态与负责人（第四轮第 1 节）：负责人只给名字，服务端查好的 -->
+            <span
+              v-if="currentStatus"
+              class="doc-status"
+              :style="{ color: currentStatus.color, borderColor: currentStatus.color }"
+            >
+              <span class="doc-status-dot" :style="{ background: currentStatus.color }" />
+              {{ currentStatus.label }}
+            </span>
+            <span v-if="current.ownerName" class="doc-owner">负责人：{{ current.ownerName }}</span>
             <span class="spacer" />
             <n-button size="tiny" secondary @click="copy(curlText, '已复制 cURL')">
               复制为 cURL
@@ -460,6 +476,31 @@ function statusType(status) {
 .doc-title {
   font-size: 16px;
   font-weight: 600;
+}
+
+/* 状态标签：描边 + 同色的点和字，颜色跟着状态走（未设置就不显示这个标签） */
+.doc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.doc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.doc-owner {
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
 }
 
 /* 方法缩写：只有文字颜色，和目录树、标签页上的那套一致 */

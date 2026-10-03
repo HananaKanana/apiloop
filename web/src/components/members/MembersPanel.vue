@@ -12,6 +12,7 @@ import {
 import { useDialog } from '@/utils/dialog';
 import { isLoginRequired } from '@/api/client';
 import * as membersApi from '@/api/members';
+import { setMembers } from '@/utils/projectMembers';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
 
@@ -69,6 +70,8 @@ async function load() {
   try {
     const data = await membersApi.listMembers(props.pid);
     members.value = data.members || [];
+    // 顺手塞进共用缓存：「负责人」下拉读的就是它（utils/projectMembers.js）
+    setMembers(props.pid, members.value);
   } catch (err) {
     showError(err);
   } finally {
@@ -115,6 +118,7 @@ async function addMember() {
   try {
     const data = await membersApi.setMemberRole(props.pid, newUserId.value, newRole.value);
     members.value = data.members || [];
+    setMembers(props.pid, members.value);
     newUserId.value = null;
     userOptions.value = [];
     message.success('已添加');
@@ -129,6 +133,7 @@ async function changeRole(member, role) {
   try {
     const data = await membersApi.setMemberRole(props.pid, member.userId, role);
     members.value = data.members || [];
+    setMembers(props.pid, members.value);
     message.success('已修改角色');
 
     // 改的是自己的话，myRole 已经变了 —— 重新拉一遍项目列表，
