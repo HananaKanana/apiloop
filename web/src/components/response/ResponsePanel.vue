@@ -31,7 +31,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['save-example', 'save-sse-example', 'resend']);
+const emit = defineEmits(['save-example', 'save-sse-example', 'resend', 'add-assertion', 'add-extract']);
 
 const ERROR_TEXT = {
   TIMEOUT: '请求超时，对方在限定时间内没有返回。',
@@ -466,6 +466,9 @@ function requestBodyText() {
                 :response="response"
                 :request-url="finalUrl"
                 :request-method="requestMethod"
+                :readonly="readonly"
+                @add-assertion="(payload) => emit('add-assertion', payload)"
+                @add-extract="(payload) => emit('add-extract', payload)"
               />
             </n-tab-pane>
 
@@ -495,6 +498,8 @@ function requestBodyText() {
                     {{ item.passed ? '通过' : '失败' }}
                   </span>
                   <span class="test-name">{{ item.name }}</span>
+                  <!-- 可视化断言（第六轮第 1 节）的结果和脚本的测试结果混在一起，标一下来源 -->
+                  <span v-if="item.source" class="test-source">{{ item.source }}</span>
                   <span v-if="!item.passed && item.error" class="test-error">{{ item.error }}</span>
                 </div>
               </div>
@@ -881,6 +886,16 @@ function requestBodyText() {
 .test-name {
   flex: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 「断言」这类来源标记：测试脚本的结果没有 source，只有可视化断言才有 */
+.test-source {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0.6;
+  background: rgba(128, 128, 128, 0.16);
 }
 
 .test-error {

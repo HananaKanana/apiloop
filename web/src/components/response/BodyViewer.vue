@@ -1,8 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
-import { Braces, ChevronDown, Copy, Download, Eye, Search, TextWrap } from '@vicons/tabler';
+import { Braces, ChevronDown, Copy, Download, Eye, ListDetails, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
+import JsonTreeView from '@/components/response/JsonTreeView.vue';
+import { buildJsonRows } from '@/utils/jsonTree';
 import { copyText } from '@/utils/clipboard';
 
 /**
@@ -26,8 +28,15 @@ const props = defineProps({
    */
   requestUrl: { type: String, default: '' },
   /** 这次请求的方法。GET 才允许「在浏览器中打开」 */
-  requestMethod: { type: String, default: '' }
+  requestMethod: { type: String, default: '' },
+  /**
+   * 只读角色（viewer）：不给「为这个字段加断言 / 提取为变量」这两个入口 ——
+   * 它们会改接口、让接口变成「有未保存的修改」。
+   */
+  readonly: { type: Boolean, default: false }
 });
+
+const emit = defineEmits(['add-assertion', 'add-extract']);
 
 const FORMAT_LIMIT = 1024 * 1024;
 const WRAP_KEY = 'apiloop.responseWrap';
@@ -261,7 +270,10 @@ const previewHtml = computed(function () {
 });
 
 const availableViews = computed(function () {
-  if (isText.value) return ['code', 'preview'];
+  if (isText.value) {
+    // 是 JSON 就多一个「字段」视图（第六轮第 1 节）：一行一个字段，可以直接加断言 / 提取
+    return fieldTree.value.ok ? ['code', 'fields', 'preview'] : ['code', 'preview'];
+  }
   if (isImage.value) return ['preview'];
   return [];
 });
@@ -282,7 +294,22 @@ watch(
 );
 
 /**
- * 下载文件名按 content-type 取扩展名。
+ * 「字段」视图的数据（第六轮第 1 节）：把 JSON 摊平成一行一个字段。
+ *
+ * 三个前置条件不满足就不给这个视图 —— 进了那个视图只会看到一句「为什么没有」，
+ * 不如直接把入口藏掉：
+ *  - 不是 JSON：没有字段这个概念；
+ *  - 超过 1 MB：和「美化」同一个理由（`FORMAT_LIMIT`），解析一遍要几百毫秒；
+ *  - 解析不过：`detected` 只在 parse 成功时才认成 json，用户手动选 JSON 时可能不过。
+ */
+const fieldTree = computed(function () {
+  if (!isText.value) return { ok: false, reason: '这段响应不是文本' };
+  if (language.value !== 'json') return { ok: false, reason: '这段响应不是 JSON，没有字段列表' };
+  if (tooBigToFormat.value) return { ok: false, reason: '响应超过 1 MB，为了不卡住界面不列字段' };
+  return buildJsonRows(body.value);
+});
+
+/** 下载文件名按 content-type 取扩展名。
  * 以前只要是图片就一律写 response.png，jpeg / gif / webp / svg 都会存成错的扩展名，
  * 双击打不开或者被系统当成 png。
  */
@@ -370,6 +397,17 @@ function formatSize(bytes) {
           <n-icon size="14" :component="Eye" />
           <span>预览</span>
         </button>
+        <!-- 字段列表（第六轮第 1 节）：只有 JSON 才有，右边每个字段可以直接加断言 / 提取 -->
+        <button
+          v-if="fieldTree.ok"
+          class="tool"
+          :class="{ active: view === 'fields' }"
+          title="按字段列出响应，可以给某个字段加断言、提取成变量"
+          @click="view = view === 'fields' ? 'code' : 'fields'"
+        >
+          <n-icon size="14" :component="ListDetails" />
+          <span>字段</span>
+        </button>
       </template>
       <span v-else-if="isImage" class="tool active static">
         <n-icon size="14" :component="Eye" />
@@ -434,6 +472,15 @@ function formatSize(bytes) {
           :wrap="wrap"
           readonly
           min-height="120px"
+        />
+      </template>
+
+      <template v-else-if="isText && view === 'fields'">
+        <json-tree-view
+          :tree="fieldTree"
+          :readonly="readonly"
+          @add-assertion="(payload) => emit('add-assertion', payload)"
+          @add-extract="(payload) => emit('add-extract', payload)"
         />
       </template>
 
