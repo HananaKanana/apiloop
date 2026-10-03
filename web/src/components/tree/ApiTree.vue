@@ -734,6 +734,12 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   line-height: 1.7;
 }
 
+/* 回收站提示：比正文淡一点，紧跟在说明后面 */
+.delete-desc.recycle {
+  margin-top: -6px;
+  opacity: 0.6;
+}
+
 :deep(.tree-label) {
   display: inline-flex;
   align-items: center;

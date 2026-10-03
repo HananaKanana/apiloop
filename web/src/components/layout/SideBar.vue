@@ -1,20 +1,27 @@
 <script setup>
+import { computed, ref, watch } from 'vue';
 import { NIcon, NTooltip } from 'naive-ui';
 import {
   Folder,
   History,
   LayoutSidebarLeftCollapse,
   LayoutSidebarLeftExpand,
+  Trash,
   Variable
 } from '@vicons/tabler';
 import { useUiStore } from '@/stores/ui';
+import { useProjectStore } from '@/stores/project';
+import { useTreeStore } from '@/stores/tree';
+import { useEnvStore } from '@/stores/env';
+import { useTrashStore } from '@/stores/trash';
 import ApiTree from '@/components/tree/ApiTree.vue';
 import EnvList from '@/components/env/EnvList.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
+import TrashDialog from '@/components/trash/TrashDialog.vue';
 
 /**
  * 左侧栏：最上面一排图标页签（目录 / 环境 / 历史），下面是对应的内容，
- * 最底下是展开 / 收起的开关。
+ * 再下面是回收站入口，最底下是展开 / 收起的开关。
  *
  * 收起之后不是整块消失，而是缩成一条 40px 的图标栏（和 Postman 一样）：
  * 图标竖排，点任意一个会展开侧栏并切到那一页；开关留在最底下，
@@ -25,6 +32,10 @@ const props = defineProps({
 });
 
 const ui = useUiStore();
+const projects = useProjectStore();
+const tree = useTreeStore();
+const envs = useEnvStore();
+const trash = useTrashStore();
 
 const TABS = [
   { key: 'tree', label: '目录', icon: Folder },
@@ -39,6 +50,28 @@ function onTabClick(key) {
   // 收起状态下点图标：顺手把侧栏展开，不然点了看不到东西
   if (props.collapsed) emit('toggle');
 }
+
+/* ---------------- 回收站 ---------------- */
+
+const showTrash = ref(false);
+
+function openTrash() {
+  showTrash.value = true;
+  trash.refresh().catch(function () {});
+}
+
+// 切项目时换一份回收站（条数跟着变）
+watch(
+  function () { return projects.currentId; },
+  function (pid) { trash.load(pid).catch(function () {}); },
+  { immediate: true }
+);
+
+// 目录树 / 环境变了（删了东西、恢复了东西）就重算条数
+watch(
+  function () { return [tree.folders, tree.apis, envs.environments]; },
+  function () { trash.refresh().catch(function () {}); }
+);
 </script>
 
 <template>
@@ -77,6 +110,18 @@ function onTabClick(key) {
       <history-panel v-if="ui.sidebarTab === 'history'" />
     </div>
 
+    <!-- 回收站：和云端 / 本机哪个空间无关，始终在侧栏底部 -->
+    <button
+      class="trash-entry"
+      :class="{ collapsed: collapsed }"
+      title="回收站"
+      @click="openTrash"
+    >
+      <n-icon size="15" :component="Trash" />
+      <span v-show="!collapsed" class="label">回收站</span>
+      <span v-if="trash.count" class="badge">{{ trash.count }}</span>
+    </button>
+
     <!-- 展开 / 收起：两种状态都在最底下，位置一样 -->
     <button
       class="toggle"
@@ -85,6 +130,8 @@ function onTabClick(key) {
     >
       <n-icon size="16" :component="collapsed ? LayoutSidebarLeftExpand : LayoutSidebarLeftCollapse" />
     </button>
+
+    <trash-dialog v-model:show="showTrash" />
   </div>
 </template>
 
@@ -166,5 +213,65 @@ function onTabClick(key) {
 
 .toggle:hover {
   opacity: 1;
+}
+
+/* 回收站入口：图标 + 文字，有东西时右边显示条数 */
+.trash-entry {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.trash-entry.collapsed {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+
+.trash-entry:hover {
+  background: rgba(128, 128, 128, 0.1);
+  opacity: 1;
+}
+
+.trash-entry .label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.trash-entry .badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(128, 128, 128, 0.28);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.trash-entry.collapsed .badge {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 14px;
+  background: #d03050;
+  color: #fff;
 }
 </style>
