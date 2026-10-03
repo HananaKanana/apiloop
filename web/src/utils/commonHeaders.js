@@ -76,6 +76,8 @@ export function resolveHeaders(own, layers) {
       const key = lowerKey(row);
       if (!byKey.has(key)) order.push(key);
       // 后面的层覆盖前面的
+      // 停用的行不参与覆盖：外层启用了、内层停着一行同名的，照样用外层的（和服务端 lib/common-headers.js 一致）
+      if (row.enabled === false && byKey.has(key) && byKey.get(key).row.enabled !== false) return;
       byKey.set(key, { row: row, from: layer.label });
     });
   });
