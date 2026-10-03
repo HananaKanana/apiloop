@@ -10,9 +10,20 @@ import { useUiStore } from '@/stores/ui';
 import { collectFolderKeys, filterTree, findNode, walkTree } from '@/utils/tree';
 import { usePrompt } from '@/utils/prompt';
 import { useDialog } from '@/utils/dialog';
+import { useSessionStore } from '@/stores/session';
+import {
+  FILTER_ALL,
+  STATUS_FILTER_OPTIONS,
+  filterCondition,
+  isDeprecated,
+  statusMeta,
+  statusTooltip
+} from '@/utils/apiStatus';
+import { loadMembers } from '@/utils/projectMembers';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 import ShareDialog from '@/components/share/ShareDialog.vue';
+import SyncDialog from '@/components/openapi/SyncDialog.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
@@ -21,6 +32,7 @@ const tree = useTreeStore();
 const gateway = useGatewayStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
+const session = useSessionStore();
 const message = useMessage();
 const prompt = usePrompt();
 const dialog = useDialog();
@@ -95,15 +107,79 @@ function openShare(folderId) {
   showShare.value = true;
 }
 
-const displayTree = computed(function () {
-  return filterTree(tree.nodes, searchText.value);
+/* ---------------- 从 OpenAPI 同步更新（第四轮第 3 节） ---------------- */
+
+const showSync = ref(false);
+const syncFolderId = ref(null);
+const syncFolderName = ref('');
+
+function openSync(folderId) {
+  syncFolderId.value = folderId || null;
+  const folder = folderId ? tree.folderById.get(folderId) : null;
+  syncFolderName.value =
+    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+  showSync.value = true;
+}
+
+/* ---------------- 状态与负责人（第四轮第 1 节） ---------------- */
+
+/**
+ * 状态存在 `apis.extra.status` 里（`GET /projects/:pid/tree` 的接口节点上就带着），
+ * 负责人的名字要自己查成员列表 —— 树里只有 ownerId。
+ *
+ * 成员列表和「负责人」下拉共用一份缓存（`utils/projectMembers.js`），
+ * 不会因为多开几个接口标签页就重复请求。
+ */
+const members = ref([]);
+const statusFilter = ref(FILTER_ALL);
+
+const memberNames = computed(function () {
+  const map = new Map();
+  members.value.forEach(function (member) {
+    map.set(member.userId, member.displayName || member.username || '');
+  });
+  return map;
 });
 
-// 搜索时自动展开命中节点所在的目录
-watch(searchText, function (value) {
-  if (!value.trim()) return;
+const myUserId = computed(function () {
+  return (session.user && session.user.id) || '';
+});
+
+const statusFilterLabel = computed(function () {
+  const found = STATUS_FILTER_OPTIONS.filter(function (item) { return item.value === statusFilter.value; })[0];
+  return found ? found.label : '全部';
+});
+
+async function loadProjectMembers() {
+  const pid = projects.currentId;
+  if (!pid) {
+    members.value = [];
+    return;
+  }
+  try {
+    members.value = await loadMembers(pid);
+  } catch (err) {
+    // 没登录（本机空间）时是 409：树照常画，只是悬停提示里没有负责人
+    members.value = [];
+  }
+}
+
+watch(function () { return projects.currentId; }, loadProjectMembers, { immediate: true });
+
+const displayTree = computed(function () {
+  return filterTree(tree.nodes, searchText.value, filterCondition(statusFilter.value, myUserId.value));
+});
+
+// 搜索 / 筛选时自动展开命中节点所在的目录
+watch([searchText, statusFilter], function () {
+  if (!searchText.value.trim() && statusFilter.value === FILTER_ALL) return;
   const keys = collectFolderKeys(displayTree.value);
   expandedKeys.value = Array.from(new Set(expandedKeys.value.concat(keys)));
+});
+
+const emptyDescription = computed(function () {
+  if (searchText.value.trim() || statusFilter.value !== FILTER_ALL) return '没有匹配的接口';
+  return projects.canEdit ? '还没有接口，右键目录或点右上角 ＋ 新建' : '这个项目还没有接口';
 });
 
 watch(
@@ -173,12 +249,18 @@ function renderLabel(info) {
     ]);
   }
 
-  const method = String((node.api && node.api.method) || 'GET').toUpperCase();
+  const api = node.api || {};
+  const method = String(api.method || 'GET').toUpperCase();
   const name = node.name || '(未命名接口)';
+  const meta = statusMeta(api.status);
+  const ownerName = api.ownerId ? (memberNames.value.get(api.ownerId) || '') : '';
+  const tip = statusTooltip(api.status, ownerName);
 
-  return h('span', { class: 'tree-label api', title: name }, [
+  return h('span', { class: 'tree-label api', title: tip ? tip + ' · ' + name : name }, [
     h('span', { class: 'method', style: { color: methodColor(method), width: methodWidth } }, method),
-    h('span', { class: 'name' }, name)
+    // 状态小色点（第四轮第 1 节）：认不出来的状态不画点，和「未设置」一样
+    meta ? h('span', { class: 'status-dot', style: { background: meta.color } }) : null,
+    h('span', { class: 'name' + (isDeprecated(api.status) ? ' deprecated' : '') }, name)
   ]);
 }
 
@@ -292,6 +374,11 @@ function openBlankMenu(event) {
   // 「运行全部」放最上面：发请求 viewer 也能做（服务端 /send 就是 viewer 权限）
   const options = [{ label: '运行全部', key: 'blank-run' }];
 
+  // 同步更新要 editor（服务端那两个接口都是 editor 权限）
+  if (projects.canEdit) {
+    options.push({ label: '从 OpenAPI 同步更新', key: 'blank-sync-openapi' });
+  }
+
   if (canShare.value) {
     options.push({ label: '分享整个项目的文档', key: 'blank-share' });
   }
@@ -319,7 +406,13 @@ function folderMenuOptions() {
   const options = [
     { label: '目录设置', key: 'folder-settings' },
     { type: 'divider', key: 'd0' },
-    { label: '运行', key: 'run' }
+    { label: '运行', key: 'run' },
+    // 计划里这条本来想只在「这个目录是从 OpenAPI 导入的、或者里面有从 OpenAPI 导入的
+    // 接口时」显示 —— 那需要目录树接口带上 extra.openapi（dto.js 的 toApiSummary），
+    // 而这一轮 dto.js / tree.js 是 session1 在改（第 1 节的 status / ownerId 就要动它）。
+    // 先对所有目录都显示：点进去没东西可同步时，弹窗会说「已经是最新的」或者
+    // 全列成新增，不会改坏什么。
+    { label: '从 OpenAPI 同步更新', key: 'sync-openapi' }
   ];
   if (canShare.value) options.push({ label: '分享文档', key: 'share' });
 
@@ -356,6 +449,7 @@ async function onMenuSelect(key) {
     return;
   }
   if (key === 'blank-run') return emit('run', null);
+  if (key === 'blank-sync-openapi') return openSync(null);
   if (key === 'blank-share') return openShare(null);
   if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
@@ -363,6 +457,7 @@ async function onMenuSelect(key) {
   try {
     if (key === 'folder-settings') return emit('open-folder', node.id);
     if (key === 'run') return emit('run', node.id);
+    if (key === 'sync-openapi') return openSync(node.id);
     if (key === 'share') return openShare(node.id);
     if (key === 'new-folder') return await createFolder(node.id);
     if (key === 'new-api') return emit('new-api', node.id);
@@ -581,6 +676,27 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         </template>
       </n-input>
 
+      <!--
+        按状态 / 负责人筛选（第四轮第 1 节）：和上面的文字过滤叠加。
+        侧栏窄，按钮只放图标；生效时图标变成主色，悬停能看到筛的是什么。
+      -->
+      <n-dropdown
+        trigger="click"
+        :options="STATUS_FILTER_OPTIONS"
+        @select="(key) => { statusFilter = key; }"
+      >
+        <n-button
+          size="small"
+          quaternary
+          :type="statusFilter === FILTER_ALL ? 'default' : 'primary'"
+          :title="'筛选：' + statusFilterLabel"
+        >
+          <template #icon>
+            <n-icon :component="Filter" />
+          </template>
+        </n-button>
+      </n-dropdown>
+
       <!-- 新建：接口 / 目录 / WebSocket 都收在这一个 ＋ 里 -->
       <n-dropdown v-if="projects.canEdit" trigger="click" :options="newOptions" @select="onNewSelect">
         <n-button size="small" quaternary title="新建">
@@ -636,9 +752,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         <n-empty
           v-else
           size="small"
-          :description="searchText
-            ? '没有匹配的接口'
-            : (projects.canEdit ? '还没有接口，右键目录或点右上角 ＋ 新建' : '这个项目还没有接口')"
+          :description="emptyDescription"
         />
       </n-spin>
     </div>
@@ -685,6 +799,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       :pid="projects.currentId"
       :folder-id="shareFolderId"
       :scope-name="shareScopeName"
+    />
+
+    <!-- 从 OpenAPI 同步更新（第四轮第 3 节）：目录里进就是那个目录，空白处进就是整个项目 -->
+    <sync-dialog
+      v-model:show="showSync"
+      :pid="projects.currentId"
+      :folder-id="syncFolderId"
+      :folder-name="syncFolderName"
     />
   </div>
 </template>
@@ -752,6 +874,20 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 状态小色点（第四轮第 1 节）：画在方法标签和接口名中间 */
+:deep(.status-dot) {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* 已废弃的接口：名字灰掉 + 删除线，一眼能在树里扫出来 */
+:deep(.tree-label .name.deprecated) {
+  text-decoration: line-through;
+  opacity: 0.5;
 }
 
 /* 只有文字颜色，没有边框和底色；宽度固定右对齐，各行的名字才能对齐 */

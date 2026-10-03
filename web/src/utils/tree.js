@@ -136,22 +136,48 @@ export function folderChain(folders, folderId) {
 }
 
 /**
- * 按关键词过滤（匹配接口名、url 或目录名）。
- * 命中的节点连同它的所有祖先目录一起保留，其余剪掉。
+ * 按关键词 / 状态 / 负责人过滤（第四轮第 1 节）。
+ *
+ * 命中的接口连同它的所有祖先目录一起保留，其余剪掉；**文字和筛选条件叠加**。
+ *
+ * 目录只有在「下面还有命中的接口」时才保留；**纯文字搜索**时目录名自己命中也算 ——
+ * 但按状态筛的时候不算（目录没有状态，名字命中留着它反而让人以为里面还有东西）。
+ *
+ * @param {Array<object>} nodes 目录树的根节点
+ * @param {string} keyword 文字过滤
+ * @param {{status?: string, ownerId?: string}} [options] 状态 / 负责人筛选（空串表示不限）
  */
-export function filterTree(nodes, keyword) {
+export function filterTree(nodes, keyword, options) {
   const q = String(keyword || '').trim().toLowerCase();
-  if (!q) return nodes;
+  const status = String((options && options.status) || '');
+  const ownerId = String((options && options.ownerId) || '');
+  const filtering = Boolean(status || ownerId);
+
+  if (!q && !filtering) return nodes;
+
+  /** 接口节点满不满足筛选条件 */
+  function keepApi(node) {
+    const api = node.api || {};
+    if (status && String(api.status || '') !== status) return false;
+    if (ownerId && String(api.ownerId || '') !== ownerId) return false;
+    return true;
+  }
 
   function visit(list) {
     const kept = [];
     list.forEach(function (node) {
       if (node.kind === 'folder') {
         const children = visit(node.children || []);
-        const selfMatch = node.name.toLowerCase().indexOf(q) !== -1;
+        // 目录名自己命中：只有纯文字搜索时才算
+        const selfMatch = !filtering && q && node.name.toLowerCase().indexOf(q) !== -1;
         if (children.length || selfMatch) {
           kept.push(Object.assign({}, node, { children: children }));
         }
+        return;
+      }
+      if (!keepApi(node)) return;
+      if (!q) {
+        kept.push(node);
         return;
       }
       const name = String(node.name || '').toLowerCase();

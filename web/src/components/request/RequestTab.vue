@@ -45,6 +45,8 @@ import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
 import { copyText } from '@/utils/clipboard';
+import { API_STATUSES, statusMeta } from '@/utils/apiStatus';
+import { loadMembers } from '@/utils/projectMembers';
 
 /**
  * 一个标签页的完整内容：地址栏 + 请求编辑区（Params / Headers / Body / Auth / Scripts）
@@ -129,6 +131,69 @@ const authLevels = computed(function () {
 const inheritAuthHint = computed(function () {
   return inheritHint(authLevels.value);
 });
+
+/* ---------------- 状态与负责人（第四轮第 1 节） ---------------- */
+
+/**
+ * 两者都存在 `apis.extra` 里，但走的是问标签页自己那套：改了就进 `spec`、算「有改动」，
+ * 和改地址、改请求头一样按「保存」落库（viewer 只读）。所以这里只动 `spec`，
+ * 提交交给 `changedFields`。
+ */
+const statusMenu = [{ label: '未设置', key: '' }].concat(
+  API_STATUSES.map(function (item) { return { label: item.label, key: item.value }; })
+);
+
+/** 认不出来的旧状态一律当「未设置」显示，但 spec 里那个原值不动 —— 用户不主动改就不会被覆盖 */
+const currentStatusMeta = computed(function () {
+  return statusMeta(spec.value.status);
+});
+
+const statusTagText = computed(function () {
+  return currentStatusMeta.value ? currentStatusMeta.value.label : '未设置';
+});
+
+const statusColor = computed(function () {
+  return currentStatusMeta.value ? currentStatusMeta.value.color : 'rgba(128, 128, 128, 0.5)';
+});
+
+function onStatusChange(key) {
+  spec.value.status = key ? String(key) : null;
+}
+
+/* 负责人：从项目成员里选。没登录（本机空间）时成员接口会回 409，那时整块不显示 */
+const members = ref([]);
+
+const membersAvailable = computed(function () { return members.value.length > 0; });
+
+const ownerOptions = computed(function () {
+  return members.value.map(function (member) {
+    return {
+      label: member.displayName || member.username || member.userId,
+      value: member.userId
+    };
+  });
+});
+
+async function loadProjectMembers() {
+  const pid = projects.currentId;
+  if (!pid) {
+    members.value = [];
+    return;
+  }
+  try {
+    members.value = await loadMembers(pid);
+  } catch (err) {
+    // 409 LOGIN_REQUIRED（本机空间）：没有成员列表，就别显示负责人这一项
+    members.value = [];
+  }
+}
+
+function onOwnerChange(value) {
+  spec.value.ownerId = value ? String(value) : null;
+}
+
+// 换项目要重新拉成员（同一个项目里由 utils/projectMembers.js 缓存，不重复请求）
+watch(function () { return projects.currentId; }, loadProjectMembers);
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
 
@@ -397,6 +462,9 @@ function changedFields(api, current) {
   if (JSON.stringify(current.scripts || []) !== JSON.stringify(saved.scripts || [])) {
     patch.scripts = current.scripts || [];
   }
+  // 状态与负责人（第四轮第 1 节）：和别的字段一样，**只提交改动过的**
+  if ((current.status || null) !== (saved.status || null)) patch.status = current.status || null;
+  if ((current.ownerId || null) !== (saved.ownerId || null)) patch.ownerId = current.ownerId || null;
 
   return patch;
 }
@@ -804,6 +872,7 @@ onMounted(function () {
   window.addEventListener('resize', clampPanesHeight);
   // 等 DOM 量出来再夹一次（存的高度可能是高屏上拖的）
   nextTick(clampPanesHeight);
+  loadProjectMembers();
 });
 
 onBeforeUnmount(function () {
@@ -845,6 +914,41 @@ onBeforeUnmount(function () {
       </div>
 
       <n-space align="center" :size="4">
+        <!--
+          状态与负责人（第四轮第 1 节）：存在 apis.extra 里，改了算「接口有改动」，
+          和改地址一样按「保存」落库。没保存过的新请求（没有 apiId）不显示这两项。
+        -->
+        <template v-if="tab.apiId">
+          <n-dropdown
+            v-if="projects.canEdit"
+            trigger="click"
+            :options="statusMenu"
+            @select="onStatusChange"
+          >
+            <button class="status-tag" :style="{ color: statusColor }" title="接口状态">
+              <span class="status-dot" :style="{ background: statusColor }" />
+              {{ statusTagText }}
+            </button>
+          </n-dropdown>
+          <span v-else class="status-tag readonly" :style="{ color: statusColor }" title="接口状态">
+            <span class="status-dot" :style="{ background: statusColor }" />
+            {{ statusTagText }}
+          </span>
+
+          <!-- 没登录（本机空间）时没有成员列表，整块不显示 -->
+          <n-select
+            v-if="membersAvailable"
+            class="owner-select"
+            size="small"
+            clearable
+            placeholder="负责人"
+            :value="spec.ownerId"
+            :options="ownerOptions"
+            :disabled="!projects.canEdit"
+            @update:value="onOwnerChange"
+          />
+        </template>
+
         <!-- 代码片段：当前请求的 cURL，一键复制（参考 Postman 右侧的 Code snippet） -->
         <n-button size="small" quaternary title="代码片段（cURL）" @click="showSnippet = true">
           <template #icon>
@@ -1190,6 +1294,41 @@ onBeforeUnmount(function () {
   min-width: 0;
   font-size: 12px;
   overflow: hidden;
+}
+
+/* 状态那个小标签：一个色点 + 文字，颜色跟着状态走（未设置是灰的） */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-tag.readonly {
+  cursor: default;
+}
+
+.status-tag:not(.readonly):hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.status-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.owner-select {
+  width: 132px;
 }
 
 .crumb {

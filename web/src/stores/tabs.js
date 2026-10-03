@@ -33,7 +33,11 @@ export function emptySpec() {
     auth: null,
     // 脚本挂在 spec 上（契约第 16 节：接口的脚本取自 request.scripts），
     // 这样没保存的脚本改动也会参与这次发送
-    scripts: []
+    scripts: [],
+    // 状态与负责人（第四轮第 1 节）：存在 apis.extra 里，但放进 spec 才能直接复用
+    // 「和快照比出 dirty」那套机制 —— 改了它们同样算接口有改动，走「保存」
+    status: null,
+    ownerId: null
   };
 }
 
@@ -153,7 +157,11 @@ export function specFromApi(api) {
     },
     body: copy(api.body || { mode: 'none' }),
     auth: api.auth === undefined || api.auth === null ? null : copy(api.auth),
-    scripts: copy(api.scripts || [])
+    scripts: copy(api.scripts || []),
+    // 状态与负责人（第四轮第 1 节）。原样带过来：服务端不认识的旧值也留着，
+    // 用户不动它就不会被写回去覆盖掉
+    status: api.status === undefined || api.status === null ? null : String(api.status),
+    ownerId: api.ownerId === undefined || api.ownerId === null ? null : String(api.ownerId)
   };
 }
 
