@@ -27,8 +27,17 @@ export async function copyText(text) {
   area.style.position = 'fixed';
   area.style.top = '-1000px';
   area.style.opacity = '0';
-  document.body.appendChild(area);
   const active = document.activeElement;
+  // 弹窗（naive-ui 的 modal / drawer）会把焦点锁在自己里面：输入框放在 body 上的话，
+  // 一选中焦点就被抢回弹窗、选区丢了，复制失败（2026-10-03 用户在分享弹窗里遇到）。
+  // 所以放进当前焦点所在的那个弹窗里
+  // Safari 点按钮时不把焦点给按钮，从焦点找不到弹窗时，退到页面上最后打开的那个弹窗
+  const selector = '[role="dialog"], [aria-modal="true"]';
+  const opened = document.querySelectorAll('[aria-modal="true"]');
+  const host = (active && typeof active.closest === 'function' && active.closest(selector)) ||
+    opened[opened.length - 1] || document.body;
+  host.appendChild(area);
+  area.focus();
   area.select();
   let ok = false;
   try {

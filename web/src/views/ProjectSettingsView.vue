@@ -48,7 +48,13 @@ const showCloudTabs = computed(function () {
 const loading = ref(true);
 const saving = ref(false);
 const errorText = ref('');
-const activeTab = ref('basic');
+// `?tab=shares` / `?tab=members` 直接打开那个页签（分享弹窗、目录树右键「管理分享链接」跳过来）。
+// 那两个页签只在能用云端时才有，不然退回基本信息
+const activeTab = ref(
+  showCloudTabs.value && (route.query.tab === 'shares' || route.query.tab === 'members')
+    ? route.query.tab
+    : 'basic'
+);
 
 const form = ref({
   name: '',
