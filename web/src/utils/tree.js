@@ -90,6 +90,30 @@ export function collectFolderKeys(nodes) {
 }
 
 /**
+ * 收集一个目录（含所有子目录）里的接口节点，**按目录树显示的顺序**。
+ *
+ * 批量运行要用：跑的次序就是用户在左边看到的次序，两边各排一次迟早会不一致。
+ * WebSocket 接口不列出来（它不是 HTTP 请求，`/send` 也不收，见第 2 节）。
+ *
+ * @param {Array<object>} nodes 目录树的根节点
+ * @param {string|null} folderId 传 null 表示整个项目（目录树最外层）
+ * @returns {Array<object>} 接口节点（buildTree 造出来的那种，带 `api` / `parentId`）
+ */
+export function collectApiNodes(nodes, folderId) {
+  const root = folderId ? findNode(nodes, 'f:' + folderId) : null;
+  // 目录已经不在了（刚被删掉）就当它底下没有接口，而不是把整个项目跑一遍
+  const list = folderId ? (root ? root.children || [] : []) : (nodes || []);
+
+  const out = [];
+  walkTree(list, function (node) {
+    if (node.kind !== 'api') return;
+    if (String((node.api && node.api.method) || '').toUpperCase() === 'WS') return;
+    out.push(node);
+  });
+  return out;
+}
+
+/**
  * 从一个目录往上走，返回 `[自己, 父目录, 祖父目录, ...]` —— **从内到外**。
  *
  * 鉴权继承（契约第 5 节第 2 步）和变量替换都要这个链，别在调用处各写一遍。

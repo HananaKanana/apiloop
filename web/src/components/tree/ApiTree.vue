@@ -12,7 +12,7 @@ import { usePrompt } from '@/utils/prompt';
 import { METHOD_LABEL_WIDTH, methodColor } from '@/utils/method';
 import ContextMenu from '@/components/common/ContextMenu.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
 const tree = useTreeStore();
@@ -255,28 +255,42 @@ function openMenu(event, node) {
   };
 }
 
-/** 在目录树的空白处右键：新建、全部收起 / 展开（节点上的右键会 stopPropagation，不会走到这里） */
+/**
+ * 在目录树的空白处右键：项目根这一层的操作（第 2 节的「运行全部」就在这里）、
+ * 新建、全部收起 / 展开（节点上的右键会 stopPropagation，不会走到这里）
+ */
 function openBlankMenu(event) {
-  const options = [];
+  // 「运行全部」放最上面：发请求 viewer 也能做（服务端 /send 就是 viewer 权限）
+  const options = [{ label: '运行全部', key: 'blank-run' }];
+
   if (projects.canEdit) {
+    options.push({ type: 'divider', key: 'blank-d' });
     options.push({ label: '新建接口', key: 'blank-new-api' });
     options.push({ label: '新建目录', key: 'blank-new-folder' });
-    options.push({ type: 'divider', key: 'blank-d' });
   }
+  options.push({ type: 'divider', key: 'blank-d2' });
   options.push({ label: anyExpanded.value ? '全部收起' : '全部展开', key: 'blank-toggle' });
 
   menu.value = { show: true, x: event.clientX, y: event.clientY, node: null, options: options };
 }
 
 function folderMenuOptions() {
-  if (!projects.canEdit) return [{ label: '目录设置', key: 'folder-settings' }];
+  // viewer 也能「运行」：发请求本来就是只读角色要做的事（服务端 /send 是 viewer 权限）
+  if (!projects.canEdit) {
+    return [
+      { label: '目录设置', key: 'folder-settings' },
+      { label: '运行', key: 'run' }
+    ];
+  }
 
   return [
     { label: '目录设置', key: 'folder-settings' },
     { type: 'divider', key: 'd0' },
+    { label: '运行', key: 'run' },
+    { type: 'divider', key: 'd1' },
     { label: '新建子目录', key: 'new-folder' },
     { label: '新建接口', key: 'new-api' },
-    { type: 'divider', key: 'd1' },
+    { type: 'divider', key: 'd2' },
     { label: '重命名', key: 'rename' },
     { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
   ];
@@ -304,11 +318,13 @@ async function onMenuSelect(key) {
     }
     return;
   }
+  if (key === 'blank-run') return emit('run', null);
   if (key === 'blank-toggle') return toggleExpandAll();
   if (!node) return;
 
   try {
     if (key === 'folder-settings') return emit('open-folder', node.id);
+    if (key === 'run') return emit('run', node.id);
     if (key === 'new-folder') return await createFolder(node.id);
     if (key === 'new-api') return emit('new-api', node.id);
     if (key === 'rename') return await rename(node);

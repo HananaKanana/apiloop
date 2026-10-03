@@ -32,7 +32,7 @@ const TABS = [
   { key: 'history', label: '历史', icon: History }
 ];
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'import', 'toggle']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import', 'toggle']);
 
 function onTabClick(key) {
   ui.setSidebarTab(key);
@@ -70,6 +70,7 @@ function onTabClick(key) {
         @new-api="(folderId) => emit('new-api', folderId)"
         @new-ws="emit('new-ws')"
         @open-folder="(folderId, options) => emit('open-folder', folderId, options)"
+        @run="(folderId) => emit('run', folderId)"
         @import="emit('import')"
       />
       <env-list v-if="ui.sidebarTab === 'env'" />

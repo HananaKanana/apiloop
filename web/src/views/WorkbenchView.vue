@@ -13,6 +13,7 @@ import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
+import RunnerTab from '@/components/runner/RunnerTab.vue';
 import EnvTab from '@/components/env/EnvTab.vue';
 import MockEnvTab from '@/components/env/MockEnvTab.vue';
 import ImportDialog from '@/components/importExport/ImportDialog.vue';
@@ -207,14 +208,22 @@ function onOpenFolder(folderId, options) {
 }
 
 /**
+ * 打开「运行」标签页（第 2 节）：目录右键「运行」、目录标签页右上角「运行」传目录 id；
+ * 目录树空白处右键「运行全部」传 null（整个项目）。
+ */
+function onRun(folderId) {
+  tabs.openRunner(folderId || null);
+}
+
+/**
  * 标签页标题前面的方法缩写（Postman 那一行也是这么排的）。
  * 目录页签没有方法；WebSocket 页签固定 WS；其余取 spec 里的方法。
  */
 function tabMethod(tab) {
   if (!tab) return '';
   if (tab.kind === 'ws') return 'WS';
-  // 目录页签没有「方法」这一说，不显示缩写
-  if (tab.kind === 'folder') return '';
+  // 目录页签和「运行」页签都没有「方法」这一说，不显示缩写
+  if (tab.kind === 'folder' || tab.kind === 'runner') return '';
   return String((tab.spec && tab.spec.method) || 'GET').toUpperCase();
 }
 
@@ -374,6 +383,7 @@ onBeforeUnmount(function () {
           @new-api="onNewApi"
           @new-ws="onNewWs"
           @open-folder="onOpenFolder"
+          @run="onRun"
           @import="ui.openImport()"
         />
       </aside>
@@ -437,6 +447,12 @@ onBeforeUnmount(function () {
         <div v-else class="tab-body">
           <folder-tab
             v-if="tabs.active && tabs.active.kind === 'folder'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+            @run="onRun"
+          />
+          <runner-tab
+            v-else-if="tabs.active && tabs.active.kind === 'runner'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />
