@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { NButton, NInput, NModal, NRadio, NRadioGroup, NSpace, useMessage } from 'naive-ui';
 import * as sharesApi from '@/api/shares';
 import { copyText } from '@/utils/clipboard';
@@ -27,6 +28,13 @@ const props = defineProps({
 const emit = defineEmits(['update:show']);
 
 const message = useMessage();
+const router = useRouter();
+
+/** 去项目设置的「分享链接」页签：所有已生成的链接都在那里复制、撤销 */
+function manageLinks() {
+  emit('update:show', false);
+  if (props.pid) router.push({ path: '/projects/' + props.pid + '/settings', query: { tab: 'shares' } });
+}
 
 /** 有效期三档。'never' 是「永久」，发给服务端时转成 null */
 const expiresInDays = ref('30');
@@ -120,7 +128,9 @@ function close() {
         <n-button size="small" type="primary" @click="copy">复制</n-button>
       </div>
       <p class="hint">
-        这条链接已经生效，也可以在「项目设置 → 分享链接」里撤销。
+        这条链接已经生效。所有分享过的链接都在
+        <a class="manage-link" href="javascript:void(0)" @click="manageLinks">项目设置 → 分享链接</a>
+        里，可以再复制或撤销。
       </p>
     </div>
 
@@ -179,4 +189,10 @@ function close() {
   line-height: 1.7;
   opacity: 0.6;
 }
+.manage-link {
+  color: var(--apiloop-primary);
+  cursor: pointer;
+  text-decoration: none;
+}
+.manage-link:hover { text-decoration: underline; }
 </style>
