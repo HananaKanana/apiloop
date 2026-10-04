@@ -269,6 +269,25 @@ const previewHtml = computed(function () {
   return withBase(body.value, props.requestUrl);
 });
 
+/**
+ * 「字段」视图的数据（第六轮第 1 节）：把 JSON 摊平成一行一个字段。
+ *
+ * 三个前置条件不满足就不给这个视图 —— 进了那个视图只会看到一句「为什么没有」，
+ * 不如直接把入口藏掉：
+ *  - 不是 JSON：没有字段这个概念；
+ *  - 超过 1 MB：和「美化」同一个理由（`FORMAT_LIMIT`），解析一遍要几百毫秒；
+ *  - 解析不过：`detected` 只在 parse 成功时才认成 json，用户手动选 JSON 时可能不过。
+ */
+const fieldTree = computed(function () {
+  if (!isText.value) return { ok: false, reason: '这段响应不是文本' };
+  if (language.value !== 'json') return { ok: false, reason: '这段响应不是 JSON，没有字段列表' };
+  if (tooBigToFormat.value) return { ok: false, reason: '响应超过 1 MB，为了不卡住界面不列字段' };
+  return buildJsonRows(body.value);
+});
+
+// **必须写在 availableViews 前面**：下面那个 `watch(availableViews, …, { immediate: true })` 在组件创建时
+// 立刻就要算 availableViews，它又要读 fieldTree —— fieldTree 写在后面的话还在 const 的暂时性死区里，
+// 直接抛 ReferenceError，整个 Body 渲染不出来（2026-10-04 用户遇到：所有文本响应的 Body 都是空的）
 const availableViews = computed(function () {
   if (isText.value) {
     // 是 JSON 就多一个「字段」视图（第六轮第 1 节）：一行一个字段，可以直接加断言 / 提取
@@ -293,21 +312,6 @@ watch(
   { immediate: true }
 );
 
-/**
- * 「字段」视图的数据（第六轮第 1 节）：把 JSON 摊平成一行一个字段。
- *
- * 三个前置条件不满足就不给这个视图 —— 进了那个视图只会看到一句「为什么没有」，
- * 不如直接把入口藏掉：
- *  - 不是 JSON：没有字段这个概念；
- *  - 超过 1 MB：和「美化」同一个理由（`FORMAT_LIMIT`），解析一遍要几百毫秒；
- *  - 解析不过：`detected` 只在 parse 成功时才认成 json，用户手动选 JSON 时可能不过。
- */
-const fieldTree = computed(function () {
-  if (!isText.value) return { ok: false, reason: '这段响应不是文本' };
-  if (language.value !== 'json') return { ok: false, reason: '这段响应不是 JSON，没有字段列表' };
-  if (tooBigToFormat.value) return { ok: false, reason: '响应超过 1 MB，为了不卡住界面不列字段' };
-  return buildJsonRows(body.value);
-});
 
 /** 下载文件名按 content-type 取扩展名。
  * 以前只要是图片就一律写 response.png，jpeg / gif / webp / svg 都会存成错的扩展名，
