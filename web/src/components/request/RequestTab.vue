@@ -1433,7 +1433,7 @@ onBeforeUnmount(function () {
             :databases="projects.current ? (projects.current.databases || []) : []"
             :disabled="!projects.canEdit"
             :has-environment="hasEnvironment"
-            :local-allowed="localDbAllowed"
+            :local-allowed="dbLocalAllowed"
             @update:db-ops="(v) => { spec.dbOps = v; }"
           />
         </n-tab-pane>
