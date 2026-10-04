@@ -22,6 +22,7 @@ import { useGatewayStore } from '@/stores/gateway';
 import { parseCurl } from '@/utils/curl';
 import { methodColor } from '@/utils/method';
 import { readFileAsText } from '@/utils/download';
+import ExternalImportPanel from '@/components/importExport/ExternalImportPanel.vue';
 
 /**
  * 导入弹窗：JSON 文件（集合 / 环境）/ cURL / OpenAPI / HAR 四个页签。
@@ -518,6 +519,11 @@ function routeLabel(route) {
           <template v-if="postmanPreview">
             <n-alert type="info" :show-icon="false" class="notice">
               <div>类型：{{ postmanPreview.kind }}</div>
+              <!-- 认出来的是哪种文件（第九轮第 1 节）：YApi / Apifox 的文件贴到这一页也能导，
+                   这里要如实说一句，免得用户以为认错了 -->
+              <div v-if="postmanPreview.format && postmanPreview.format !== 'postman'">
+                识别为：{{ postmanPreview.format === 'yapi' ? 'YApi' : 'Apifox' }}
+              </div>
               <div>名称：{{ postmanPreview.name }}</div>
               <div v-if="postmanPreview.stats">
                 目录 {{ postmanPreview.stats.folders }} 个、接口 {{ postmanPreview.stats.apis }} 个、
@@ -565,6 +571,19 @@ function routeLabel(route) {
             </n-space>
           </template>
         </div>
+      </n-tab-pane>
+
+      <!--
+        YApi / Apifox（第九轮第 1 节）：两个页签用的是同一个面板 —— 流程和「JSON 文件」
+        那个页签一模一样，而且**服务端会自动认格式**，所以界面上不需要各写一套。
+        页签本身还是要分开：用户是从这两个工具迁过来的，得能一眼看到入口。
+      -->
+      <n-tab-pane name="yapi" tab="YApi">
+        <external-import-panel format="yapi" />
+      </n-tab-pane>
+
+      <n-tab-pane name="apifox" tab="Apifox">
+        <external-import-panel format="apifox" />
       </n-tab-pane>
 
       <n-tab-pane name="curl" tab="cURL">
