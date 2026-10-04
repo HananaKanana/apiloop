@@ -230,7 +230,7 @@ watch(
 <template>
   <div class="pane">
     <div class="toolbar">
-      <span class="hint">按顺序执行；点开一行可以给这一步**追加**断言和提取变量。</span>
+      <span class="hint">按顺序执行；点开一行可以给这一步<b>追加</b>断言和提取变量。</span>
       <span class="spacer" />
       <n-button size="small" :disabled="!canEdit" @click="openAdd">
         <template #icon><n-icon :component="Plus" /></template>

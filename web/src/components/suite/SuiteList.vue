@@ -184,6 +184,7 @@ async function onDrop() {
       <n-input
         v-if="renamingId === suite.id"
         v-model:value="renameText"
+        class="rename"
         size="tiny"
         autofocus
         @click.stop
@@ -286,6 +287,12 @@ async function onDrop() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 改名框占满名字那一格：不写的话在窄侧栏里会被挤得只剩一个小框，看不到里面的字 */
+.rename {
+  flex: 1;
+  min-width: 0;
 }
 
 .count {
