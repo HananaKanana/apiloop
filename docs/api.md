@@ -247,6 +247,26 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 内容和打码规则与分享文档一样（同一份 `publicDoc`）。示例里的 Mock 模板先渲染成真实数据再写进文档（分享页同样）。
 
+## 前置接口（自动登录）
+
+- 项目 / 目录 DTO 顶层 `preflight`：`{ apiId, whenMissing, retryOn401 }`；目录上 `null` = 跟着上层，`{ apiId: null }` = 这个目录下不用。`PUT /projects/:pid`、`PUT /folders/:id` 保存。
+- 接口 DTO 顶层 `noPreflight: true` = 这个接口不用前置接口（`PUT /apis/:id`，发送的请求体里也认）。
+- 生效规则：接口 `noPreflight` → 目录链从内到外第一个配过的 → 项目。前置接口本身不会再触发前置接口。
+- 执行：`whenMissing` 的变量没值时先跑前置接口（它的脚本、断言、提取、数据库操作照常），变量改动和 Cookie 并进这次请求、照常写回。
+  非流式（`/send`、测试集、批量运行）响应 401 且 `retryOn401` 时在服务端重发一次；流式（`/send/stream`）的 `end` 事件带 `preflight`（生效规则），前端带 `options.forcePreflight: true` 重发。
+  前置接口失败不拦主请求，控制台里写原因。`/send/curl`、GraphQL Schema 不跑前置接口。
+
+## 代码片段
+
+`POST /projects/:pid/send/curl` 返回 `{ curl, code, missing }`：`code` 是 `{ curl, fetch, axios, python, java, go, php, csharp }`，变量换成实际值、带鉴权和公共请求头。
+
+## 内置动态变量
+
+`{{$guid}}` `{{$timestamp}}` `{{$timestampMs}}` `{{$isoTimestamp}}` `{{$randomInt}}` / `{{$randomInt(1,100)}}` / `{{$整数(1,100)}}`，
+以及中英文两种写法等价的：`$randomPhone`/`$手机号`、`$randomIdCard`/`$身份证`、`$randomChineseName`/`$中文名`、`$randomEmail`/`$邮箱`、`$randomDate`/`$日期`、`$randomDateTime`/`$时间`、
+`$randomAddress`/`$地址`、`$randomCompany`/`$公司`、`$randomBankCard`/`$银行卡`、`$randomCreditCode`/`$信用代码`、`$randomPlate`/`$车牌`、`$randomIp`。每出现一次生成一个新值。
+变量名允许 Unicode 字母（中文）。脚本里 `pm.variables.replaceIn(text)`。
+
 ## 数据库操作（只在客户端执行）
 
 - 连接：项目 DTO 顶层 `databases: [{ id, name, type: 'mysql' | 'postgres' | 'redis', host, port, user, password, database }]`，每个字段都能写 `{{变量}}`；`PUT /projects/:pid` 整份替换。
