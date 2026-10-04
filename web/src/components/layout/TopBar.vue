@@ -3,7 +3,7 @@
 import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
-import { Activity, BrandGit, Help, Search, Settings } from '@vicons/tabler';
+import { Activity, BrandGithub, Help, Search, Settings } from '@vicons/tabler';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
@@ -22,8 +22,8 @@ import UserMenu from './UserMenu.vue';
  */
 const emit = defineEmits(['about']);
 
-/** 项目的 git 仓库（和 package.json 的 homepage 一致）。客户端里点开会交给系统浏览器 */
-const REPO_URL = 'http://leonaz.top:3000/liuxiuqi/apiloop';
+/** 项目的 git 仓库。客户端里点开会交给系统浏览器 */
+const REPO_URL = 'https://github.com/HananaKanana/apiloop';
 
 const router = useRouter();
 const session = useSessionStore();
@@ -169,10 +169,10 @@ onBeforeUnmount(function () {
       <n-tooltip trigger="hover">
         <template #trigger>
           <a class="icon-button" :href="REPO_URL" target="_blank" rel="noopener">
-            <n-icon size="18" :component="BrandGit" />
+            <n-icon size="18" :component="BrandGithub" />
           </a>
         </template>
-        源代码仓库
+        GitHub 仓库
       </n-tooltip>
 
       <n-tooltip v-if="session.isAdmin" trigger="hover">
