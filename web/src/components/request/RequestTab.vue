@@ -35,6 +35,7 @@ import BodyEditor from './BodyEditor.vue';
 import AuthEditor from './AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import AssertionsPane from '@/components/assertions/AssertionsPane.vue';
+import DbOpsPane from '@/components/db/DbOpsPane.vue';
 import MockPanel from '@/components/mock/MockPanel.vue';
 import ResponsePanel from '@/components/response/ResponsePanel.vue';
 import { folderChain } from '@/utils/tree';
@@ -47,6 +48,9 @@ import { parseCurl } from '@/utils/curl';
 import { encodeQueryPart } from '@/utils/query';
 import { usePaneTabsTheme } from '@/utils/paneTabs';
 import { assertionFromField, extractFromField, hasEnabled } from '@/utils/assertions';
+// 同样的「有没有启用着的行」判断，数据库操作那一份在自己的模块里（两边各留一份，
+// 改一边的规则不会牵动另一边）
+import { hasEnabled as hasEnabledDbOp } from '@/utils/db';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
 import { copyText } from '@/utils/clipboard';
@@ -572,6 +576,16 @@ const loadBlocked = computed(function () {
   return gateway.loaded && !gateway.isGateway;
 });
 
+/**
+ * 数据库操作（第九轮第 3 节）**只在客户端里执行**：连接里带着库密码，云端不该拿着它
+ * 去连生产库（服务端按 `ctx.localSend` 判断，见 lib/send-core.js）。这里是同一个判断 ——
+ * 网页版上照样能配、照样保存，只提示「发送时会被跳过」，不做成灰的：配置本身是有用的，
+ * 换到客户端上打开就能跑。
+ */
+const dbLocalAllowed = computed(function () {
+  return !(gateway.loaded && !gateway.isGateway);
+});
+
 function onMoreMenu(key) {
   if (key !== 'load') return;
   if (!props.tab.apiId) {
@@ -652,6 +666,10 @@ function changedFields(api, current) {
   }
   if (JSON.stringify(current.extracts || []) !== JSON.stringify(saved.extracts || [])) {
     patch.extracts = current.extracts || [];
+  }
+  // 数据库操作（第九轮第 3 节）：整份比、整份提交
+  if (JSON.stringify(current.dbOps || []) !== JSON.stringify(saved.dbOps || [])) {
+    patch.dbOps = current.dbOps || [];
   }
 
   return patch;
@@ -841,6 +859,8 @@ const paneStatus = computed(function () {
     }),
     // 断言 / 提取变量（第六轮第 1 节）：两张表里有一条启用着的就点一个圆点
     hasChecks: hasEnabled(spec.assertions) || hasEnabled(spec.extracts),
+    // 数据库操作（第九轮第 3 节）：同上
+    hasDbOps: hasEnabledDbOp(spec.dbOps),
     auth: AUTH_LABELS[String(auth.type || 'inherit')] || '继承'
   };
 });
@@ -1395,6 +1415,26 @@ onBeforeUnmount(function () {
             :highlight-id="highlightRowId"
             @update:assertions="(v) => { spec.assertions = v; }"
             @update:extracts="(v) => { spec.extracts = v; }"
+          />
+        </n-tab-pane>
+
+        <!--
+          数据库操作（第九轮第 3 节）：测接口时常要「先往库里造条测试数据」「调完去库里
+          看有没有写进去」。和断言一样改的是 spec，按「保存」落库，没保存的改动发送时也生效。
+        -->
+        <n-tab-pane name="db">
+          <template #tab>
+            <span class="pane-tab">
+              数据库<span v-if="paneStatus.hasDbOps" class="pane-dot" />
+            </span>
+          </template>
+          <db-ops-pane
+            :db-ops="spec.dbOps || []"
+            :databases="projects.current ? (projects.current.databases || []) : []"
+            :disabled="!projects.canEdit"
+            :has-environment="hasEnvironment"
+            :local-allowed="localDbAllowed"
+            @update:db-ops="(v) => { spec.dbOps = v; }"
           />
         </n-tab-pane>
 

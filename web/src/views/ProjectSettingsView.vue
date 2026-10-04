@@ -23,6 +23,7 @@ import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import MembersPanel from '@/components/members/MembersPanel.vue';
 import ShareLinksPanel from '@/components/share/ShareLinksPanel.vue';
 import MockFaultPanel from '@/components/mock/MockFaultPanel.vue';
+import DatabasePanel from '@/components/db/DatabasePanel.vue';
 
 /**
  * 项目设置。按角色收口：
@@ -66,7 +67,9 @@ const form = ref({
   headers: [],
   scripts: [],
   // Mock 故障模拟（第七轮第 1 节）：`projects.extra.mockFaults`，没设过是 null
-  mockFaults: null
+  mockFaults: null,
+  // 数据库连接（第九轮第 3 节）：`projects.extra.databases`，接口的「数据库」页签挑的就是它们
+  databases: []
 });
 
 const projectId = ref('');
@@ -87,7 +90,8 @@ function fillFrom(project) {
     auth: project.auth ? JSON.parse(JSON.stringify(project.auth)) : { type: 'inherit' },
     headers: JSON.parse(JSON.stringify(project.headers || [])),
     scripts: JSON.parse(JSON.stringify(project.scripts || [])),
-    mockFaults: project.mockFaults ? JSON.parse(JSON.stringify(project.mockFaults)) : null
+    mockFaults: project.mockFaults ? JSON.parse(JSON.stringify(project.mockFaults)) : null,
+    databases: JSON.parse(JSON.stringify(project.databases || []))
   };
 }
 
@@ -126,7 +130,9 @@ async function save() {
       headers: form.value.headers,
       scripts: form.value.scripts,
       // Mock 故障模拟（第七轮第 1 节）：没开过、也没加过规则时给 null，服务端会把这块清掉
-      mockFaults: form.value.mockFaults
+      mockFaults: form.value.mockFaults,
+      // 数据库连接（第九轮第 3 节）：整份提交，空数组就是清掉
+      databases: form.value.databases
     };
     if (isOwner.value) {
       patch.name = form.value.name.trim();
@@ -271,6 +277,18 @@ watch(function () { return route.params.pid; }, load);
           <n-card :bordered="false" size="small" title="Mock 故障模拟" class="card">
             <mock-fault-panel
               v-model="form.mockFaults"
+              :pid="projectId"
+              :disabled="!canEdit"
+            />
+          </n-card>
+
+          <!--
+            数据库连接（第九轮第 3 节）：接口的「数据库」页签挑的就是这里的连接 ——
+            测接口时要造数据、查数据，都靠它。
+          -->
+          <n-card :bordered="false" size="small" title="数据库连接" class="card">
+            <database-panel
+              v-model:databases="form.databases"
               :pid="projectId"
               :disabled="!canEdit"
             />
