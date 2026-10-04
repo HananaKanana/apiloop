@@ -123,11 +123,6 @@ function syncGqlFromCache() {
 
 watch(gqlUrl, syncGqlFromCache, { immediate: true });
 
-/** 切到 GraphQL 模式时也同步一次（地址可能没变但缓存里有） */
-watch(mode, function (value) {
-  if (value === 'graphql') syncGqlFromCache();
-});
-
 async function loadGqlSchema() {
   if (!props.projectId) {
     message.warning('还没有选中项目');
@@ -164,6 +159,17 @@ async function loadGqlSchema() {
 
 const mode = computed(function () {
   return body.value.mode || 'none';
+});
+
+/**
+ * 切到 GraphQL 模式时也同步一次（地址可能没变但缓存里有）。
+ *
+ * **必须写在 `mode` 声明之后**：`watch(mode, …)` 在组件创建时就要读 `mode`，写在前面的话
+ * 它还在 const 的暂时性死区里，直接抛 ReferenceError，整个 Body 编辑器一片空白
+ * （第七轮引入，2026-10-04 用户截图发现；和 BodyViewer 的 fieldTree 是同一类错）。
+ */
+watch(mode, function (value) {
+  if (value === 'graphql') syncGqlFromCache();
 });
 
 function setMode(next) {
