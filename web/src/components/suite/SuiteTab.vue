@@ -345,7 +345,8 @@ function backToEdit() {
           <suite-report v-else-if="view === 'report'" :run="historyRun || reportRun" />
 
           <!-- 编辑：四个页签 -->
-          <n-tabs v-else v-model:value="activePane" type="line" size="small" animated>
+          <!-- tabs-padding 和上面标题行的左右边距（16px）对齐，不设的话「步骤」贴着左边的分隔线 -->
+          <n-tabs v-else v-model:value="activePane" type="line" size="small" animated :tabs-padding="16">
             <n-tab-pane name="steps" tab="步骤">
               <suite-steps-pane :suite="suite" :disabled="isRunning" @change="patch" />
             </n-tab-pane>
