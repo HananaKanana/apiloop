@@ -5,7 +5,7 @@ import { specFromApi, useTabsStore } from '@/stores/tabs';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { mockBaseFor } from '@/utils/mock';
-import { clampSettings, emptyLive, loadPayload, tickPoint } from '@/utils/load';
+import { emptyLive, loadPayload, tickPoint } from '@/utils/load';
 
 /**
  * 简单压测（第八轮第 2 节）。
@@ -85,10 +85,6 @@ export const useLoadStore = defineStore('load', function () {
     }
 
     const environmentId = state.envId === undefined ? envs.selectedId : state.envId;
-    if (environmentId === 'mock' && !tab.apiId) {
-      state.error = '压测要先选一个接口';
-      return;
-    }
 
     state.running = true;
     state.status = '';
@@ -144,16 +140,8 @@ export const useLoadStore = defineStore('load', function () {
     if (state.controller) state.controller.abort();
   }
 
-  /** 界面改设置时就记下来（按接口记），下次打开这个接口的压测页接着用 */
-  function rememberSettings(tab) {
-    const state = tab && tab.load;
-    if (!state) return;
-    state.settings = clampSettings(state.settings);
-  }
-
   return {
     start: start,
-    stop: stop,
-    rememberSettings: rememberSettings
+    stop: stop
   };
 });
