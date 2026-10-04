@@ -12,6 +12,7 @@ import { openSearchPanel } from '@codemirror/search';
 import { syntaxHighlighting } from '@codemirror/language';
 import { classHighlighter } from '@lezer/highlight';
 import { formatJson } from '@/utils/jsonFormat';
+import { curlLanguage } from '@/utils/curlLanguage';
 
 /**
  * CodeMirror 6 的薄封装。
@@ -58,6 +59,8 @@ function languageExtension(name) {
   if (name === 'html') return html();
   if (name === 'xml') return xml();
   if (name === 'javascript') return javascript();
+  // 代码片段面板的 cURL 命令（见 utils/curlLanguage.js）
+  if (name === 'curl') return curlLanguage;
   // graphql 的扩展要等动态 import（见 ensureGraphql），这里不给
   return [];
 }
@@ -402,6 +405,8 @@ defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: 
 .code-editor .tok-attributeName { color: #b5530f; }
 .code-editor .tok-attributeValue { color: #1a56c5; }
 .code-editor .tok-variableName.tok-definition { color: #1f4fbf; }
+/* cURL 的续行符 `\`（代码片段面板） */
+.code-editor .tok-meta { opacity: 0.45; }
 .code-editor .tok-punctuation,
 .code-editor .tok-bracket { opacity: 0.75; }
 

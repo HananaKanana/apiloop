@@ -79,7 +79,7 @@ async function copy() {
         </n-alert>
 
         <n-spin :show="loading">
-          <code-editor class="code" :model-value="curl" language="text" readonly wrap min-height="240px" />
+          <code-editor class="code" :model-value="curl" language="curl" readonly wrap min-height="240px" />
         </n-spin>
       </div>
     </n-drawer-content>
