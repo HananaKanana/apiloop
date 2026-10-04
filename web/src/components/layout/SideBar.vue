@@ -163,8 +163,13 @@ watch(
 </template>
 
 <style scoped>
-/* 接口 / 测试集 的切换：两个小按钮，选中那个底色浅、字色正 */
-.view-switch {
+/*
+ * 接口 / 测试集 的切换：两个小按钮，选中那个底色浅、字色正。
+ *
+ * 选择器写成 `.panel > .view-switch`：下面的 `.panel > *` 让面板里每一块都 `flex: 1` 平分高度，
+ * 只写 `.view-switch` 的话两条优先级一样、后写的赢，切换条就被撑成半屏高（2026-10-04 用户截图）。
+ */
+.panel > .view-switch {
   flex: none;
   display: flex;
   gap: 2px;
