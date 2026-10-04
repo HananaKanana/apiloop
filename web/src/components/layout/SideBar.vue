@@ -18,6 +18,7 @@ import ApiTree from '@/components/tree/ApiTree.vue';
 import EnvList from '@/components/env/EnvList.vue';
 import HistoryPanel from '@/components/history/HistoryPanel.vue';
 import TrashDialog from '@/components/trash/TrashDialog.vue';
+import SuiteList from '@/components/suite/SuiteList.vue';
 
 /**
  * 左侧栏：最上面一排图标页签（目录 / 环境 / 历史），下面是对应的内容，
@@ -52,6 +53,9 @@ function onTabClick(key) {
 }
 
 /* ---------------- 回收站 ---------------- */
+
+/** 目录树那一栏现在切「接口 / 测试集」两个视图（第八轮第 1 节） */
+const treeView = ref('apis');
 
 const showTrash = ref(false);
 
@@ -97,8 +101,29 @@ watch(
     </div>
 
     <div v-show="!collapsed" class="panel">
+      <!--
+        目录树上方：接口 / 测试集 两个视图切一下（第八轮第 1 节）。
+        测试集是「排好的流程」，和接口树是两种东西，所以放在同一个位置切，不各占一栏。
+      -->
+      <div v-show="ui.sidebarTab === 'tree'" class="view-switch">
+        <button
+          class="switch-item"
+          :class="{ active: treeView === 'apis' }"
+          @click="treeView = 'apis'"
+        >
+          接口
+        </button>
+        <button
+          class="switch-item"
+          :class="{ active: treeView === 'suites' }"
+          @click="treeView = 'suites'"
+        >
+          测试集
+        </button>
+      </div>
+
       <api-tree
-        v-show="ui.sidebarTab === 'tree'"
+        v-show="ui.sidebarTab === 'tree' && treeView === 'apis'"
         @open="(api, options) => emit('open', api, options)"
         @new-api="(folderId) => emit('new-api', folderId)"
         @new-ws="emit('new-ws')"
@@ -106,6 +131,7 @@ watch(
         @run="(folderId) => emit('run', folderId)"
         @import="emit('import')"
       />
+      <suite-list v-if="ui.sidebarTab === 'tree' && treeView === 'suites'" />
       <env-list v-if="ui.sidebarTab === 'env'" />
       <history-panel v-if="ui.sidebarTab === 'history'" />
     </div>
@@ -136,6 +162,36 @@ watch(
 </template>
 
 <style scoped>
+/* 接口 / 测试集 的切换：两个小按钮，选中那个底色浅、字色正 */
+.view-switch {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 4px;
+}
+
+.switch-item {
+  flex: 1;
+  padding: 3px 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.switch-item:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.switch-item.active {
+  background: rgba(128, 128, 128, 0.16);
+  opacity: 1;
+  font-weight: 500;
+}
+
 .sidebar {
   height: 100%;
   display: flex;

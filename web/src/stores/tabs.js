@@ -534,6 +534,57 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
+   * 打开「测试集」标签页（第八轮第 1 节）：一个测试集一个，再点就切过去。
+   *
+   * 没有 `spec` / `savedSnapshot`：测试集的编辑是**自动保存**的（组件里防抖 700ms 提交），
+   * 所以它永远不脏，也不需要「关标签页要确认」那一套。运行状态在 `stores/suiteRun.js`，
+   * 切标签页不会断。
+   */
+  function openSuite(suiteId, name) {
+    const key = 'suite:' + suiteId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const tab = {
+      key: key,
+      kind: 'suite',
+      apiId: null,
+      folderId: null,
+      suiteId: suiteId,
+      title: name || '测试集',
+      spec: null,
+      savedSnapshot: null,
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    };
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 测试集被删了：把它开着的标签页也关掉 */
+  function closeSuite(suiteId) {
+    close('suite:' + suiteId);
+  }
+
+  /** 改了测试集名字：把标签页标题也跟着换（保存之后调） */
+  function renameSuite(suiteId, name) {
+    tabs.value.forEach(function (tab) {
+      if (tab.kind === 'suite' && tab.suiteId === suiteId) tab.title = name;
+    });
+  }
+
+  /**
    * 打开「压测」标签页（第八轮第 2 节）：**每个接口一个**，再点就切过去。
    *
    * 设置（并发数、次数……）按接口记在 localStorage 里，打开时读回来接着用
@@ -1009,6 +1060,9 @@ export const useTabsStore = defineStore('tabs', function () {
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,
+    openSuite: openSuite,
+    closeSuite: closeSuite,
+    renameSuite: renameSuite,
     openLoad: openLoad,
     openHistory: openHistory,
     activate: activate,

@@ -6,9 +6,13 @@ import {
   NIcon,
   NInputNumber,
   NSelect,
-  NTag
+  NTag,
+  useMessage
 } from 'naive-ui';
-import { ChevronDown, ChevronRight, PlayerPlay, PlayerStop } from '@vicons/tabler';
+import { ChevronDown, ChevronRight, PlayerPlay, PlayerStop, DeviceFloppy } from '@vicons/tabler';
+import { useProjectStore } from '@/stores/project';
+import { useSuitesStore } from '@/stores/suites';
+import * as suitesApi from '@/api/suites';
 import { useRunnerStore } from '@/stores/runner';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
@@ -68,6 +72,46 @@ function toggleAll() {
 const checkedCount = computed(function () {
   return items.value.filter(function (node) { return isChecked(node.id); }).length;
 });
+
+/* ---------------- 存为测试集（第八轮第 1 节） ---------------- */
+
+const projects = useProjectStore();
+const suites = useSuitesStore();
+const message = useMessage();
+const savingSuite = ref(false);
+
+/**
+ * 把当前勾选的接口按顺序建成一个新测试集，然后打开它。
+ *
+ * 批量运行是「这一次跑一批」，测试集是「存下来反复跑」—— 跑完觉得这套顺序有用，
+ * 一键存下来最省事（不用再去侧栏一个个加）。
+ */
+async function saveAsSuite() {
+  const picked = items.value.filter(function (node) { return isChecked(node.id); });
+  if (!picked.length) return;
+
+  savingSuite.value = true;
+  try {
+    const now = new Date();
+    const pad = function (n) { return String(n).padStart(2, '0'); };
+    const name = '测试集 ' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + ' ' +
+      pad(now.getHours()) + ':' + pad(now.getMinutes());
+
+    const data = await suitesApi.createSuite(projects.currentId, {
+      name: name,
+      steps: picked.map(function (node) { return { apiId: node.id }; })
+    });
+
+    // 侧栏那一栏读的是这个 store：放进去，切过去就能看到
+    suites.put(Object.assign({}, data.suite, { data: undefined }));
+    message.success('已存为测试集「' + data.suite.name + '」');
+    tabs.openSuite(data.suite.id, data.suite.name);
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    savingSuite.value = false;
+  }
+}
 
 /* ---------------- 设置 ---------------- */
 
@@ -184,6 +228,19 @@ function onStop() {
     <div class="head">
       <span class="title">{{ tab.title }}</span>
       <span class="spacer" />
+      <n-button
+        v-if="!runner.running"
+        size="small"
+        secondary
+        :disabled="!checkedCount"
+        :loading="savingSuite"
+        @click="saveAsSuite"
+      >
+        <template #icon>
+          <n-icon :component="DeviceFloppy" />
+        </template>
+        存为测试集
+      </n-button>
       <n-button v-if="runner.running" size="small" type="error" secondary @click="onStop">
         <template #icon>
           <n-icon :component="PlayerStop" />
