@@ -102,11 +102,11 @@ function removeExtract(op, id) {
       </span>
     </p>
 
-    <div v-if="!databases.length" class="notice">
+    <div v-if="localAllowed && !databases.length" class="notice">
       这个项目还没有数据库连接。先到「项目设置 → 数据库连接」里加一个，这里才能选。
     </div>
-    <div v-else-if="!localAllowed" class="notice">
-      数据库操作只在客户端里执行。当前是网页版，这些操作发送时会被跳过。
+    <div v-if="!localAllowed" class="notice">
+      网页版连不了数据库：数据库操作只能在客户端里新增、修改和执行。这里只能看，发送时会被跳过。
     </div>
     <div v-if="!hasEnvironment" class="notice warn">
       当前没有选环境（或者选的是内置的 Mock 环境），提取到「环境」的变量不会保存。

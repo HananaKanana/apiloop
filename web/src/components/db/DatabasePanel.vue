@@ -36,8 +36,16 @@ const props = defineProps({
   /** 只读角色：一个都不能改（连「测试连接」也不给 —— 那是拿库密码去连真库） */
   disabled: { type: Boolean, default: false },
   /** 测试连接要带项目 id（接口挂在这个项目下） */
-  pid: { type: String, default: '' }
+  pid: { type: String, default: '' },
+  /**
+   * 是不是在客户端里（本机网关上）。网页版连不了数据库：云端不该拿着库密码去连库，
+   * 「测试连接」的接口也只在客户端上有 —— 所以网页版上整块只读，只能看（用户 2026-10-04 要求）。
+   */
+  localAllowed: { type: Boolean, default: true }
 });
+
+/** 能不能改：只读角色不能，网页版也不能 */
+const locked = computed(function () { return props.disabled || !props.localAllowed; });
 
 const emit = defineEmits(['update:databases']);
 
@@ -163,8 +171,8 @@ const PASSWORD_PLACEHOLDER = '可以写 {{dbPassword}}';
         <div class="cell">{{ typeLabel(row.type) }}</div>
         <div class="cell mono">{{ addressOf(row) }}</div>
         <div class="cell action">
-          <n-button v-if="!disabled" size="tiny" quaternary @click="openEdit(row)">编辑</n-button>
-          <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="remove(row)">删除</n-button>
+          <n-button v-if="!locked" size="tiny" quaternary @click="openEdit(row)">编辑</n-button>
+          <n-button v-if="!locked" size="tiny" quaternary type="error" @click="remove(row)">删除</n-button>
         </div>
       </div>
 
@@ -173,10 +181,11 @@ const PASSWORD_PLACEHOLDER = '可以写 {{dbPassword}}';
       </div>
     </div>
 
-    <div v-if="!disabled" class="tools">
+    <div v-if="!locked" class="tools">
       <n-button size="small" @click="openNew">+ 新增连接</n-button>
     </div>
-    <p v-if="disabled" class="hint">只读角色只能看连接列表，不能改。</p>
+    <p v-if="!localAllowed" class="hint">网页版连不了数据库：连接要在客户端里新增、修改和测试（数据库操作也只在客户端里执行）。</p>
+    <p v-else-if="disabled" class="hint">只读角色只能看连接列表，不能改。</p>
 
     <n-modal
       :show="showEditor"

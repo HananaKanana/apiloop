@@ -580,8 +580,8 @@ const loadBlocked = computed(function () {
 /**
  * 数据库操作（第九轮第 3 节）**只在客户端里执行**：连接里带着库密码，云端不该拿着它
  * 去连生产库（服务端按 `ctx.localSend` 判断，见 lib/send-core.js）。这里是同一个判断 ——
- * 网页版上照样能配、照样保存，只提示「发送时会被跳过」，不做成灰的：配置本身是有用的，
- * 换到客户端上打开就能跑。
+ * 网页版上**只能看、不能改**（用户 2026-10-04：「云端不能连数据库，能操作的地方都不能操作」），
+ * 配好的内容换到客户端上打开就能改、能跑。
  */
 const dbLocalAllowed = computed(function () {
   return !(gateway.loaded && !gateway.isGateway);
@@ -1450,7 +1450,7 @@ onBeforeUnmount(function () {
           <db-ops-pane
             :db-ops="spec.dbOps || []"
             :databases="projects.current ? (projects.current.databases || []) : []"
-            :disabled="!projects.canEdit"
+            :disabled="!projects.canEdit || !dbLocalAllowed"
             :has-environment="hasEnvironment"
             :local-allowed="dbLocalAllowed"
             @update:db-ops="(v) => { spec.dbOps = v; }"

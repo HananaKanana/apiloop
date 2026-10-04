@@ -302,6 +302,7 @@ watch(function () { return route.params.pid; }, load);
               v-model:databases="form.databases"
               :pid="projectId"
               :disabled="!canEdit"
+              :local-allowed="!(gateway.loaded && !gateway.isGateway)"
             />
           </n-card>
 
