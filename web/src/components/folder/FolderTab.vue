@@ -9,6 +9,7 @@ import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
+import PreflightPanel from '@/components/preflight/PreflightPanel.vue';
 import { folderChain } from '@/utils/tree';
 import { inheritHint } from '@/utils/auth';
 
@@ -106,7 +107,9 @@ async function save() {
       auth: spec.value.auth,
       variables: spec.value.variables,
       headers: spec.value.headers,
-      scripts: spec.value.scripts
+      scripts: spec.value.scripts,
+      // 前置接口（第十轮第 3 节）：整份提交；null 是「跟着上层走」，{ apiId: null } 是「这里不用」
+      preflight: spec.value.preflight
     });
     tabs.markFolderSaved(props.tab, saved);
     message.success('已保存');
@@ -234,6 +237,23 @@ onBeforeUnmount(function () {
             响应回来后再按同样的顺序执行「响应后」脚本。
           </p>
           <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="180px" />
+        </n-card>
+
+        <!--
+          前置接口（第十轮第 3 节）：这个目录下的接口发送前先自动调一遍它（通常是登录接口）。
+          没设就是「跟着外层走」；设了「不使用」就挡住往上找。
+        -->
+        <n-card :bordered="false" size="small" title="前置接口" class="card">
+          <p class="tip">
+            这个目录下的接口发送之前，先自动调一遍选中的接口（通常是登录接口），
+            把 token 拿回来。不设置就跟着外层（上级目录 → 项目）走。
+          </p>
+          <preflight-panel
+            v-model="spec.preflight"
+            :apis="tree.apis"
+            allow-inherit
+            :disabled="!canEdit"
+          />
         </n-card>
       </template>
     </div>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
+  NAlert,
   NBadge,
   NButton,
   NCheckbox,
@@ -670,6 +671,10 @@ function changedFields(api, current) {
   // 数据库操作（第九轮第 3 节）：整份比、整份提交
   if (JSON.stringify(current.dbOps || []) !== JSON.stringify(saved.dbOps || [])) {
     patch.dbOps = current.dbOps || [];
+  }
+  // 前置接口（第十轮第 3 节）：这个接口自己「不使用前置接口」
+  if ((current.noPreflight === true) !== (saved.noPreflight === true)) {
+    patch.noPreflight = current.noPreflight === true;
   }
 
   return patch;
@@ -1500,6 +1505,27 @@ onBeforeUnmount(function () {
                 </span>
               </div>
             </div>
+
+            <!--
+              前置接口（第十轮第 3 节）：上面三条是「这次请求」的开关，这一条不一样 ——
+              它是**接口自己的设置**，会跟着「保存」存进 `apis.extra`，每次打开都生效。
+            -->
+            <p class="label section">保存到接口的设置</p>
+            <div class="option-row">
+              <n-switch
+                size="small"
+                :value="spec.noPreflight === true"
+                :disabled="!projects.canEdit"
+                @update:value="(v) => { spec.noPreflight = v; }"
+              />
+              <div class="option-text">
+                <span class="option-title">不使用前置接口</span>
+                <span class="option-desc">
+                  发送这个接口时不自动调用项目 / 目录上配的「前置接口」（比如登录接口）。
+                  适合那个接口自己不需要登录态的情况。改完记得点「保存」。
+                </span>
+              </div>
+            </div>
           </div>
         </n-tab-pane>
 
@@ -1520,6 +1546,19 @@ onBeforeUnmount(function () {
     />
 
     <div v-if="activePane !== 'mock'" class="response">
+      <!--
+        前置接口（第十轮第 3 节）：401 重发的那一次给一句提示，否则用户只会看到
+        「发了一次请求、结果是 200」，不知道中间多打了一次登录。
+      -->
+      <n-alert
+        v-if="tab.preflightNotice"
+        type="info"
+        :show-icon="false"
+        class="preflight-notice"
+      >
+        {{ tab.preflightNotice }}
+      </n-alert>
+
       <response-panel
         :tab="tab"
         :saving-example="savingExample"
@@ -1946,5 +1985,19 @@ onBeforeUnmount(function () {
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
+}
+
+/* 前置接口（第十轮第 3 节）401 重发那一次的提示：只占一行，不要跟着响应区一起被撑开 */
+.preflight-notice {
+  flex: none;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+/* 「这次请求的发送选项」和「保存到接口的设置」两块之间的分隔标题 */
+.label.section {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
 }
 </style>

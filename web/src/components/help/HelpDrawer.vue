@@ -27,6 +27,7 @@ const SECTIONS = [
   { id: 'load', title: '压测' },
   { id: 'db', title: '数据库操作' },
   { id: 'sio', title: 'Socket.IO' },
+  { id: 'preflight', title: '前置接口' },
   { id: 'shortcuts', title: '快捷键' }
 ];
 
@@ -193,14 +194,36 @@ const EXAMPLES = [
             <p>比如项目里 <code>host</code> 是生产地址，「测试」环境里也定义了 <code>host</code>，选「测试」时用的就是测试地址。</p>
 
             <h3>内置的动态变量</h3>
-            <p>每次发送都会重新生成，不用定义，名字不区分大小写：</p>
+            <p>不用定义，写在地址、参数、请求头、请求体里就行。<b>每出现一次生成一个新值</b>，
+              名字不区分大小写，中英文两种写法等价：</p>
             <table>
-              <tr><th>写法</th><th>值</th><th>例子</th></tr>
+              <tr><th>写法</th><th>生成什么</th><th>例子</th></tr>
               <tr><td><code v-pre>{{$guid}}</code></td><td>随机 UUID</td><td>3f2b8c1e-…</td></tr>
               <tr><td><code v-pre>{{$timestamp}}</code></td><td>当前时间戳（秒）</td><td>1790944794</td></tr>
+              <tr><td><code v-pre>{{$timestampMs}}</code></td><td>当前毫秒时间戳</td><td>1790944794000</td></tr>
               <tr><td><code v-pre>{{$isoTimestamp}}</code></td><td>当前时间（ISO 格式）</td><td>2026-10-02T08:00:00.000Z</td></tr>
               <tr><td><code v-pre>{{$randomInt}}</code></td><td>0~1000 的随机整数</td><td>427</td></tr>
+              <tr><td><code v-pre>{{$randomInt(1,100)}}</code> / <code v-pre>{{$整数(1,100)}}</code></td><td>区间内的随机整数</td><td>39</td></tr>
+              <tr><td><code v-pre>{{$randomPhone}}</code> / <code v-pre>{{$手机号}}</code></td><td>11 位手机号（真实号段）</td><td>13800138000</td></tr>
+              <tr><td><code v-pre>{{$randomIdCard}}</code> / <code v-pre>{{$身份证}}</code></td><td>18 位身份证号（校验位正确）</td><td>11010519900307123X</td></tr>
+              <tr><td><code v-pre>{{$randomChineseName}}</code> / <code v-pre>{{$中文名}}</code></td><td>中文姓名</td><td>张伟</td></tr>
+              <tr><td><code v-pre>{{$randomEmail}}</code> / <code v-pre>{{$邮箱}}</code></td><td>邮箱</td><td>user1234@example.com</td></tr>
+              <tr><td><code v-pre>{{$randomDate}}</code> / <code v-pre>{{$日期}}</code></td><td>近一年内的日期</td><td>2026-04-11</td></tr>
+              <tr><td><code v-pre>{{$randomDateTime}}</code> / <code v-pre>{{$时间}}</code></td><td>近一年内的日期时间</td><td>2026-04-11 15:20:33</td></tr>
+              <tr><td><code v-pre>{{$randomAddress}}</code> / <code v-pre>{{$地址}}</code></td><td>省市区 + 详细地址</td><td>杭州市中山路12号3栋501室</td></tr>
+              <tr><td><code v-pre>{{$randomCompany}}</code> / <code v-pre>{{$公司}}</code></td><td>公司名</td><td>字节跳动</td></tr>
+              <tr><td><code v-pre>{{$randomBankCard}}</code> / <code v-pre>{{$银行卡}}</code></td><td>16 / 19 位卡号（Luhn 校验正确）</td><td>6222021234567890</td></tr>
+              <tr><td><code v-pre>{{$randomCreditCode}}</code> / <code v-pre>{{$信用代码}}</code></td><td>18 位统一社会信用代码</td><td>91330106MA27XYZ123</td></tr>
+              <tr><td><code v-pre>{{$randomPlate}}</code> / <code v-pre>{{$车牌}}</code></td><td>车牌号</td><td>浙A1B2C3</td></tr>
+              <tr><td><code v-pre>{{$randomIp}}</code></td><td>IPv4 地址</td><td>192.168.1.20</td></tr>
             </table>
+            <p>在输入框里打 <code v-pre>{{$</code> 会把这些列出来（带中文说明）。</p>
+            <p><b>同一个值要用两次</b>：先在「请求前」脚本里存一次，再用普通变量引用 ——</p>
+            <pre v-pre>pm.variables.set('phone', pm.variables.replaceIn('{{$手机号}}'));</pre>
+            <p>之后写 <code v-pre>{{phone}}</code> 就是同一个号码了。脚本里也能用
+              <code>pm.variables.replaceIn()</code> 直接展开任意带变量的文本。</p>
+            <p><b>变量名可以用中文</b>：<code v-pre>{{账号}}</code> 这种写法在环境变量、目录变量、
+              项目变量和数据驱动的 CSV 列名里都认。</p>
 
             <h3>内置的 Mock 环境</h3>
             <p>环境下拉里固定有一项「Mock」，选中后 <code v-pre>{{host}}</code> 就是这个项目的 Mock 地址。
@@ -490,6 +513,39 @@ const EXAMPLES = [
                 所以要在本机客户端（不是网页版）里用。</li>
               <li>本客户端连的是 Socket.IO <b>3.x / 4.x</b> 的服务端；2.x 及更早的握手格式不一样，
                 连不上时会提示。</li>
+            </ul>
+          </section>
+
+          <!-- ============================================================ 前置接口 -->
+          <section id="help-preflight">
+            <h2>前置接口</h2>
+            <p>token 过期之后就不用再手动点一次「登录」再回来发请求了：在<b>项目设置</b>或
+              <b>目录设置</b>里指一个接口（通常就是登录接口），发送时会自动先调它一遍。
+              测试集、批量运行同样生效，而且<b>一次运行只登录一次</b>（拿到的 token 留在这次运行里）。</p>
+
+            <h3>怎么配</h3>
+            <ul>
+              <li>「前置接口」选一个接口；两个触发条件（默认都勾着）：</li>
+              <li>☑ <b>变量没有值时</b> —— 变量名默认 <code>token</code>，取不到或者为空就先调一次；</li>
+              <li>☑ <b>响应是 401 时</b> —— 主请求回了 401 就自动登录再重发一次（只重发一次）。</li>
+              <li>目录上设了就用目录的（离接口最近的那一层），没设就往上找，一直到项目。
+                目录上还能选「不使用前置接口」，挡住往上找。</li>
+              <li>单个接口不想用，在它的「设置」页签里勾「不使用前置接口」。</li>
+              <li>前置接口自己不会再触发前置接口 —— 不然把登录接口设成前置接口就套起来了。</li>
+            </ul>
+
+            <h3>token 从哪儿来</h3>
+            <p>前置接口要<b>自己</b>把 token 存起来：在它的「断言」页签里配一条<b>提取变量</b>
+              （提取到环境，变量名 <code>token</code>），或者写一段「响应后」脚本
+              <code>pm.environment.set('token', ...)</code>。存下来的值会写回环境，
+              所以下一次连前置接口都不用调。</p>
+
+            <h3>发生了什么</h3>
+            <ul>
+              <li>自动调了前置接口时，响应面板的「控制台」里会有一行说明（是因为变量没有值，还是因为 401）。</li>
+              <li>401 重发的那一次，响应面板顶上会提示「token 失效，已自动登录并重发」。</li>
+              <li>前置接口自己失败（连不上、响应 4xx/5xx、它自己的断言没过）<b>不影响主请求</b>
+                —— token 可能其实还有效，控制台里会写清楚失败原因。</li>
             </ul>
           </section>
 

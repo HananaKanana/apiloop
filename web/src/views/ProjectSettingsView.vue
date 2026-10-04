@@ -16,6 +16,7 @@ import {
 import { useDialog } from '@/utils/dialog';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
+import { useTreeStore } from '@/stores/tree';
 import VarTable from '@/components/common/VarTable.vue';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import AuthEditor from '@/components/request/AuthEditor.vue';
@@ -24,6 +25,7 @@ import MembersPanel from '@/components/members/MembersPanel.vue';
 import ShareLinksPanel from '@/components/share/ShareLinksPanel.vue';
 import MockFaultPanel from '@/components/mock/MockFaultPanel.vue';
 import DatabasePanel from '@/components/db/DatabasePanel.vue';
+import PreflightPanel from '@/components/preflight/PreflightPanel.vue';
 
 /**
  * 项目设置。按角色收口：
@@ -37,6 +39,7 @@ const route = useRoute();
 const router = useRouter();
 const projects = useProjectStore();
 const gateway = useGatewayStore();
+const tree = useTreeStore();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -69,7 +72,9 @@ const form = ref({
   // Mock 故障模拟（第七轮第 1 节）：`projects.extra.mockFaults`，没设过是 null
   mockFaults: null,
   // 数据库连接（第九轮第 3 节）：`projects.extra.databases`，接口的「数据库」页签挑的就是它们
-  databases: []
+  databases: [],
+  // 前置接口（第十轮第 3 节）：`projects.extra.preflight`，没配过是 null
+  preflight: null
 });
 
 const projectId = ref('');
@@ -91,7 +96,9 @@ function fillFrom(project) {
     headers: JSON.parse(JSON.stringify(project.headers || [])),
     scripts: JSON.parse(JSON.stringify(project.scripts || [])),
     mockFaults: project.mockFaults ? JSON.parse(JSON.stringify(project.mockFaults)) : null,
-    databases: JSON.parse(JSON.stringify(project.databases || []))
+    databases: JSON.parse(JSON.stringify(project.databases || [])),
+    // 前置接口（第十轮第 3 节）：整份深拷贝，没配过就是 null
+    preflight: project.preflight ? JSON.parse(JSON.stringify(project.preflight)) : null
   };
 }
 
@@ -101,6 +108,8 @@ async function load() {
   try {
     if (!projects.projects.length) await projects.load();
     projectId.value = String(route.params.pid || '');
+    // 前置接口要选一个接口，所以这一个页签也要一份接口清单（目录树的数据）
+    if (!tree.apis.length) await tree.load();
     const project = projects.projects.find(function (item) { return item.id === projectId.value; });
     if (!project) {
       errorText.value = '找不到这个项目，它可能已经被删除了。';
@@ -132,7 +141,9 @@ async function save() {
       // Mock 故障模拟（第七轮第 1 节）：没开过、也没加过规则时给 null，服务端会把这块清掉
       mockFaults: form.value.mockFaults,
       // 数据库连接（第九轮第 3 节）：整份提交，空数组就是清掉
-      databases: form.value.databases
+      databases: form.value.databases,
+      // 前置接口（第十轮第 3 节）：整份提交，null 就是清掉
+      preflight: form.value.preflight
     };
     if (isOwner.value) {
       patch.name = form.value.name.trim();
@@ -290,6 +301,22 @@ watch(function () { return route.params.pid; }, load);
             <database-panel
               v-model:databases="form.databases"
               :pid="projectId"
+              :disabled="!canEdit"
+            />
+          </n-card>
+
+          <!--
+            前置接口（第十轮第 3 节）：token 过期时不用再手动点一次登录。
+            目录上也能设，离接口最近的那一层说了算；项目这一层是最外层。
+          -->
+          <n-card :bordered="false" size="small" title="前置接口" class="card">
+            <p class="tip">
+              发送之前先自动调一遍这个接口（通常是登录接口），把 token 拿回来。
+              目录上单独设过的话，以目录上的为准。
+            </p>
+            <preflight-panel
+              v-model="form.preflight"
+              :apis="tree.apis"
               :disabled="!canEdit"
             />
           </n-card>

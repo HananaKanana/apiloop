@@ -8,6 +8,7 @@ import { encodeQueryPart } from '@/utils/query';
 import { MOCK_ENV_ID, mockBaseFor } from '@/utils/mock';
 import { byteLength } from '@/utils/bytes';
 import { emptyRunner } from '@/utils/runner';
+import { shouldRetry401 } from '@/utils/preflight';
 import { emptyLoad, readSettings } from '@/utils/load';
 import { useWsStore } from '@/stores/ws';
 import { useSioStore } from '@/stores/sio';
@@ -56,7 +57,10 @@ export function emptySpec() {
     responseFields: [],
     // 数据库操作（第九轮第 3 节）：同样存在 extra 里、同样进 spec。
     // 发送时服务端从请求体里读（和 scripts 一样），所以没保存的改动也生效
-    dbOps: []
+    dbOps: [],
+    // 前置接口（第十轮第 3 节）：这个接口自己不使用前置接口。勾了就保存到 `apis.extra`，
+    // 发送时也从请求体里读（和 dbOps 一样，没保存的改动也生效）
+    noPreflight: false
   };
 }
 
@@ -90,7 +94,14 @@ export function emptyLive() {
      * `SERVER_SEND_DISABLED`）。这种错发生在 NDJSON 开始之前，进不了 `result.error`，
      * 只存在 `tab.sendError` 的文案里，界面就没法按码区分（审阅 B1）。
      */
-    sendErrorCode: ''
+    sendErrorCode: '',
+    /**
+     * 前置接口（第十轮第 3 节）：这次生效的规则，由服务端在 `end` 事件里给。
+     * 流式的 401 只能由前端重发，重发前得先知道 `retryOn401` 开着没有。
+     */
+    preflightRule: null,
+    /** 401 重发那一次的提示文案（响应面板顶上那条） */
+    preflightNotice: ''
   };
 }
 
@@ -151,7 +162,9 @@ export function folderSpecFrom(folder) {
     variables: JSON.parse(JSON.stringify(folder.variables || [])),
     // 公共请求头（第五轮第 1 节）：这个目录下的接口发送时都会带上
     headers: JSON.parse(JSON.stringify(folder.headers || [])),
-    scripts: JSON.parse(JSON.stringify(folder.scripts || []))
+    scripts: JSON.parse(JSON.stringify(folder.scripts || [])),
+    // 前置接口（第十轮第 3 节）：`null` 是「跟着上层走」，`{ apiId: null }` 是「这里不用」
+    preflight: folder.preflight ? JSON.parse(JSON.stringify(folder.preflight)) : null
   };
 }
 
@@ -212,7 +225,9 @@ export function specFromApi(api) {
     // 响应字段说明（第六轮第 2 节）：整份深拷贝，编辑区和 tab.api 那份不能共用对象
     responseFields: copy(api.responseFields || []),
     // 数据库操作（第九轮第 3 节）：同样整份深拷贝；连接表在项目上，这里只有「用哪个连接」
-    dbOps: copy(api.dbOps || [])
+    dbOps: copy(api.dbOps || []),
+    // 前置接口（第十轮第 3 节）：这个接口自己勾了「不使用前置接口」
+    noPreflight: api.noPreflight === true
   };
 }
 
@@ -1062,9 +1077,12 @@ export const useTabsStore = defineStore('tabs', function () {
    * - 其他响应只累计字节数，不把 chunk 一段段拼进 DOM；
    * - `end` 到了才把 result 交给响应面板。Cookie 写回和历史都由服务端在 `end` 之前做完。
    */
-  async function sendRequest(projectId, environmentId) {
+  async function sendRequest(projectId, environmentId, extra) {
     const tab = active.value;
     if (!tab || tab.sending) return;
+
+    /** 前置接口（第十轮第 3 节）：401 重发那一次带 true，服务端会直接先登录一遍 */
+    const forcePreflight = Boolean(extra && extra.forcePreflight);
 
     Object.assign(tab, emptyLive(), {
       sending: true,
@@ -1074,6 +1092,8 @@ export const useTabsStore = defineStore('tabs', function () {
       missingVariables: [],
       controller: new AbortController()
     });
+
+    if (forcePreflight) tab.preflightNotice = 'token 失效，已自动登录并重发';
 
     // 只在确认是 SSE 之后才建解析器
     const sse = { parser: null };
@@ -1111,6 +1131,8 @@ export const useTabsStore = defineStore('tabs', function () {
       if (event.type === 'end') {
         if (sse.parser) sse.parser.end();
         tab.result = event.result || null;
+        // 前置接口（第十轮第 3 节）：这次生效的规则由服务端算，下面据此决定要不要重发
+        tab.preflightRule = event.preflight || null;
         tab.historyId = event.historyId || null;
         tab.missingVariables = (event.result && event.result.missingVariables) || [];
         refreshVariablesIfPersisted(event.result);
@@ -1127,7 +1149,8 @@ export const useTabsStore = defineStore('tabs', function () {
           // 选中内置 Mock 环境时要额外带上 mock 地址：服务端不存这个环境，
           // 地址只能由页面给它（见 utils/mock.js）
           mockBase: mockBaseFor(environmentId, useProjectStore().current),
-          options: clone(tab.options || emptyOptions())
+          options: Object.assign(clone(tab.options || emptyOptions()),
+            forcePreflight ? { forcePreflight: true } : null)
         },
         { signal: tab.controller.signal, onEvent: onEvent }
       );
@@ -1144,6 +1167,20 @@ export const useTabsStore = defineStore('tabs', function () {
     } finally {
       tab.sending = false;
       tab.controller = null;
+    }
+
+    /**
+     * 401 自动重发（第十轮第 3 节）。
+     *
+     * **流式发送只能在浏览器这头重发**：响应头早就推给页面了，服务端再换一份响应
+     * 就等于说了两次话。所以这里拿到 401、而且这个接口生效的规则里 `retryOn401` 开着时，
+     * 带 `forcePreflight` 再发一次（服务端见到它就先跑前置接口，不看「变量有没有值」）。
+     *
+     * **只重发一次**：第二次进来 `forcePreflight` 为真，不再往下走。
+     */
+    if (active.value === tab && !tab.cancelled && !tab.sendError &&
+        shouldRetry401(tab.result, tab.preflightRule, { forcePreflight: forcePreflight })) {
+      return sendRequest(projectId, environmentId, { forcePreflight: true });
     }
   }
 
