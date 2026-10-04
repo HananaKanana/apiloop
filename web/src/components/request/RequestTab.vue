@@ -850,6 +850,18 @@ const AUTH_LABELS = {
   apikey: 'API Key'
 };
 
+/**
+ * 这个接口的 Mock 开着没有（临时标签页没有接口，就是没开）。
+ * 优先读标签页自己那份接口详情（Mock 面板开关后改的就是它），没加载过再看目录树那份。
+ */
+function mockEnabledNow() {
+  const apiId = props.tab.apiId;
+  if (!apiId) return false;
+  if (props.tab.api && props.tab.api.mock) return Boolean(props.tab.api.mock.enabled);
+  const api = tree.apis.find(function (item) { return item.id === apiId; });
+  return Boolean(api && api.mockEnabled);
+}
+
 const paneStatus = computed(function () {
   const spec = props.tab.spec;
   const params = spec.params || {};
@@ -866,6 +878,8 @@ const paneStatus = computed(function () {
     hasChecks: hasEnabled(spec.assertions) || hasEnabled(spec.extracts),
     // 数据库操作（第九轮第 3 节）：同上
     hasDbOps: hasEnabledDbOp(spec.dbOps),
+    // Mock 开着：和目录树右边那个绿点读的是同一份（tree store 里的接口），开关一变两处一起变
+    mockOn: mockEnabledNow(),
     auth: AUTH_LABELS[String(auth.type || 'inherit')] || '继承'
   };
 });
@@ -1529,7 +1543,13 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="mock" tab="Mock">
+        <n-tab-pane name="mock">
+          <!-- Mock 开着时和 Body / 断言一样点一个绿点：一眼看出这个接口在对外提供假数据 -->
+          <template #tab>
+            <span class="pane-tab" :title="paneStatus.mockOn ? 'Mock 已开启' : ''">
+              Mock<span v-if="paneStatus.mockOn" class="pane-dot" />
+            </span>
+          </template>
           <div class="pane">
             <mock-panel :tab="tab" @save-response="openSaveExample" />
           </div>

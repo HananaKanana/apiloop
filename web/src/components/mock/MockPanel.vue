@@ -15,6 +15,7 @@ import * as expectationsApi from '@/api/expectations';
 import { useProjectStore } from '@/stores/project';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
+import { useTreeStore } from '@/stores/tree';
 import { mockBaseUrl } from '@/utils/mock';
 import { usePrompt } from '@/utils/prompt';
 import { conditionSummary } from '@/utils/expectation';
@@ -206,6 +207,9 @@ async function patchMock(patch) {
     // 界面上还弹「已保存」—— 启用 mock / 改路径 / 设为 mock 全都失效。
     const data = await apisApi.updateApi(props.tab.apiId, { mock: next });
     props.tab.api = data.api;
+    // 目录树右边的绿点读的是 tree store 那份：顺手改掉，不然要刷新页面才变
+    const node = useTreeStore().apis.find(function (item) { return item.id === props.tab.apiId; });
+    if (node && data.api && data.api.mock) node.mockEnabled = Boolean(data.api.mock.enabled);
     message.success('已保存');
   } catch (err) {
     // 服务端的 400（比如「请先保存一个示例」）原样提示，并把界面退回真实状态
