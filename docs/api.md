@@ -239,15 +239,49 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 `PUT /projects/:pid` 传 `mockVariables: [...]` 保存，传 `null` 还原默认值。
 `/send`、`/send/stream`、`POST /projects/:pid/ws` 用 `environmentId: 'mock'` 加 `mockBase` 选中它。
 
+## 导出文档
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/export/doc` | `?format=md\|html\|docx&folderId=&examples=1&mock=0&doneOnly=0&mockBase=`，直接回文件（`Content-Disposition: attachment`，中文文件名走 `filename*`）（viewer） |
+
+内容和打码规则与分享文档一样（同一份 `publicDoc`）。示例里的 Mock 模板先渲染成真实数据再写进文档（分享页同样）。
+
+## 数据库操作（只在客户端执行）
+
+- 连接：项目 DTO 顶层 `databases: [{ id, name, type: 'mysql' | 'postgres' | 'redis', host, port, user, password, database }]`，每个字段都能写 `{{变量}}`；`PUT /projects/:pid` 整份替换。
+- 操作：接口 DTO 顶层 `dbOps: [{ id, enabled, phase: 'pre' | 'post', connectionId, statement, extracts: [{ id, enabled, path, scope, name }] }]`；保存接口时接受，`/send` 的 `request.dbOps` 也认（没保存的修改照样生效）。
+- 执行顺序：请求前的数据库操作 → 请求前脚本 → 发请求 → 响应后的数据库操作 → 可视化断言和提取 → 响应后脚本。请求前的失败了不发请求；响应后的失败记一条没通过的测试。
+- 提取路径：SQL 的结果是行数组（`[0].code`）；MySQL 的 INSERT / UPDATE / DELETE 是 `[{ affectedRows, insertId }]`；Redis 是命令的返回值（路径留空取整个）。BIGINT 按字符串给。SELECT 最多 100 行，超时 10 秒。
+- 云端发送时整节跳过，控制台提示一句。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/databases/test` | `{ connection, environmentId }`，执行 `SELECT 1` / `PING`，回 `{ ok, timeMs, error }`（editor，只在客户端上有） |
+
+## Socket.IO 调试
+
+接口 `method` 为 `SIO`，DTO 顶层 `sio: { path, namespace, transports: 'polling' | 'websocket', auth, listenEvents, sends: [{ id, event, args, ack }] }`。
+`auth` 里的字符串、地址、请求头都按环境替换变量。客户端是 socket.io-client v4（能连 3.x / 4.x 的服务端）。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/sio/prepare` | 给本机网关用的准备（viewer） |
+| `POST /projects/:pid/sio` | `{ spec, environmentId }` 建会话并开始连（viewer；`SERVER_SEND=0` 时 409） |
+| `GET /sio/:id/events?after=` | NDJSON 事件流（`open` / `message`（`direction`: in / out / ack，`event`，`text`）/ `close` / `error`），断线后带 `after` 补发（会话创建者） |
+| `POST /sio/:id/send` | `{ event, args, ack }`（会话创建者；没连上 409） |
+| `DELETE /sio/:id` | 断开并销毁 |
+
 ## 集合 / 环境 JSON 导入导出（契约第 6 节）
 
-格式是 Collection v2.0 / v2.1、Environment、Globals 的 JSON。
+格式是 Collection v2.0 / v2.1、Environment、Globals 的 JSON，以及 **YApi**（「数据导出 → json」）和 **Apifox**（`.apifox.json`）的导出文件 ——
+自动识别，预览的响应里 `format` 是 `postman` / `yapi` / `apifox`。Apifox 文件里的环境会一并建出来。导入的请求体上限 50MB。
 
 | 方法与路径 | 说明 |
 | --- | --- |
 | `POST /import/json/preview` | 解析并统计，不写库 |
 | `POST /import/json` | 导入集合 / 环境 / 全局变量；`{ text, mode?: 'new'\|'into', projectId? }`，整个导入是一个事务 |
-| `GET /projects/:pid/export/json` | 导出项目（集合 JSON），返回 `{ filename, json }`。`method` 为 `WS` 的接口会被跳过，`warnings` 里说明跳过了几个 |
+| `GET /projects/:pid/export/json` | 导出项目（集合 JSON），返回 `{ filename, json }`。`method` 为 `WS` / `SIO` 的接口会被跳过，`warnings` 里说明跳过了几个；数据库连接的密码清空 |
 | `GET /environments/:id/export/json` | 导出环境 JSON |
 
 ## HAR 导入（契约第 13 节）
