@@ -15,6 +15,16 @@
   起临时云端：`APILOOP_HOME=<scratchpad>/x APILOOP_ADMIN_PASSWORD=adminpass123 node bin/server web --port 18xxx`；
   起临时网关：`APILOOP_HOME=<scratchpad>/y node bin/server gateway --cloud=http://127.0.0.1:18xxx --port=18yyy`。
   **绝对不要碰真实的 `~/.apiloop`**（用户本机客户端的数据）。
+- **改了 `.vue` 文件，审阅时要真的把组件跑一遍**（不开浏览器）：`npm run build:web` 只查语法，
+  「声明之前就用了」这类错误要组件创建时才炸（2026-10-04：`BodyViewer.vue` 的 `fieldTree` 写在
+  `watch(..., { immediate: true })` 后面，所有文本响应的 Body 一片空白，构建、审阅全都没发现）。
+  办法：scratchpad 里写一个 `.mjs`，用 vite 的 `createServer({ configFile: 'web/vite.config.js',
+  server: { middlewareMode: true }, ssr: { external: ['vue', 'naive-ui', '@vicons/tabler', 'pinia', 'vue-router', 'codemirror'] } })`
+  + `ssrLoadModule('/src/…/X.vue')` 加载组件；`vue`、`vue/server-renderer`、`naive-ui`、`pinia`、`vue-router`
+  用 `createRequire(项目的 package.json).resolve` 拿到路径再原生 `import()`；套上 `NConfigProvider`、`NMessageProvider`、
+  `NDialogProvider`，`app.use(createPinia())` + 内存路由，`app.config.errorHandler` 只记第一个错误，`renderToString`。
+  报 `before initialization` / `is not a function` 就是真问题；`document is not defined`（CodeMirror）是 SSR 自己的限制，可以忽略。
+  一次能扫全部 `.vue`，几秒钟。
 - **攒一批再打包。** 修完一个问题只提交、推送，不打安装包。等用户说「问题说完了 / 打个包」才统一打包。
 - **推送：** 只有主会话推送。推之前单独跑一次 `git log origin/master..HEAD` 看范围，**不要把
   commit 和 push 串在一条命令里**。用路径限定提交：`git commit -m "..." -- <自己改的文件>`，
