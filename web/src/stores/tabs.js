@@ -10,6 +10,7 @@ import { byteLength } from '@/utils/bytes';
 import { emptyRunner } from '@/utils/runner';
 import { emptyLoad, readSettings } from '@/utils/load';
 import { useWsStore } from '@/stores/ws';
+import { useSioStore } from '@/stores/sio';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
@@ -18,6 +19,12 @@ import { usePrefsStore } from '@/stores/prefs';
 
 let draftSeq = 0;
 let wsSeq = 0;
+let sioSeq = 0;
+
+/** 既是 WebSocket 标签页又是 Socket.IO 标签页（两者的状态都按 key 存、都要单独收尾） */
+function isSocketTab(tab) {
+  return Boolean(tab) && (tab.kind === 'ws' || tab.kind === 'sio');
+}
 
 /** 事件视图里最多保留多少条，超出就丢最旧的（契约第 14 节的调试视图） */
 const MAX_SSE_EVENTS = 2000;
@@ -107,6 +114,29 @@ export function wsSpecFromApi(api) {
       ? null
       : JSON.parse(JSON.stringify(api.auth))
   };
+}
+
+/**
+ * Socket.IO 调试标签页的请求内容（第九轮第 4 节）。
+ *
+ * 地址、请求头、query、鉴权沿用接口自己的字段（和 WebSocket 一样），
+ * 多一块 `sio`：path / namespace / 传输方式 / 监听名单 / 常用发送。
+ */
+export function emptySioSpec() {
+  return {
+    url: '',
+    params: { headers: [], query: [] },
+    auth: null,
+    sio: { path: '/socket.io', namespace: '/', transports: 'polling', listenEvents: [], sends: [] }
+  };
+}
+
+export function sioSpecFromApi(api) {
+  const base = wsSpecFromApi(api);
+  base.sio = api.sio
+    ? JSON.parse(JSON.stringify(api.sio))
+    : { path: '/socket.io', namespace: '/', transports: 'polling', listenEvents: [], sends: [] };
+  return base;
 }
 
 /**
@@ -324,6 +354,8 @@ export const useTabsStore = defineStore('tabs', function () {
     // WS 接口用 WebSocket 标签页打开（契约第 17 节），不是那套 HTTP 界面。
     // 它不走预览：连着的会话被顶掉就断了
     if (data.api.method === 'WS') return pushWsApiTab(data.api);
+    // Socket.IO（第九轮第 4 节）同理，走 Socket.IO 标签页
+    if (data.api.method === 'SIO') return pushSioApiTab(data.api);
 
     const spec = specFromApi(data.api);
     const tab = Object.assign({
@@ -429,6 +461,63 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: api.id,
       folderId: api.folderId || null,
       title: api.name || 'WebSocket',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
+   * 新建一个 Socket.IO 调试标签页（第九轮第 4 节）。和 WebSocket 那一份一模一样：
+   * **不进目录树**，想留下来就点「保存到目录」，那时会变成绑定接口的 Socket.IO 标签页。
+   */
+  function openSio() {
+    sioSeq += 1;
+    const key = 'sio:' + sioSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'sio',
+      apiId: null,
+      folderId: null,
+      title: 'Socket.IO',
+      spec: emptySioSpec(),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 绑定接口的 Socket.IO 标签页（同一接口只会有一个标签页，key 是 `api:<id>`） */
+  function pushSioApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = sioSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'sio',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || 'Socket.IO',
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: { cookies: true },
@@ -764,7 +853,10 @@ export const useTabsStore = defineStore('tabs', function () {
     if (tab && tab.runner && tab.runner.controller) tab.runner.controller.abort();
     // 压测也要一起停：关掉标签页之后没人看结果了，在途的请求没必要继续打人家
     if (tab && tab.load && tab.load.controller) tab.load.controller.abort();
-    if (tab && tab.kind === 'ws') useWsStore().closeFor(tab.key);
+    if (isSocketTab(tab)) {
+      if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
+      else useWsStore().closeFor(tab.key);
+    }
   }
 
   function close(key) {
@@ -790,8 +882,8 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      // 绑定了接口的 WebSocket 标签页（kind 是 ws）也要一起收
-      return (tab.kind === 'api' || tab.kind === 'ws') &&
+      // 绑定了接口的 WebSocket / Socket.IO 标签页（kind 是 ws / sio）也要一起收
+      return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio') &&
         Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
@@ -815,7 +907,7 @@ export const useTabsStore = defineStore('tabs', function () {
    */
   function applyRename(kind, id, name) {
     tabs.value.forEach(function (tab) {
-      if (kind === 'api' && tab.apiId === id && (tab.kind === 'api' || tab.kind === 'ws')) {
+      if (kind === 'api' && tab.apiId === id && (tab.kind === 'api' || isSocketTab(tab))) {
         tab.title = name;
         if (tab.api) tab.api = Object.assign({}, tab.api, { name: name });
         return;
@@ -835,23 +927,25 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function markSaved(tab, api) {
-    // WS 接口存下来之后要换成 WebSocket 的样子：spec 形状和普通接口不一样
-    if (api.method === 'WS') {
+    // WS / SIO 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
+    if (api.method === 'WS' || api.method === 'SIO') {
+      const isSio = api.method === 'SIO';
       const previousKey = tab.key;
-      const wsSpec = wsSpecFromApi(api);
-      tab.kind = 'ws';
+      const nextSpec = isSio ? sioSpecFromApi(api) : wsSpecFromApi(api);
+      tab.kind = isSio ? 'sio' : 'ws';
       tab.apiId = api.id;
       tab.api = api;
       tab.key = 'api:' + api.id;
-      tab.title = api.name || 'WebSocket';
+      tab.title = api.name || (isSio ? 'Socket.IO' : 'WebSocket');
       tab.folderId = api.folderId || null;
-      tab.spec = wsSpec;
-      tab.savedSnapshot = snapshot(wsSpec);
+      tab.spec = nextSpec;
+      tab.savedSnapshot = snapshot(nextSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
-      // 临时标签页是 `ws:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 临时标签页是 `ws:N` / `sio:N`，绑上接口之后 key 变成 `api:<id>`：
       // 会话状态（日志、连接、重连计时器）要跟着搬，否则刚录的东西全丢
-      useWsStore().move(previousKey, tab.key);
+      if (isSio) useSioStore().move(previousKey, tab.key);
+      else useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
       return;
     }
@@ -893,14 +987,17 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const list = tabs.value.filter(function (tab) {
       return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
-        (tab.kind === 'api' || tab.kind === 'ws');
+        (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio');
     });
     if (!list.length) return;
 
     await Promise.all(list.map(async function (tab) {
       try {
         const data = await apisApi.getApi(tab.apiId);
-        const next = data.api.method === 'WS' ? wsSpecFromApi(data.api) : specFromApi(data.api);
+        const method = String(data.api.method || '').toUpperCase();
+        const next = method === 'WS'
+          ? wsSpecFromApi(data.api)
+          : (method === 'SIO' ? sioSpecFromApi(data.api) : specFromApi(data.api));
         tab.api = data.api;
         tab.title = data.api.name || tab.title;
         tab.folderId = data.api.folderId || null;
@@ -1062,6 +1159,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openApi: openApi,
     openDraft: openDraft,
     openWs: openWs,
+    openSio: openSio,
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,

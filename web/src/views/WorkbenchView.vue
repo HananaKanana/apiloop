@@ -13,6 +13,7 @@ import FindReplaceDialog from '@/components/search/FindReplaceDialog.vue';
 import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
+import SioTab from '@/components/sio/SioTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
 import LoadTab from '@/components/load/LoadTab.vue';
@@ -229,6 +230,11 @@ function onNewWs() {
   tabs.openWs();
 }
 
+/** Socket.IO 调试标签页（第九轮第 4 节）：同上，不进目录树 */
+function onNewSio() {
+  tabs.openSio();
+}
+
 /** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
 function onOpenFolder(folderId, options) {
   tabs.openFolder(folderId, options);
@@ -249,6 +255,8 @@ function onRun(folderId) {
 function tabMethod(tab) {
   if (!tab) return '';
   if (tab.kind === 'ws') return 'WS';
+  // Socket.IO 调试标签页固定 SIO（第九轮第 4 节）
+  if (tab.kind === 'sio') return 'SIO';
   // 目录页签、「运行」页签、「压测」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
   if (tab.kind === 'folder' || tab.kind === 'runner' || tab.kind === 'load' ||
       tab.kind === 'suite' || tab.kind === 'envdiff') return '';
@@ -421,6 +429,7 @@ onBeforeUnmount(function () {
           @open="onOpenApi"
           @new-api="onNewApi"
           @new-ws="onNewWs"
+          @new-sio="onNewSio"
           @open-folder="onOpenFolder"
           @run="onRun"
           @import="ui.openImport()"
@@ -512,6 +521,11 @@ onBeforeUnmount(function () {
           />
           <ws-tab
             v-else-if="tabs.active && tabs.active.kind === 'ws'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <sio-tab
+            v-else-if="tabs.active && tabs.active.kind === 'sio'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

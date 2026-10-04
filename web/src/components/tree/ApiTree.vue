@@ -29,7 +29,7 @@ import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.v
 import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
 const prefs = usePrefsStore();
@@ -59,7 +59,9 @@ const methodWidth = METHOD_LABEL_WIDTH;
 const newOptions = [
   { label: '接口', key: 'api' },
   { label: '目录', key: 'folder' },
-  { label: 'WebSocket', key: 'ws' }
+  { label: 'WebSocket', key: 'ws' },
+  // Socket.IO（第九轮第 4 节）：和 WebSocket 并列的调试标签页入口
+  { label: 'Socket.IO', key: 'sio' }
 ];
 
 function onNewSelect(key) {
@@ -69,6 +71,10 @@ function onNewSelect(key) {
   }
   if (key === 'ws') {
     emit('new-ws');
+    return;
+  }
+  if (key === 'sio') {
+    emit('new-sio');
     return;
   }
   if (key === 'folder') {

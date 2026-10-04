@@ -6,6 +6,9 @@ import { formatBytes } from '@/utils/bytes';
 /**
  * WebSocket 的消息日志：上游来的事件原样列出来。
  *
+ * Socket.IO（第九轮第 4 节）也用它：那边每条消息多一个事件名，所以多一列
+ * `item.event`（WebSocket 的消息没有这个字段，那一列就不显示）。
+ *
  * 和 SSE 事件视图一样手写列表而不是 n-data-table（体积），
  * 也只是显示 —— 截断、上限都在 stores/ws.js 里做完。
  */
@@ -113,9 +116,10 @@ const overflowText = computed(function () {
             @click="toggle(index)"
           >
             <span class="dir" :class="item.direction === 'out' ? 'out' : 'in'">
-              {{ item.direction === 'out' ? '↑ 发出' : '↓ 收到' }}
+              {{ item.direction === 'out' ? '↑ 发出' : (item.direction === 'ack' ? '↩ 确认' : '↓ 收到') }}
             </span>
             <span class="time">{{ formatTime(item.time) }}</span>
+            <span v-if="item.event" class="name">{{ item.event }}</span>
             <span class="text">{{ summary(item) }}</span>
             <span class="size">{{ formatBytes(item.size) }}</span>
           </div>
@@ -207,6 +211,16 @@ const overflowText = computed(function () {
   flex: none;
   width: 88px;
   opacity: 0.65;
+}
+
+/* Socket.IO 才有的一列（事件名）；WebSocket 的消息没有 item.event，这一列不出现 */
+.name {
+  flex: none;
+  width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--apiloop-primary, #0ea5a4);
 }
 
 .text {

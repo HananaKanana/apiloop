@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: 'suite', title: '测试集' },
   { id: 'load', title: '压测' },
   { id: 'db', title: '数据库操作' },
+  { id: 'sio', title: 'Socket.IO' },
   { id: 'shortcuts', title: '快捷键' }
 ];
 
@@ -456,6 +457,38 @@ const EXAMPLES = [
                 SELECT 最多取 100 行。测试集和批量运行会照常带上这些操作，压测不跑。</li>
               <li>导出接口 JSON 时会带上连接清单，但<b>密码一律清空</b>；导入到已有项目时不会动
                 那个项目里已经配好的连接。</li>
+            </ul>
+          </section>
+
+          <!-- ============================================================ Socket.IO -->
+          <section id="help-sio">
+            <h2>Socket.IO</h2>
+            <p>很多推送服务（聊天、通知、行情）用的是 Socket.IO —— 它在 WebSocket 之上还有自己的
+              协议（握手、事件名、确认），普通的 WebSocket 标签页连不上，或者连上了只看到一堆
+              <code>42["message",…]</code>。左边目录树工具条的「＋ → Socket.IO」新建一个调试标签页
+              （接口页签的方法里也能直接选 <code>SIO</code>，存下来就是一个 Socket.IO 接口）。</p>
+
+            <h3>连接</h3>
+            <ul>
+              <li><b>地址</b>填 <code>http://host:port</code>，<b>路径</b>默认 <code>/socket.io</code>，
+                <b>命名空间</b>默认 <code>/</code>。三者拼起来才是真正连的地址。</li>
+              <li>请求头、查询参数里可以写 <code>{{变量}}</code>，按当前环境替换；<code>鉴权</code>那一块和 HTTP
+                接口是同一套规则（Bearer / Basic / API Key）。</li>
+              <li><b>握手 auth</b> 是 Socket.IO 自己的认证对象（服务端拿 <code>socket.handshake.auth</code>），
+                和上面的「鉴权」不是一回事，写 JSON。</li>
+              <li>传输方式两档：<b>先长轮询再升级</b>（默认，最稳）和 <b>只用 WebSocket</b>。</li>
+            </ul>
+
+            <h3>收发</h3>
+            <ul>
+              <li><b>监听的事件</b>一行一个；留空表示监听全部事件。</li>
+              <li>发送区填事件名和参数（JSON 数组，可以多个参数）；勾上「等待确认（ack）」时，
+                服务端的回值也会记一条。</li>
+              <li>「存为常用」把这条事件记进接口，下次打开点一下就发。</li>
+              <li>和 WebSocket 一样，<b>连接是由服务端建立的</b>：浏览器装不了客户端、也绕不开跨域，
+                所以要在本机客户端（不是网页版）里用。</li>
+              <li>本客户端连的是 Socket.IO <b>3.x / 4.x</b> 的服务端；2.x 及更早的握手格式不一样，
+                连不上时会提示。</li>
             </ul>
           </section>
 

@@ -93,7 +93,7 @@ export function collectFolderKeys(nodes) {
  * 收集一个目录（含所有子目录）里的接口节点，**按目录树显示的顺序**。
  *
  * 批量运行要用：跑的次序就是用户在左边看到的次序，两边各排一次迟早会不一致。
- * WebSocket 接口不列出来（它不是 HTTP 请求，`/send` 也不收，见第 2 节）。
+ * WebSocket / Socket.IO 接口不列出来（它们不是 HTTP 请求，`/send` 也不收，见第 2 节）。
  *
  * @param {Array<object>} nodes 目录树的根节点
  * @param {string|null} folderId 传 null 表示整个项目（目录树最外层）
@@ -107,7 +107,8 @@ export function collectApiNodes(nodes, folderId) {
   const out = [];
   walkTree(list, function (node) {
     if (node.kind !== 'api') return;
-    if (String((node.api && node.api.method) || '').toUpperCase() === 'WS') return;
+    const method = String((node.api && node.api.method) || '').toUpperCase();
+    if (method === 'WS' || method === 'SIO') return;
     out.push(node);
   });
   return out;
