@@ -103,7 +103,7 @@ const EXAMPLES = [
   },
   {
     title: '每次请求带上时间戳和签名',
-    where: '项目设置 / 目录 →「请求前」（下面所有接口都会执行）',
+    where: '项目设置 →「脚本」/ 目录 →「请求前」（下面所有接口都会执行）',
     code: [
       'const ts = String(Date.now());',
       "pm.variables.set('ts', ts);",
@@ -182,7 +182,7 @@ const EXAMPLES = [
             <h3>在哪里定义</h3>
             <table>
               <tr><th>位置</th><th>作用范围</th><th>在哪改</th></tr>
-              <tr><td>项目变量</td><td>整个项目的所有接口</td><td>项目设置 → 变量</td></tr>
+              <tr><td>项目变量</td><td>整个项目的所有接口</td><td>项目设置 → 请求设置 → 项目变量</td></tr>
               <tr><td>目录变量</td><td>这个目录（含子目录）下的接口</td><td>点开目录 → 变量</td></tr>
               <tr><td>环境变量</td><td>选中这个环境时</td><td>左边栏「环境」</td></tr>
               <tr><td>临时变量</td><td>只在这一次请求里</td><td>脚本里 <code>pm.variables.set()</code></td></tr>
@@ -447,7 +447,7 @@ const EXAMPLES = [
 
             <h3>先配连接</h3>
             <ol>
-              <li>进入「项目设置 → 数据库连接」，点「+ 新增连接」，填名字、类型（MySQL / PostgreSQL / Redis）、
+              <li>进入「项目设置 → 数据库」，点「+ 新增连接」，填名字、类型（MySQL / PostgreSQL / Redis）、
                 主机、端口、用户名、密码、数据库名（Redis 填库号）。</li>
               <li>点「测试连接」当场试一下（用的是当前环境里的变量）。</li>
               <li>连接保存后跟着「保存」一起生效，项目里所有接口都能用。</li>

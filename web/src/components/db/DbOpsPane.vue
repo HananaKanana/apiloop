@@ -103,7 +103,7 @@ function removeExtract(op, id) {
     </p>
 
     <div v-if="localAllowed && !databases.length" class="notice">
-      这个项目还没有数据库连接。先到「项目设置 → 数据库连接」里加一个，这里才能选。
+      这个项目还没有数据库连接。先到「项目设置 → 数据库」里加一个，这里才能选。
     </div>
     <div v-if="!localAllowed" class="notice">
       网页版连不了数据库：数据库操作只能在客户端里新增、修改和执行。这里只能看，发送时会被跳过。

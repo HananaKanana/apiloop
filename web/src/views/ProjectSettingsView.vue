@@ -54,13 +54,21 @@ const showCloudTabs = computed(function () {
 const loading = ref(true);
 const saving = ref(false);
 const errorText = ref('');
-// `?tab=shares` / `?tab=members` 直接打开那个页签（分享弹窗、目录树右键「管理分享链接」跳过来）。
-// 那两个页签只在能用云端时才有，不然退回基本信息
-const activeTab = ref(
-  showCloudTabs.value && (route.query.tab === 'shares' || route.query.tab === 'members')
-    ? route.query.tab
-    : 'basic'
-);
+/**
+ * `?tab=xxx` 直接打开那个页签（分享弹窗跳到 shares、项目名旁「故障模拟中」跳到 mock……）。
+ * 成员 / 分享链接只在能用云端时才有，不然退回基本信息。
+ *
+ * 页签按用途分（2026-10-04 用户：基本信息里东西太多，不好看）：基本信息只放名称和说明，
+ * 发送相关的放「请求设置」，脚本、Mock、数据库各一页。右上角「保存」一次存所有页签的改动。
+ */
+const LOCAL_TABS = ['basic', 'request', 'scripts', 'mock', 'database'];
+const CLOUD_TABS = ['members', 'shares'];
+const activeTab = ref((function () {
+  const wanted = String(route.query.tab || '');
+  if (LOCAL_TABS.indexOf(wanted) > -1) return wanted;
+  if (showCloudTabs.value && CLOUD_TABS.indexOf(wanted) > -1) return wanted;
+  return 'basic';
+})());
 
 const form = ref({
   name: '',
@@ -218,7 +226,9 @@ watch(function () { return route.params.pid; }, load);
       </n-space>
     </div>
 
+    <!-- 滚动区占满整个宽度（滚动条在窗口最右边），内容在中间 -->
     <div class="content">
+      <div class="inner">
       <n-alert v-if="errorText" type="error" :show-icon="false" class="alert">
         {{ errorText }}
       </n-alert>
@@ -240,9 +250,13 @@ watch(function () { return route.params.pid; }, load);
               </n-form-item>
             </n-form>
             <p v-if="!isOwner" class="tip">只有 owner 能修改项目名称和标识。</p>
+            <p class="tip">变量、鉴权、公共请求头、前置接口在「请求设置」里；脚本、Mock、数据库各有一个页签。右上角「保存」会一起保存所有页签的改动。</p>
           </n-card>
+        </n-tab-pane>
 
-          <n-card :bordered="false" size="small" title="项目变量" class="card">
+        <!-- 请求设置：发送时会用到的那几样（变量、鉴权、公共请求头、前置接口） -->
+        <n-tab-pane name="request" tab="请求设置">
+          <n-card :bordered="false" size="small" title="项目变量">
             <p class="tip">
               项目变量在发送时先展开，同名的话会被当前环境里的变量覆盖。
             </p>
@@ -273,39 +287,6 @@ watch(function () { return route.params.pid; }, load);
             />
           </n-card>
 
-          <n-card :bordered="false" size="small" title="项目脚本" class="card">
-            <p class="tip">
-              这个项目里所有接口发送时都会执行：「请求前」脚本在请求发出之前，「响应后」脚本在响应回来之后。
-              顺序是「项目 → 目录（从外到内）→ 接口」。
-            </p>
-            <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />
-          </n-card>
-
-          <!--
-            Mock 故障模拟（第七轮第 1 节）：让 Mock 按比例故意出错，
-            给前端测「报错提示对不对」「慢的时候有没有加载状态」。
-          -->
-          <n-card :bordered="false" size="small" title="Mock 故障模拟" class="card">
-            <mock-fault-panel
-              v-model="form.mockFaults"
-              :pid="projectId"
-              :disabled="!canEdit"
-            />
-          </n-card>
-
-          <!--
-            数据库连接（第九轮第 3 节）：接口的「数据库」页签挑的就是这里的连接 ——
-            测接口时要造数据、查数据，都靠它。
-          -->
-          <n-card :bordered="false" size="small" title="数据库连接" class="card">
-            <database-panel
-              v-model:databases="form.databases"
-              :pid="projectId"
-              :disabled="!canEdit"
-              :local-allowed="!(gateway.loaded && !gateway.isGateway)"
-            />
-          </n-card>
-
           <!--
             前置接口（第十轮第 3 节）：token 过期时不用再手动点一次登录。
             目录上也能设，离接口最近的那一层说了算；项目这一层是最外层。
@@ -323,6 +304,49 @@ watch(function () { return route.params.pid; }, load);
           </n-card>
         </n-tab-pane>
 
+        <n-tab-pane name="scripts" tab="脚本">
+          <n-card :bordered="false" size="small" title="项目脚本">
+            <p class="tip">
+              这个项目里所有接口发送时都会执行：「请求前」脚本在请求发出之前，「响应后」脚本在响应回来之后。
+              顺序是「项目 → 目录（从外到内）→ 接口」。
+            </p>
+            <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />
+          </n-card>
+
+          <!--
+            Mock 故障模拟（第七轮第 1 节）：让 Mock 按比例故意出错，
+            给前端测「报错提示对不对」「慢的时候有没有加载状态」。
+          -->
+        </n-tab-pane>
+
+        <n-tab-pane name="mock" tab="Mock">
+          <n-card :bordered="false" size="small" title="Mock 故障模拟">
+            <mock-fault-panel
+              v-model="form.mockFaults"
+              :pid="projectId"
+              :disabled="!canEdit"
+            />
+          </n-card>
+
+          <!--
+            数据库连接（第九轮第 3 节）：接口的「数据库」页签挑的就是这里的连接 ——
+            测接口时要造数据、查数据，都靠它。
+          -->
+        </n-tab-pane>
+
+        <n-tab-pane name="database" tab="数据库">
+          <n-card :bordered="false" size="small" title="数据库连接">
+            <database-panel
+              v-model:databases="form.databases"
+              :pid="projectId"
+              :disabled="!canEdit"
+              :local-allowed="!(gateway.loaded && !gateway.isGateway)"
+            />
+          </n-card>
+
+
+        </n-tab-pane>
+
         <n-tab-pane v-if="showCloudTabs" name="members" tab="成员">
           <members-panel v-if="projectId" :pid="projectId" @left="onLeft" />
         </n-tab-pane>
@@ -335,6 +359,7 @@ watch(function () { return route.params.pid; }, load);
           <share-links-panel v-if="projectId" :pid="projectId" />
         </n-tab-pane>
       </n-tabs>
+      </div>
     </div>
   </div>
 </template>
@@ -367,9 +392,13 @@ watch(function () { return route.params.pid; }, load);
   min-height: 0;
   overflow: auto;
   padding: 12px 16px;
-  max-width: 760px;
-  width: 100%;
   box-sizing: border-box;
+}
+
+/* 内容居中、限宽（2026-10-04 用户：只占左半边不好看） */
+.inner {
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 .card {

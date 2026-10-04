@@ -210,7 +210,8 @@ const mockFaultsOn = computed(function () {
 });
 
 function openFaultSettings() {
-  if (projects.currentId) router.push('/projects/' + projects.currentId + '/settings');
+  // 直接打开「Mock」那一页（项目设置分了页签之后，不带 tab 会落在「基本信息」上）
+  if (projects.currentId) router.push({ path: '/projects/' + projects.currentId + '/settings', query: { tab: 'mock' } });
 }
 
 async function onOpenApi(api, options) {

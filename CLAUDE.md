@@ -32,6 +32,9 @@
   `computed` 的 getter 都算；pinia 的 setup store（`defineStore` 里那个函数）同样要查。写好后先拿上面两个出过事的旧版本
   （`git show 91bac1b~1:web/src/components/response/BodyViewer.vue`、`git show e857e0a~1:web/src/components/request/BodyEditor.vue`）
   验证它抓得到，再扫全量。
+  **路由页面**（`views/*`，用 `useRoute()` 的）要挂在真路由上跑：脚本里自己 `import` 的 vue-router 和组件用的不是同一份，
+  `useRoute()` 会拿到 undefined。办法是把检查脚本临时放进 `node_modules/.cache/`（不进 git），在那里直接
+  `import('vue-router')` / `import('vue')`，就和 vite external 出去的是同一个实例；`createRouter` + `router.push(地址)` 之后再渲染，跑完删掉。
 - **攒一批再打包。** 修完一个问题只提交、推送，不打安装包。等用户说「问题说完了 / 打个包」才统一打包。
 - **推送：** 只有主会话推送。推之前单独跑一次 `git log origin/master..HEAD` 看范围，**不要把
   commit 和 push 串在一条命令里**。用路径限定提交：`git commit -m "..." -- <自己改的文件>`，
