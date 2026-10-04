@@ -6,6 +6,10 @@ import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { xml } from '@codemirror/lang-xml';
 import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
+import { java } from '@codemirror/lang-java';
+import { go } from '@codemirror/lang-go';
+import { php } from '@codemirror/lang-php';
 import { autocompletion } from '@codemirror/autocomplete';
 import { Decoration } from '@codemirror/view';
 import { openSearchPanel } from '@codemirror/search';
@@ -59,6 +63,12 @@ function languageExtension(name) {
   if (name === 'html') return html();
   if (name === 'xml') return xml();
   if (name === 'javascript') return javascript();
+  if (name === 'python') return python();
+  if (name === 'java') return java();
+  if (name === 'go') return go();
+  if (name === 'php') return php();
+  // C# 没有单独的语法包，用 Java 的高亮凑合（都是大括号 + 分号那一套，配色够用）
+  if (name === 'csharp') return java();
   // 代码片段面板的 cURL 命令（见 utils/curlLanguage.js）
   if (name === 'curl') return curlLanguage;
   // graphql 的扩展要等动态 import（见 ensureGraphql），这里不给

@@ -33,10 +33,12 @@ export function removeExample(id) {
 }
 
 /**
- * 「代码片段 → cURL」：按发送时的同一套规则（变量、鉴权继承）生成 curl 命令，不发请求。
+ * 「代码片段」：按发送时的同一套规则（变量、鉴权继承）生成各语言的调用代码，不发请求。
  * payload 和发送接口一样：{ request, apiId, environmentId, mockBase }
  *
- * @returns {Promise<{curl: string, missing: string[]}>}
+ * 后台一次返回**所有语言**（`code` 是「语言 → 代码」的表），切语言不用再打接口。
+ *
+ * @returns {Promise<{curl: string, code: Object<string,string>, missing: string[]}>}
  */
 export function curlFor(projectId, payload) {
   return post('/projects/' + encodeURIComponent(projectId) + '/send/curl', payload);
