@@ -15,6 +15,7 @@ import {
   NSwitch,
   NTabPane,
   NTabs,
+  NTooltip,
   useMessage
 } from 'naive-ui';
 import { ChevronDown, Code, DeviceFloppy, Message } from '@vicons/tabler';
@@ -551,6 +552,33 @@ function onSend() {
 
 function onCancel() {
   tabs.cancelSend();
+}
+
+/* ---------------- 压测（第八轮第 2 节） ---------------- */
+
+/** 「发送」旁边那个下拉：目前只有一项，以后（比如「另存为测试集」）还往这儿加 */
+const moreMenu = computed(function () {
+  return [
+    // 还没保存的临时标签页没有接口可挂 —— 压测页是按接口开的，先让用户保存
+    { label: '压测…', key: 'load', disabled: !props.tab.apiId }
+  ];
+});
+
+/**
+ * 网页版（不是从客户端打开的）：压测这条路在云端根本不存在（路由只挂在本机网关上），
+ * 所以入口直接灰掉并说明原因，别等点了才 404。
+ */
+const loadBlocked = computed(function () {
+  return gateway.loaded && !gateway.isGateway;
+});
+
+function onMoreMenu(key) {
+  if (key !== 'load') return;
+  if (!props.tab.apiId) {
+    message.warning('先保存这个接口，再压测');
+    return;
+  }
+  tabs.openLoad(props.tab.apiId);
 }
 
 /* ---------------- 地址栏粘贴 cURL ---------------- */
@@ -1176,6 +1204,27 @@ onBeforeUnmount(function () {
         @cancel="onCancel"
         @paste-curl="onPasteCurl"
       />
+
+      <!-- 压测入口（第八轮第 2 节）：网页版灰掉，悬停说清楚 -->
+      <n-tooltip v-if="loadBlocked" trigger="hover">
+        <template #trigger>
+          <span>
+            <n-button size="small" quaternary disabled title="更多操作">
+              <template #icon>
+                <n-icon :component="ChevronDown" />
+              </template>
+            </n-button>
+          </span>
+        </template>
+        网页版不能压测，请在客户端里使用
+      </n-tooltip>
+      <n-dropdown v-else trigger="click" :options="moreMenu" @select="onMoreMenu">
+        <n-button size="small" quaternary title="更多操作">
+          <template #icon>
+            <n-icon :component="ChevronDown" />
+          </template>
+        </n-button>
+      </n-dropdown>
     </div>
 
     <!-- 未定义的变量：发送前就提示，别等请求发出去才发现 -->

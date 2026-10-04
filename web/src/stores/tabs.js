@@ -8,6 +8,7 @@ import { encodeQueryPart } from '@/utils/query';
 import { MOCK_ENV_ID, mockBaseFor } from '@/utils/mock';
 import { byteLength } from '@/utils/bytes';
 import { emptyRunner } from '@/utils/runner';
+import { emptyLoad, readSettings } from '@/utils/load';
 import { useWsStore } from '@/stores/ws';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
@@ -533,6 +534,48 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
+   * 打开「压测」标签页（第八轮第 2 节）：**每个接口一个**，再点就切过去。
+   *
+   * 设置（并发数、次数……）按接口记在 localStorage 里，打开时读回来接着用
+   * （见 `utils/load.js` 的 `readSettings`）。跑的那一段在 `stores/load.js`，
+   * 状态挂在 `tab.load` 上 —— 所以运行中切标签页不会断。
+   */
+  function openLoad(apiId) {
+    const key = 'load:' + apiId;
+    const existing = tabs.value.find(function (tab) { return tab.key === key; });
+    if (existing) {
+      activeKey.value = key;
+      return existing;
+    }
+
+    const node = useTreeStore().apiById.get(apiId);
+    const saved = readSettings(apiId);
+
+    const tab = {
+      key: key,
+      kind: 'load',
+      apiId: apiId,
+      folderId: null,
+      title: '压测 · ' + ((node && node.name) || '接口'),
+      spec: null,
+      savedSnapshot: null,
+      options: emptyOptions(),
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null,
+      load: emptyLoad(saved)
+    };
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
    * 打开「环境对比」标签页（第五轮第 3 节）：把所有环境的变量并排放在一张表里。
    *
    * 草稿放在 `tab.spec` 上，所以「有没保存的修改」「关标签页要确认」那套机制白拿。
@@ -663,6 +706,8 @@ export const useTabsStore = defineStore('tabs', function () {
   function dropTab(tab) {
     abortTab(tab);
     if (tab && tab.runner && tab.runner.controller) tab.runner.controller.abort();
+    // 压测也要一起停：关掉标签页之后没人看结果了，在途的请求没必要继续打人家
+    if (tab && tab.load && tab.load.controller) tab.load.controller.abort();
     if (tab && tab.kind === 'ws') useWsStore().closeFor(tab.key);
   }
 
@@ -964,6 +1009,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,
+    openLoad: openLoad,
     openHistory: openHistory,
     activate: activate,
     close: close,
