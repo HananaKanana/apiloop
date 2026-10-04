@@ -835,8 +835,12 @@ async function assign(projectId, groupId) {
   color: var(--apiloop-primary);
 }
 
-/* 已收藏：tabler 的星是描边的，填上色才像「点亮了」 */
-.star.on :deep(svg) {
+/*
+ * 已收藏：tabler 的星是描边的，填上色才像「点亮了」。
+ * 要打到 **path** 上：「不填色」（fill="none"）写在 path 自己身上，只给外层 svg 设填色盖不住它，
+ * 星星看起来一直是空心的（2026-10-04 用户截图）。
+ */
+.star.on :deep(svg path) {
   fill: currentColor;
 }
 
