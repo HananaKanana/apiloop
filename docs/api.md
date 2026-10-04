@@ -188,6 +188,50 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | --- | --- |
 | `POST /projects/:pid/graphql/schema` | 请求体同 `/send`；服务端把 body 换成 introspection 查询发出去（不跑脚本、不写历史、不写 Cookie），返回 `{ schema }`（viewer） |
 
+## 测试集
+
+测试集会同步（同步实体 `suite`，排在 `api` 后面）。DTO：`{ id, projectId, name, description, position, steps, stepCount, enabledStepCount, data, settings, createdAt, updatedAt }`。
+
+- `steps`：`[{ id, apiId, enabled, onFail: 'continue' | 'skipIteration', delayMs, assertions, extracts }]`，断言 / 提取的形状和接口上的一样，**接在接口自己的断言 / 提取后面**跑。
+- `data`：`null` 或 `{ format: 'csv' | 'json', fileName, text }`，保存时先解析一次，不合法 400；上限 1000 行 / 2 MB。
+- `settings`：`{ iterations (1–100), delayMs, timeoutMs? }`。有数据时轮数 = 数据行数。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/suites` | 列表，`data` 不带 `text`（viewer） |
+| `POST /projects/:pid/suites` | 新建，可以带 `steps`（editor） |
+| `GET /suites/:id` / `PUT /suites/:id` / `DELETE /suites/:id` | 详情（viewer）/ 只改传了的字段（editor）/ 删除，不进回收站（editor） |
+| `POST /suites/:id/copy` | 复制，名字加「（副本）」（editor） |
+| `POST /projects/:pid/suites/reorder` | `{ ids }`（editor） |
+| `POST /projects/:pid/suites/preview-data` | `{ format, text }` → `{ columns, rows（前 20 行）, total }`，不合法 400（viewer） |
+| `POST /suites/:id/run` | **运行**，`{ environmentId, mockBase }`，NDJSON：`start { runId, iterations, steps }` → 每步一条 `step { iteration, index, stepId, apiId, name, method, url, status, timeMs, size, ok, skipped, error, tests }` → `done { runId, status, summary, result, saved, warning }`（viewer）。云端 `SERVER_SEND=0` 时 409 `SERVER_SEND_DISABLED`；同一个测试集已经在跑时 409 |
+| `POST /suites/:id/stop` | 停止正在跑的那次；收尾、存记录、`done` 照常从运行那条流上回来（viewer） |
+
+运行时：变量改动（脚本、提取）只在这次运行的内存里，不写库；Cookie 每次从空开始、步骤之间共用；不写历史。
+变量优先级多一层：项目 → 目录 → 环境 → **数据** → 临时变量；脚本里 `pm.iterationData.get / has / toObject`（只读）。
+`status`：`passed` / `failed` / `stopped` / `error`。
+
+**运行记录（只在云端，客户端转发）**：每个测试集只留最近 100 条。客户端跑完后带当前用户的会话存到云端（没登录不存，`done.saved` 为 false）。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /suites/:id/runs` | 列表，不带 `result`（viewer） |
+| `POST /suites/:id/runs` | 存一条：`{ source: 'app' \| 'cli', environmentName, status, summary, result, label, startedAt, finishedAt }`（viewer） |
+| `GET /suite-runs/:id` / `DELETE /suite-runs/:id` | 一条（带 `result`，viewer）/ 删除（editor） |
+
+`summary`：`{ iterations, requests, passed, failed, errors, assertions: { passed, failed }, durationMs, avgMs, truncated? }`。
+`result.iterations[].steps[]` 里只有失败的步骤带 `request` / `response`（响应体最多 32 KB，保密值、`Authorization`、`Cookie` 打码）；整份超过 2 MB 时都去掉并记 `truncated`。
+
+## 压测（只在客户端）
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/load` | 请求体同 `/send`，多 `load: { concurrency (1–200), mode: 'count' \| 'duration', count (1–100000), durationSec (5–600), rampUpSec (0–60), timeoutMs, okStatus: [] }`，越界 400；同时只能跑一个，第二个 409。NDJSON：`start { missingVariables }` → 每秒一条 `tick { t, sent, ok, failed, active, qps, secondAvgMs, failedInSecond, avgMs, p95Ms }` → `done { status: 'finished' \| 'stopped', summary }`（viewer） |
+| `POST /projects/:pid/load/stop` | 停止，`done` 照常从上面那条流回来（viewer） |
+
+只在本机网关上有这两个路由，云端不管 `SERVER_SEND` 都是 404。不跑脚本、不跑断言、不读写 Cookie、不写历史；变量开始时算一次。
+`summary`：`{ sent, ok, failed, aborted, errorRate, durationMs, qps, minMs, avgMs, maxMs, p50Ms, p90Ms, p95Ms, p99Ms, statusCodes: [{ status, count }], errors: [{ group, count, sample }], 以及这次的参数 }`。
+
 ## 内置 Mock 环境
 
 项目 DTO 带 `mockVariables`：内置「Mock」环境改过的变量表，没改过是 `null`（默认只有 `host`）。
