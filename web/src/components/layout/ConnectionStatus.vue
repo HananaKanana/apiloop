@@ -61,6 +61,15 @@ const indicator = computed(function () {
   // 直接打开云端：没有空间、没有同步，就是「请求从云端发出」这一件事。
   // 点开是「安装本机 apiloop」——装完请求就能从自己电脑发出
   if (!gateway.isGateway) {
+    // 云端关掉了「替用户发请求」（SERVER_SEND=0，接口多在内网时推荐这么部署）：网页版发不了请求
+    if (gateway.cloudSendBlocked) {
+      return {
+        color: '#f59e0b',
+        text: '网页版不能发请求',
+        hint: '这个云端不替你发请求（接口多在内网，云端访问不到）。点这里下载 apiloop 客户端，请求从你自己的电脑发出',
+        action: 'install'
+      };
+    }
     return {
       color: '#6b7280',
       text: '云端发送',

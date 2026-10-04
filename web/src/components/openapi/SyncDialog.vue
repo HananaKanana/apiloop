@@ -15,6 +15,7 @@ import {
 import { ChevronDown, ChevronRight } from '@vicons/tabler';
 import * as openapiApi from '@/api/openapi';
 import { useTreeStore } from '@/stores/tree';
+import { useGatewayStore } from '@/stores/gateway';
 import { methodColor } from '@/utils/method';
 
 /**
@@ -48,6 +49,8 @@ const show = computed({
 
 /** 地址 / 粘贴内容两种来源 */
 const mode = ref('url');
+/** 网页版而且云端不发请求（SERVER_SEND=0）：云端也不替人拉地址，只能粘贴 */
+const urlFetchBlocked = computed(function () { return useGatewayStore().cloudSendBlocked; });
 const url = ref('');
 const text = ref('');
 
@@ -102,7 +105,7 @@ watch(
   function () { return props.show; },
   function (value) {
     if (!value) return;
-    mode.value = 'url';
+    mode.value = urlFetchBlocked.value ? 'text' : 'url';
     url.value = readSavedUrl();
     text.value = '';
     checking.value = false;
@@ -247,10 +250,13 @@ function changeSummary(item) {
     <div class="scope">范围：{{ scopeText }}</div>
 
     <n-radio-group v-model:value="mode" size="small" class="mode">
-      <n-radio-button value="url">地址</n-radio-button>
+      <n-radio-button value="url" :disabled="urlFetchBlocked">地址</n-radio-button>
       <n-radio-button value="text">粘贴内容</n-radio-button>
     </n-radio-group>
 
+    <p v-if="urlFetchBlocked" class="url-blocked">
+      网页版不能填地址拉取（云端访问不到内网），请把文档内容粘贴进来；要填地址请在 apiloop 客户端里同步。
+    </p>
     <n-input
       v-if="mode === 'url'"
       v-model:value="url"
@@ -553,5 +559,10 @@ function changeSummary(item) {
 .hint {
   font-size: 12px;
   opacity: 0.6;
+}
+.url-blocked {
+  margin: 8px 0 0;
+  font-size: 12px;
+  opacity: 0.65;
 }
 </style>

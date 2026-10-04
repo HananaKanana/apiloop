@@ -18,6 +18,7 @@ import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { useGatewayStore } from '@/stores/gateway';
 import { parseCurl } from '@/utils/curl';
 import { methodColor } from '@/utils/method';
 import { readFileAsText } from '@/utils/download';
@@ -274,6 +275,8 @@ const openapiBusy = ref(false);
  * OpenAPI / Swagger 只有 JSON 和 YAML 两种写法，没有 XML 版。
  */
 const openapiUrl = ref('');
+/** 网页版而且云端不发请求（SERVER_SEND=0）：云端也不替人拉地址，只能选文件或粘贴 */
+const urlFetchBlocked = computed(function () { return useGatewayStore().cloudSendBlocked; });
 const openapiFileInput = ref(null);
 const openapiFileName = ref('');
 
@@ -616,7 +619,11 @@ function routeLabel(route) {
 
       <n-tab-pane name="openapi" tab="OpenAPI">
         <div class="pane">
+          <p v-if="urlFetchBlocked" class="url-blocked">
+            网页版不能填地址拉取（云端访问不到内网），请选文件或粘贴内容；要填地址请在 apiloop 客户端里导入。
+          </p>
           <n-input
+            v-else
             v-model:value="openapiUrl"
             size="small"
             clearable
@@ -838,5 +845,10 @@ function routeLabel(route) {
 
 .hidden-input {
   display: none;
+}
+.url-blocked {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.65;
 }
 </style>
