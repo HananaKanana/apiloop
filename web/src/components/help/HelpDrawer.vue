@@ -219,7 +219,7 @@ const EXAMPLES = [
             </table>
             <p>在输入框里打 <code v-pre>{{$</code> 会把这些列出来（带中文说明）。</p>
             <p><b>同一个值要用两次</b>：先在「请求前」脚本里存一次，再用普通变量引用 ——</p>
-            <pre v-pre>pm.variables.set('phone', pm.variables.replaceIn('{{$手机号}}'));</pre>
+            <pre v-pre><code>pm.variables.set('phone', pm.variables.replaceIn('{{$手机号}}'));</code></pre>
             <p>之后写 <code v-pre>{{phone}}</code> 就是同一个号码了。脚本里也能用
               <code>pm.variables.replaceIn()</code> 直接展开任意带变量的文本。</p>
             <p><b>变量名可以用中文</b>：<code v-pre>{{账号}}</code> 这种写法在环境变量、目录变量、

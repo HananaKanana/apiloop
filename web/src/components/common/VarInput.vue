@@ -12,6 +12,7 @@ import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { autocompletion, completionStatus } from '@codemirror/autocomplete';
 import { history, historyKeymap, defaultKeymap, standardKeymap } from '@codemirror/commands';
 import { findVariables } from '@/utils/variables';
+import { DYNAMIC_VARIABLES } from '@/utils/suggestions';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
 
 /**
@@ -102,6 +103,8 @@ function decorate(state) {
   findVariables(state.doc.toString()).forEach(function (item) {
     let cls = 'cm-var-mock';
     if (item.kind === 'var') cls = known.has(item.name) ? 'cm-var-ok' : 'cm-var-missing';
+    // 内置动态变量（{{$手机号}}）：不需要定义，也不该标成「未定义」
+    else if (item.kind === 'dynamic') cls = 'cm-var-dynamic';
     ranges.push(Decoration.mark({ class: cls }).range(item.from, item.to));
   });
 
@@ -136,6 +139,22 @@ function sourceRank(source) {
   return 0;
 }
 
+/**
+ * 内置动态变量（`{{$手机号}}` 这些）。排在作用域变量后面：输入 `{{` 时先给「我自己定义过
+ * 的变量」，输入 `{{$` 时它们自然就顶上来了。
+ */
+function dynamicCompletionOptions() {
+  return DYNAMIC_VARIABLES.map(function (item) {
+    return {
+      label: item.label,
+      detail: item.detail,
+      info: '内置动态变量',
+      boost: -1,
+      apply: applyCompletion
+    };
+  });
+}
+
 function completionOptions() {
   const list = [];
   currentScope().forEach(function (entry, name) {
@@ -148,7 +167,7 @@ function completionOptions() {
       apply: applyCompletion
     });
   });
-  return list;
+  return list.concat(dynamicCompletionOptions());
 }
 
 /**
@@ -242,6 +261,10 @@ const variableTooltip = hoverTooltip(function (editorView, pos) {
   let content;
   if (item.kind === 'mock') {
     content = '{{@' + item.name + '}}：mock 占位符，只在 mock 渲染时展开';
+  } else if (item.kind === 'dynamic') {
+    content = '{{' + item.name + '}}：内置动态变量，每出现一次生成一个新值';
+  } else if (item.kind === 'literal') {
+    content = '不是变量，发送时原样保留';
   } else {
     const entry = currentScope().get(item.name);
     content = entry
@@ -296,13 +319,16 @@ const enterKey = keymap.of([
 const VAR_COLORS = {
   '.cm-var-ok': { color: '#1d4ed8', backgroundColor: 'rgba(29, 78, 216, 0.10)', borderRadius: '2px' },
   '.cm-var-missing': { color: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.10)', borderRadius: '2px' },
-  '.cm-var-mock': { color: '#7c3aed', backgroundColor: 'rgba(124, 58, 237, 0.10)', borderRadius: '2px' }
+  '.cm-var-mock': { color: '#7c3aed', backgroundColor: 'rgba(124, 58, 237, 0.10)', borderRadius: '2px' },
+  // 内置动态变量：和「已定义」（蓝）、「未定义」（红）、mock 占位符（紫）都拉开
+  '.cm-var-dynamic': { color: '#0f7f8a', backgroundColor: 'rgba(15, 127, 138, 0.10)', borderRadius: '2px' }
 };
 
 const DARK_VAR_COLORS = {
   '.cm-var-ok': { color: '#93c5fd', backgroundColor: 'rgba(147, 197, 253, 0.16)' },
   '.cm-var-missing': { color: '#fca5a5', backgroundColor: 'rgba(252, 165, 165, 0.16)' },
-  '.cm-var-mock': { color: '#c4b5fd', backgroundColor: 'rgba(196, 181, 253, 0.16)' }
+  '.cm-var-mock': { color: '#c4b5fd', backgroundColor: 'rgba(196, 181, 253, 0.16)' },
+  '.cm-var-dynamic': { color: '#6fd0da', backgroundColor: 'rgba(111, 208, 218, 0.16)' }
 };
 
 const theme = EditorView.theme(Object.assign({
