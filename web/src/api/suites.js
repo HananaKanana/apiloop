@@ -57,3 +57,11 @@ export function getRun(id) {
 export function removeRun(id) {
   return del('/suite-runs/' + encodeURIComponent(id));
 }
+
+/**
+ * 请服务端停下正在跑的测试集。收尾、存记录、`done` 事件照常从运行那条流上回来，
+ * 所以「停止」不要直接断开连接 —— 断开就不知道记录存没存上了。
+ */
+export function stopSuite(id) {
+  return post('/suites/' + encodeURIComponent(id) + '/stop', {});
+}

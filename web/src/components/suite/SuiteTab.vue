@@ -168,8 +168,8 @@ watch(
 );
 
 function run() {
-  if (!gateway.cloudSendBlocked && gateway.isCloud) {
-    // 网页版：云端不替网页发请求
+  if (gateway.cloudSendBlocked) {
+    // 网页版、云端不替网页发请求（SERVER_SEND=0）。开了 SERVER_SEND=1 的云端照样能跑
     message.warning('网页版不能运行测试集，请在客户端里运行');
     return;
   }
@@ -228,7 +228,7 @@ const reportRun = computed(function () {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     summary: state.summary || {},
-    result: { iterations: groupByIteration(state.steps) }
+    result: state.result || { iterations: groupByIteration(state.steps) }
   };
 });
 

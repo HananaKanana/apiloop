@@ -100,6 +100,8 @@ export const useLoadStore = defineStore('load', function () {
 
     const controller = new AbortController();
     state.controller = controller;
+    // 停止时要知道往哪个项目发（跑的时候用户可能已经切了项目）
+    state.pid = pid;
 
     try {
       const request = await requestSnapshot(tab.apiId);
@@ -136,8 +138,18 @@ export const useLoadStore = defineStore('load', function () {
    */
   function stop(tab) {
     const state = tab && tab.load;
-    if (!state) return;
-    if (state.controller) state.controller.abort();
+    if (!state || !state.controller) return;
+
+    const controller = state.controller;
+    /**
+     * 先请服务端停：它收尾后照常发 `done`，汇总表才出得来。服务端没响应、或者
+     * 5 秒内流还没结束（网关卡住了之类），再直接断开兜底 —— 不能让「停止」按了没反应。
+     */
+    function hardStop() {
+      if (state.controller === controller) controller.abort();
+    }
+    loadApi.stopLoad(state.pid || projects.currentId).catch(hardStop);
+    setTimeout(hardStop, 5000);
   }
 
   return {

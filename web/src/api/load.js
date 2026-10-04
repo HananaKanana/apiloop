@@ -1,4 +1,5 @@
 import { postNdjson } from './stream';
+import { post } from './client';
 
 /**
  * 简单压测（第八轮第 2 节）。
@@ -12,4 +13,12 @@ import { postNdjson } from './stream';
  */
 export function startLoad(pid, body, options) {
   return postNdjson('/projects/' + encodeURIComponent(pid) + '/load', body, options);
+}
+
+/**
+ * 请服务端停下正在跑的压测。服务端收尾后照常在那条流上发 `done`（带汇总），
+ * 所以「停止」不要直接断开连接 —— 断开就收不到汇总了。
+ */
+export function stopLoad(pid) {
+  return post('/projects/' + encodeURIComponent(pid) + '/load/stop', {});
 }

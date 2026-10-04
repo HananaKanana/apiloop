@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { postNdjson } from '@/api/stream';
+import { stopSuite } from '@/api/suites';
 
 /**
  * 测试集运行的状态（第八轮第 1 节）。
@@ -26,6 +27,8 @@ export const useSuiteRunStore = defineStore('suiteRun', function () {
         /** 每步的结果（服务端那条 step 事件原样留着，多带 iteration / index） */
         steps: [],
         summary: null,
+        /** `done` 事件带回来的整份结果（停止后断开兜底时没有，报告退回用 steps 拼） */
+        result: null,
         status: '',           // passed | failed | stopped | error
         saved: false,
         warning: '',
@@ -54,6 +57,7 @@ export const useSuiteRunStore = defineStore('suiteRun', function () {
       stepCount: 0,
       steps: [],
       summary: null,
+      result: null,
       status: '',
       saved: false,
       warning: '',
@@ -85,6 +89,8 @@ export const useSuiteRunStore = defineStore('suiteRun', function () {
         if (event.type === 'done') {
           state.status = event.status || '';
           state.summary = event.summary || null;
+          // 整份结果（服务端裁过）：报告直接用它，每一轮的数据行也在里面
+          state.result = event.result || null;
           state.saved = event.saved === true;
           state.warning = event.warning || '';
           state.phase = 'done';
@@ -114,9 +120,19 @@ export const useSuiteRunStore = defineStore('suiteRun', function () {
     });
   }
 
+  /**
+   * 停止。先请服务端停：它收尾、存记录后照常发 `done`，界面才知道记录存没存上。
+   * 服务端没响应、或者 5 秒内流还没结束，再直接断开兜底。
+   */
   function stop(suiteId) {
     const controller = controllers[suiteId];
-    if (controller) controller.abort();
+    if (!controller) return;
+
+    function hardStop() {
+      if (controllers[suiteId] === controller) controller.abort();
+    }
+    stopSuite(suiteId).catch(hardStop);
+    setTimeout(hardStop, 5000);
   }
 
   function clear(suiteId) {
