@@ -1,6 +1,6 @@
 {
   "name": "apiloop",
-  "version": "2.0.3",
+  "version": "2.1.1",
   "description": "团队接口调试工具：请求在本机发、数据云端同步、调通的接口直接变成 Mock",
   "main": "lib/command.js",
   "engines": {
