@@ -146,7 +146,10 @@ const pickerNodes = computed(function () {
   function decorate(list) {
     list.forEach(function (node) {
       if (node.kind === 'api') {
-        node.label = (node.method || 'GET') + ' ' + (node.name || node.url || '');
+        // 方法在 node.api 上（buildTree 的接口节点只带 name / label / api），
+        // 以前读的是 node.method —— 永远是 undefined，于是全都显示成 GET
+        const api = node.api || {};
+        node.label = (api.method || 'GET') + ' ' + (node.name || api.url || '');
         node.children = null;
       } else if (node.children) {
         decorate(node.children);
