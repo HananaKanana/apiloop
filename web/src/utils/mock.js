@@ -46,9 +46,17 @@ export function mockPrefix(project) {
  * @returns {string} 例如 `https://cloud.example.com/mock-p_xxx`；根项目就是云端地址本身
  */
 export function mockBaseUrl(project) {
+  return mockOrigin() + mockPrefix(project);
+}
+
+/**
+ * Mock 地址的前半段（云端地址）：客户端里是网关记着的云端地址，网页版就是当前页面。
+ * 「创建样例项目」也要用它 —— 样例项目的环境里 `host` 要写成这个项目的 Mock 地址。
+ */
+export function mockOrigin() {
   const gateway = useGatewayStore();
   const base = gateway.isGateway && gateway.cloudUrl ? gateway.cloudUrl : window.location.origin;
-  return String(base).replace(/\/+$/, '') + mockPrefix(project);
+  return String(base).replace(/\/+$/, '');
 }
 
 /** 默认的 Mock 变量表（展开后的）：只有 host = mock 地址 */

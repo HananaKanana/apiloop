@@ -23,12 +23,16 @@ import { downloadJson } from '@/utils/download';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
 import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import * as copyApi from '@/api/copy';
+import * as projectsApi from '@/api/projects';
+import { useEnvStore } from '@/stores/env';
+import { mockOrigin } from '@/utils/mock';
 
 const emit = defineEmits(['change']);
 
 const projects = useProjectStore();
 const prefs = usePrefsStore();
 const tabs = useTabsStore();
+const envs = useEnvStore();
 const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
@@ -283,6 +287,34 @@ async function submitDuplicate() {
   }
 }
 
+/* ---------------- 创建样例项目（试功能用，见 lib/demo-project.js） ---------------- */
+
+const creatingDemo = ref(false);
+
+/**
+ * 建一个什么都配齐了的样例项目，切过去并选中「样例环境」—— 接口都打到它自己的 Mock 上，
+ * 点开就能发。客户端里刚建的项目要先同步到云端，Mock 才有（通常几秒）。
+ */
+async function createDemo() {
+  if (creatingDemo.value) return;
+  creatingDemo.value = true;
+  try {
+    const data = await projectsApi.createDemoProject(mockOrigin());
+    await projects.load();
+    tabs.closeAll();
+    projects.setCurrent(data.project.id);
+    // 先把「样例环境」记成这个项目选中的环境，切过去时环境列表一加载就是它
+    await envs.load(data.project.id);
+    if (data.environmentId) envs.select(data.environmentId);
+    emit('change', data.project.id);
+    message.success('已创建「' + data.project.name + '」，项目说明里写了可以怎么试');
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    creatingDemo.value = false;
+  }
+}
+
 /* ---------------- 管理分组 ---------------- */
 
 const showGroups = ref(false);
@@ -490,6 +522,10 @@ async function assign(projectId, groupId) {
         </div>
         <div class="row action" @click="run(openCreate)">
           <span class="row-name">新建项目</span>
+        </div>
+        <!-- 样例项目：点一下就有一个什么都配齐了的项目，拿来试功能 -->
+        <div class="row action" @click="run(createDemo)">
+          <span class="row-name">{{ creatingDemo ? '正在创建样例项目…' : '创建样例项目' }}</span>
         </div>
       </div>
     </div>

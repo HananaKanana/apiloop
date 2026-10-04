@@ -247,6 +247,12 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 
 内容和打码规则与分享文档一样（同一份 `publicDoc`）。示例里的 Mock 模板先渲染成真实数据再写进文档（分享页同样）。
 
+## 样例项目
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/demo` | `{ origin }`（云端地址，用来拼 Mock 地址）→ `{ project, environmentId }`。建一个配齐了的样例项目，建的人是 owner；内容见 `lib/demo-project.js` |
+
 ## 前置接口（自动登录）
 
 - 项目 / 目录 DTO 顶层 `preflight`：`{ apiId, whenMissing, retryOn401 }`；目录上 `null` = 跟着上层，`{ apiId: null }` = 这个目录下不用。`PUT /projects/:pid`、`PUT /folders/:id` 保存。
