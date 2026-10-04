@@ -21,6 +21,7 @@ import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { downloadJson } from '@/utils/download';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
+import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import * as copyApi from '@/api/copy';
 
 const emit = defineEmits(['change']);
@@ -40,6 +41,8 @@ const showCreate = ref(false);
 const creating = ref(false);
 /* 导出 OpenAPI 的小弹窗（第四轮第 2 节）：范围是整个项目 */
 const showOpenapi = ref(false);
+/// 导出文档（第九轮第 2 节）：Markdown / HTML / Word，范围是整个项目
+const showExportDoc = ref(false);
 // 没有「标识」这一项了：mock 地址改成 /mock-<项目ID>/，标识不再用于 mock（L1）。
 // 服务端仍然会自动生成一个唯一标识，只是界面上不用管它。
 const form = ref({ name: '', description: '' });
@@ -470,6 +473,9 @@ async function assign(projectId, groupId) {
         <div class="row action" @click="run(function () { showOpenapi = true; })">
           <span class="row-name">导出为 OpenAPI</span>
         </div>
+        <div class="row action" @click="run(function () { showExportDoc = true; })">
+          <span class="row-name">导出文档…</span>
+        </div>
         <!-- 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口 -->
         <div class="row action" @click="run(function () { tabs.openEnvDiff(); })">
           <span class="row-name">环境对比</span>
@@ -574,6 +580,14 @@ async function assign(projectId, groupId) {
   <!-- 导出 OpenAPI（第四轮第 2 节）：默认 YAML，下载 <项目名>.openapi.yaml -->
   <openapi-export-dialog
     v-model:show="showOpenapi"
+    :pid="projects.currentId"
+    :folder-id="null"
+    :scope-name="projects.current ? projects.current.name : ''"
+  />
+
+  <!-- 导出文档（第九轮第 2 节）：整个项目，三种格式 -->
+  <export-doc-dialog
+    v-model:show="showExportDoc"
     :pid="projects.currentId"
     :folder-id="null"
     :scope-name="projects.current ? projects.current.name : ''"

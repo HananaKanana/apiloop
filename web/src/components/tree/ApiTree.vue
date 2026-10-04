@@ -26,6 +26,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue';
 import ShareDialog from '@/components/share/ShareDialog.vue';
 import SyncDialog from '@/components/openapi/SyncDialog.vue';
 import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.vue';
+import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'open-folder', 'run', 'import']);
@@ -121,6 +122,19 @@ function openShare(folderId) {
 const showOpenapiExport = ref(false);
 const exportFolderId = ref(null);
 const exportScopeName = ref('');
+
+/// 导出文档（第九轮第 2 节）：范围是这个目录连同子目录
+const showDocExport = ref(false);
+const docFolderId = ref(null);
+const docScopeName = ref('');
+
+function openDocExport(folderId) {
+  docFolderId.value = folderId || null;
+  const folder = folderId ? tree.folderById.get(folderId) : null;
+  docScopeName.value =
+    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+  showDocExport.value = true;
+}
 
 function openOpenapiExport(folderId) {
   exportFolderId.value = folderId || null;
@@ -534,7 +548,8 @@ function folderMenuOptions() {
     return [
       { label: '目录设置', key: 'folder-settings' },
       { label: '运行', key: 'run' },
-      { label: '导出为 OpenAPI', key: 'export-openapi' }
+      { label: '导出为 OpenAPI', key: 'export-openapi' },
+      { label: '导出文档…', key: 'export-doc' }
     ];
   }
 
@@ -543,6 +558,7 @@ function folderMenuOptions() {
     { type: 'divider', key: 'd0' },
     { label: '运行', key: 'run' },
     { label: '导出为 OpenAPI', key: 'export-openapi' },
+    { label: '导出文档…', key: 'export-doc' },
     // 计划里这条本来想只在「这个目录是从 OpenAPI 导入的、或者里面有从 OpenAPI 导入的
     // 接口时」显示 —— 那需要目录树接口带上 extra.openapi（dto.js 的 toApiSummary），
     // 而这一轮 dto.js / tree.js 是 session1 在改（第 1 节的 status / ownerId 就要动它）。
@@ -616,6 +632,7 @@ async function onMenuSelect(key) {
     if (key === 'folder-settings') return emit('open-folder', node.id);
     if (key === 'run') return emit('run', node.id);
     if (key === 'export-openapi') return openOpenapiExport(node.id);
+    if (key === 'export-doc') return openDocExport(node.id);
     if (key === 'sync-openapi') return openSync(node.id);
     if (key === 'share') return openShare(node.id);
     if (key === 'copy-to') return openCopy(node, false);
@@ -1005,6 +1022,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       :pid="projects.currentId"
       :folder-id="exportFolderId"
       :scope-name="exportScopeName"
+    />
+
+    <!-- 导出文档（第九轮第 2 节）：Markdown / HTML / Word，默认这个目录 -->
+    <export-doc-dialog
+      v-model:show="showDocExport"
+      :pid="projects.currentId"
+      :folder-id="docFolderId"
+      :scope-name="docScopeName"
     />
 
     <!-- 复制 / 移动到其他项目（第六轮第 3 节） -->

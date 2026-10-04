@@ -29,6 +29,24 @@ export function downloadJson(filename, json) {
   downloadText(filename, text, 'application/json');
 }
 
+/**
+ * 直接落盘一个已经拿到的 Blob（导出接口文档用：服务端回的就是文件本身）。
+ *
+ * @param {string} filename
+ * @param {Blob} blob
+ */
+export function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'export';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // 立刻 revoke 在部分浏览器里会让下载中断，等一会儿再放
+  setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+}
+
 /** 读一个用户选中的文件为文本 */
 export function readFileAsText(file) {
   return new Promise(function (resolve, reject) {
