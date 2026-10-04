@@ -437,7 +437,8 @@ const EXAMPLES = [
                 可以检查数据有没有写进去）。</li>
               <li>每行选一个连接、写一条语句（多行也行，语句里能写 <code v-pre>{{变量}}</code>）。</li>
               <li>要「把结果存成变量」就点这一行的「+ 提取」：填取值路径（SQL 的结果是行数组，
-                <code>[0].code</code> 就是第一行的 code 列；Redis 留空就是整个返回值）、存到环境还是项目、变量名。</li>
+                <code>[0].code</code> 就是第一行的 code 列；MySQL 的 INSERT 用 <code>[0].insertId</code> 取刚插入的 id，
+                PostgreSQL 在语句后面加 <code>RETURNING id</code> 再用 <code>[0].id</code>；Redis 留空就是整个返回值）、存到环境还是项目、变量名。</li>
               <li>执行顺序是<b>请求前的数据库操作 → 请求前脚本 → 发请求 → 响应后的数据库操作 →
                 断言和提取 → 响应后脚本</b>。所以「响应后」查出来的变量可以直接写进断言里。</li>
             </ol>
