@@ -50,8 +50,9 @@ function onPaste(event) {
 
 // WS 也是一种接口（契约第 17 节）：存进目录树，打开时是 WebSocket 标签页。
 // 放在这里是为了「新建接口」时能直接选它，和选 GET / POST 一样。
-// SIO（Socket.IO，第九轮第 4 节）同理，打开时是 Socket.IO 标签页。
-const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS', 'SIO'].map(function (name) {
+// SIO（Socket.IO，第九轮第 4 节）同理，打开时是 Socket.IO 标签页；
+// GRPC（gRPC，第十一轮第 3 节）同理，打开时是 gRPC 标签页。
+const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS', 'SIO', 'GRPC'].map(function (name) {
   return { label: name, value: name };
 });
 

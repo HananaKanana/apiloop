@@ -47,7 +47,8 @@ export function optionsFor(apis, options) {
   (apis || []).forEach(function (api) {
     if (!api || !api.id) return;
     const method = String(api.method || '').toUpperCase();
-    if (method === 'WS' || method === 'SIO') return;
+    // 前置接口是用 /send 发的 HTTP 请求，非 HTTP 的接口（WS / SIO / GRPC）不能当它
+    if (method === 'WS' || method === 'SIO' || method === 'GRPC') return;
 
     list.push({ label: api.name || '(未命名接口)', value: String(api.id) });
   });

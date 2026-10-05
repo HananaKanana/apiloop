@@ -4,7 +4,7 @@
  *
  * 这几个色号是照着 Postman 挑的：GET 绿、POST 黄、PUT 蓝、PATCH 紫、DELETE 红，
  * HEAD / OPTIONS 这种少见的中性灰，WebSocket 用青色和 HTTP 区分开，
- * Socket.IO（第九轮第 4 节）用紫红，和 WebSocket 那个青色一眼分得开。
+ * Socket.IO（第九轮第 4 节）用紫红，gRPC（第十一轮第 1 节）用橙色。
  * 都取的是中间调，亮色和暗色主题下都读得清。
  */
 const COLORS = {
@@ -16,7 +16,8 @@ const COLORS = {
   HEAD: '#6b7280',
   OPTIONS: '#6b7280',
   WS: '#0ea5a4',
-  SIO: '#d946ef'
+  SIO: '#d946ef',
+  GRPC: '#e8590c'
 };
 
 /** 认不出来的方法（用户自己输入的自定义方法）一律中性灰 */

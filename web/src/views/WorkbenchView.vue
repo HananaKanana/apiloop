@@ -14,6 +14,7 @@ import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import SioTab from '@/components/sio/SioTab.vue';
+import GrpcTab from '@/components/grpc/GrpcTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
 import LoadTab from '@/components/load/LoadTab.vue';
@@ -258,6 +259,9 @@ function tabMethod(tab) {
   if (tab.kind === 'ws') return 'WS';
   // Socket.IO 调试标签页固定 SIO（第九轮第 4 节）
   if (tab.kind === 'sio') return 'SIO';
+  // gRPC 调试标签页固定 GRPC（第十一轮第 3 节）：它的 spec 里没有 method 字段，
+  // 不在这里拦掉的话会走到下面那个默认值、显示成「GET」
+  if (tab.kind === 'grpc') return 'GRPC';
   // 目录页签、「运行」页签、「压测」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
   if (tab.kind === 'folder' || tab.kind === 'runner' || tab.kind === 'load' ||
       tab.kind === 'suite' || tab.kind === 'envdiff') return '';
@@ -527,6 +531,11 @@ onBeforeUnmount(function () {
           />
           <sio-tab
             v-else-if="tabs.active && tabs.active.kind === 'sio'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <grpc-tab
+            v-else-if="tabs.active && tabs.active.kind === 'grpc'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

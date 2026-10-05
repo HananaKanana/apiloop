@@ -134,11 +134,11 @@ function onDrop() {
 const showAdd = ref(false);
 const checkedKeys = ref([]);
 
-/** 目录树（WebSocket / Socket.IO 接口不能加进测试集）：勾目录会连它下面的接口一起勾上 */
+/** 目录树（WebSocket / Socket.IO / gRPC 接口不能加进测试集）：勾目录会连它下面的接口一起勾上 */
 const pickerNodes = computed(function () {
   const apis = tree.apis.filter(function (api) {
     const method = String(api.method || '').toUpperCase();
-    return method !== 'WS' && method !== 'SIO';
+    return method !== 'WS' && method !== 'SIO' && method !== 'GRPC';
   });
 
   const nodes = buildTree(tree.folders, apis);

@@ -12,6 +12,7 @@ import { shouldRetry401 } from '@/utils/preflight';
 import { emptyLoad, readSettings } from '@/utils/load';
 import { useWsStore } from '@/stores/ws';
 import { useSioStore } from '@/stores/sio';
+import { useGrpcStore } from '@/stores/grpc';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
@@ -21,10 +22,36 @@ import { usePrefsStore } from '@/stores/prefs';
 let draftSeq = 0;
 let wsSeq = 0;
 let sioSeq = 0;
+let grpcSeq = 0;
 
-/** 既是 WebSocket 标签页又是 Socket.IO 标签页（两者的状态都按 key 存、都要单独收尾） */
+/**
+ * 三种「非 HTTP」接口各自的调试标签页。
+ *
+ * 表放在这里是因为三者在标签页这一层要做的事**完全一样**（打开、保存后换形态、
+ * 关掉时收尾、失效时重载），差别只有 kind、默认标题和 spec 的形状 ——
+ * 各写一份的话，下一个新方法又要再抄一遍。
+ */
+const DEBUG_TABS = {
+  WS: { kind: 'ws', title: 'WebSocket', spec: wsSpecFromApi },
+  SIO: { kind: 'sio', title: 'Socket.IO', spec: sioSpecFromApi },
+  GRPC: { kind: 'grpc', title: 'gRPC', spec: grpcSpecFromApi }
+};
+
+function debugTabOf(api) {
+  return DEBUG_TABS[String((api && api.method) || '').toUpperCase()] || null;
+}
+
+/** 既是 WebSocket / Socket.IO 标签页又是 gRPC 标签页（状态都按 key 存、都要单独收尾） */
 function isSocketTab(tab) {
-  return Boolean(tab) && (tab.kind === 'ws' || tab.kind === 'sio');
+  return Boolean(tab) && (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc');
+}
+
+/** 调试标签页自己的运行时状态（在对应的 store 里），关标签页时要把它一起收掉 */
+function dropDebugState(tab) {
+  if (!tab) return;
+  if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
+  else if (tab.kind === 'grpc') useGrpcStore().closeFor(tab.key);
+  else if (tab.kind === 'ws') useWsStore().closeFor(tab.key);
 }
 
 /** 事件视图里最多保留多少条，超出就丢最旧的（契约第 14 节的调试视图） */
@@ -147,6 +174,39 @@ export function sioSpecFromApi(api) {
   base.sio = api.sio
     ? JSON.parse(JSON.stringify(api.sio))
     : { path: '/socket.io', namespace: '/', transports: 'polling', listenEvents: [], sends: [] };
+  return base;
+}
+
+/**
+ * gRPC 调试标签页的请求内容（第十一轮第 3 节）。
+ *
+ * 和 WebSocket / Socket.IO 不一样：gRPC **没有请求头 / query / 鉴权**那一套 ——
+ * 地址是 `host:port`，凭据走 metadata，多一块 `grpc`：
+ * proto 文件、服务方法、TLS 开关、metadata、消息、超时、常用消息。
+ */
+export function emptyGrpcSpec() {
+  return {
+    url: '',
+    params: { headers: [], query: [] },
+    auth: null,
+    grpc: {
+      protoFiles: [],
+      service: '',
+      method: '',
+      tls: false,
+      metadata: [],
+      message: '',
+      deadlineMs: 10000,
+      savedMessages: []
+    }
+  };
+}
+
+export function grpcSpecFromApi(api) {
+  const base = wsSpecFromApi(api);
+  base.grpc = api.grpc
+    ? JSON.parse(JSON.stringify(api.grpc))
+    : emptyGrpcSpec().grpc;
   return base;
 }
 
@@ -371,6 +431,8 @@ export const useTabsStore = defineStore('tabs', function () {
     if (data.api.method === 'WS') return pushWsApiTab(data.api);
     // Socket.IO（第九轮第 4 节）同理，走 Socket.IO 标签页
     if (data.api.method === 'SIO') return pushSioApiTab(data.api);
+    // gRPC（第十一轮第 3 节）同理，走 gRPC 标签页
+    if (data.api.method === 'GRPC') return pushGrpcApiTab(data.api);
 
     const spec = specFromApi(data.api);
     const tab = Object.assign({
@@ -533,6 +595,63 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: api.id,
       folderId: api.folderId || null,
       title: api.name || 'Socket.IO',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
+   * 新建一个 gRPC 调试标签页（第十一轮第 3 节）。和 WebSocket / Socket.IO 一样：
+   * **不进目录树**，想留下来就点「保存到目录」，那时会变成绑定接口的 gRPC 标签页。
+   */
+  function openGrpc() {
+    grpcSeq += 1;
+    const key = 'grpc:' + grpcSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'grpc',
+      apiId: null,
+      folderId: null,
+      title: 'gRPC',
+      spec: emptyGrpcSpec(),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 绑定接口的 gRPC 标签页（同一接口只会有一个标签页，key 是 `api:<id>`） */
+  function pushGrpcApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = grpcSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'grpc',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || 'gRPC',
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: { cookies: true },
@@ -856,8 +975,9 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   /**
-   * WebSocket 标签页要连带把服务端的会话销毁掉（DELETE /ws/:id）。
-   * 切换项目时 ProjectSwitcher 会 closeAll，所以这条路径也一起覆盖了。
+   * WebSocket / Socket.IO / gRPC 标签页要连带把各自的运行时状态收掉
+   * （销毁服务端会话、取消在途的调用）。切换项目时 ProjectSwitcher 会 closeAll，
+   * 所以这条路径也一起覆盖了。
    *
    * 「运行」标签页要连带中断批量运行：**运行中切走标签页不中断，关掉才中断**。
    * 在途的那个请求直接 abort，后面的不再发（跑的那一段在 `stores/runner.js`，
@@ -868,10 +988,7 @@ export const useTabsStore = defineStore('tabs', function () {
     if (tab && tab.runner && tab.runner.controller) tab.runner.controller.abort();
     // 压测也要一起停：关掉标签页之后没人看结果了，在途的请求没必要继续打人家
     if (tab && tab.load && tab.load.controller) tab.load.controller.abort();
-    if (isSocketTab(tab)) {
-      if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
-      else useWsStore().closeFor(tab.key);
-    }
+    if (isSocketTab(tab)) dropDebugState(tab);
   }
 
   function close(key) {
@@ -897,8 +1014,8 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      // 绑定了接口的 WebSocket / Socket.IO 标签页（kind 是 ws / sio）也要一起收
-      return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio') &&
+      // 绑定了接口的 WebSocket / Socket.IO / gRPC 标签页（kind 是 ws / sio / grpc）也要一起收
+      return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc') &&
         Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
@@ -942,24 +1059,25 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function markSaved(tab, api) {
-    // WS / SIO 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
-    if (api.method === 'WS' || api.method === 'SIO') {
-      const isSio = api.method === 'SIO';
+    // WS / SIO / GRPC 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
+    const debug = debugTabOf(api);
+    if (debug) {
       const previousKey = tab.key;
-      const nextSpec = isSio ? sioSpecFromApi(api) : wsSpecFromApi(api);
-      tab.kind = isSio ? 'sio' : 'ws';
+      const nextSpec = debug.spec(api);
+      tab.kind = debug.kind;
       tab.apiId = api.id;
       tab.api = api;
       tab.key = 'api:' + api.id;
-      tab.title = api.name || (isSio ? 'Socket.IO' : 'WebSocket');
+      tab.title = api.name || debug.title;
       tab.folderId = api.folderId || null;
       tab.spec = nextSpec;
       tab.savedSnapshot = snapshot(nextSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
-      // 临时标签页是 `ws:N` / `sio:N`，绑上接口之后 key 变成 `api:<id>`：
-      // 会话状态（日志、连接、重连计时器）要跟着搬，否则刚录的东西全丢
-      if (isSio) useSioStore().move(previousKey, tab.key);
+      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 运行时状态（日志、连接、在途的调用）要跟着搬，否则刚调出来的东西全丢
+      if (debug.kind === 'sio') useSioStore().move(previousKey, tab.key);
+      else if (debug.kind === 'grpc') useGrpcStore().move(previousKey, tab.key);
       else useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
       return;
@@ -1002,17 +1120,15 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const list = tabs.value.filter(function (tab) {
       return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
-        (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio');
+        (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc');
     });
     if (!list.length) return;
 
     await Promise.all(list.map(async function (tab) {
       try {
         const data = await apisApi.getApi(tab.apiId);
-        const method = String(data.api.method || '').toUpperCase();
-        const next = method === 'WS'
-          ? wsSpecFromApi(data.api)
-          : (method === 'SIO' ? sioSpecFromApi(data.api) : specFromApi(data.api));
+        const debug = debugTabOf(data.api);
+        const next = debug ? debug.spec(data.api) : specFromApi(data.api);
         tab.api = data.api;
         tab.title = data.api.name || tab.title;
         tab.folderId = data.api.folderId || null;
@@ -1197,6 +1313,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openDraft: openDraft,
     openWs: openWs,
     openSio: openSio,
+    openGrpc: openGrpc,
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,

@@ -1,0 +1,835 @@
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue';
+import {
+  NAlert,
+  NButton,
+  NEmpty,
+  NInput,
+  NInputNumber,
+  NSelect,
+  NSwitch,
+  NTabPane,
+  NTabs,
+  useMessage
+} from 'naive-ui';
+import { useProjectStore } from '@/stores/project';
+import { useEnvStore } from '@/stores/env';
+import { useGatewayStore } from '@/stores/gateway';
+import { useGrpcStore } from '@/stores/grpc';
+import { useTabsStore } from '@/stores/tabs';
+import { useTreeStore } from '@/stores/tree';
+import * as apisApi from '@/api/apis';
+import { parseProto } from '@/api/grpc';
+import { copyText } from '@/utils/clipboard';
+import { usePrompt } from '@/utils/prompt';
+import { methodColor } from '@/utils/method';
+import { resolveScope } from '@/utils/variables';
+import KeyValueTable from '@/components/common/KeyValueTable.vue';
+import CodeEditor from '@/components/common/CodeEditor.vue';
+import VarInput from '@/components/common/VarInput.vue';
+import InlineRename from '@/components/common/InlineRename.vue';
+import GrpcResponse from './GrpcResponse.vue';
+import {
+  DEADLINE_DEFAULT,
+  DEADLINE_MAX,
+  DEADLINE_MIN,
+  clampDeadline,
+  exampleOf,
+  findMethod,
+  grpcurlCommand,
+  methodOptions,
+  methodValue,
+  nextProtoName,
+  splitMethodValue
+} from './grpc-util';
+
+/**
+ * gRPC 标签页（第十一轮第 3 节）。
+ *
+ * 和其它调试标签页（WebSocket / Socket.IO）一个形态：**临时**（`apiId` 为空，
+ * 不进目录树）和**绑定接口**（有 `apiId`，改动能存回接口）共用这一个组件。
+ *
+ * 和它们最大的不同：gRPC **没有长连接会话**。一次调用 = 一次 POST + 一串 NDJSON
+ * 事件，所以状态在 `stores/grpc.js` 里只有「这次调用的结果」，没有会话 id。
+ */
+const props = defineProps({
+  tab: { type: Object, required: true }
+});
+
+const projects = useProjectStore();
+const envs = useEnvStore();
+const gateway = useGatewayStore();
+const grpc = useGrpcStore();
+const tabs = useTabsStore();
+const tree = useTreeStore();
+const message = useMessage();
+const prompt = usePrompt();
+
+/**
+ * 「可以写 `{{变量}}`」这句话里的那个占位符。
+ *
+ * 放在这里而不是直接写进模板：Vue 的插值语法里出现 `}}` 会被提前截断
+ * （见 docs/HANDOFF.md 的「前端约定」）。
+ */
+const varHint = '{{变量}}';
+
+const activePane = ref('message');
+const spec = computed(function () { return props.tab.spec; });
+
+/** 地址栏：和目录树上的接口双向同步（改完点保存才写库） */
+const urlText = computed({
+  get: function () { return String(spec.value.url || ''); },
+  set: function (value) { spec.value.url = String(value === undefined || value === null ? '' : value); touch(); }
+});
+
+/** 默认形状要和后端 `dto.toApiGrpc` 对齐（这里只是「还没配过」时界面上的初值） */
+function emptyGrpc() {
+  return {
+    protoFiles: [],
+    service: '',
+    method: '',
+    tls: false,
+    metadata: [],
+    message: '',
+    deadlineMs: DEADLINE_DEFAULT,
+    savedMessages: []
+  };
+}
+
+const grpcCfg = computed(function () {
+  if (!spec.value.grpc) spec.value.grpc = emptyGrpc();
+  return spec.value.grpc;
+});
+
+const editable = computed(function () { return projects.canEdit; });
+const isGateway = computed(function () { return gateway.isGateway; });
+
+const state = computed(function () { return grpc.stateOf(props.tab.key); });
+const running = computed(function () {
+  const current = state.value;
+  return Boolean(current && current.phase === 'running');
+});
+
+/** 变量作用域（契约第 5 节）：地址、metadata、消息里的 `{{变量}}` 都用它高亮 / 补全 */
+const scope = computed(function () {
+  return resolveScope({
+    project: projects.current,
+    folders: tree.folders,
+    folderId: props.tab.folderId,
+    environment: envs.selected
+  });
+});
+
+function touch() {
+  tabs.touch(props.tab);
+}
+
+/* ---------------- proto 解析 ---------------- */
+
+/** 解析出来的服务清单；网页版拿不到（那条路由只在客户端里有） */
+const services = ref([]);
+const parseError = ref('');
+const parsing = ref(false);
+
+let parseTimer = null;
+
+/** 当前在下面编辑器里打开的那个 proto 文件（列表里的下标） */
+const activeFile = ref(0);
+
+const files = computed(function () { return grpcCfg.value.protoFiles || []; });
+
+const methodList = computed(function () { return methodOptions(services.value); });
+
+const selected = computed(function () {
+  return methodValue(grpcCfg.value.service, grpcCfg.value.method);
+});
+
+const currentStreaming = computed(function () {
+  const found = findMethod(services.value, grpcCfg.value.service, grpcCfg.value.method);
+  return Boolean(found && found.serverStreaming === true);
+});
+
+/**
+ * 下拉里要显示的选项。
+ *
+ * 已保存的那个「服务 / 方法」如果不在解析结果里（还没解析、或者网页版根本解析不了），
+ * 补一条进去 —— 否则下拉是空的，用户会以为自己没选过。
+ */
+const selectOptions = computed(function () {
+  const list = methodList.value.slice();
+  const value = selected.value;
+  if (!value) return list;
+  if (list.some(function (item) { return item.value === value; })) return list;
+
+  const parts = splitMethodValue(value);
+  list.unshift({
+    label: parts.service + ' / ' + parts.method + '（未解析）',
+    value: value,
+    disabled: false
+  });
+  return list;
+});
+
+async function doParse() {
+  if (!isGateway.value) return;   // 网页版没有 /grpc/parse，提示见模板
+  if (!files.value.length) {
+    services.value = [];
+    parseError.value = '';
+    return;
+  }
+
+  parsing.value = true;
+  try {
+    const data = await parseProto(projects.currentId, {
+      protoFiles: JSON.parse(JSON.stringify(files.value))
+    });
+    services.value = data.services || [];
+    parseError.value = '';
+  } catch (err) {
+    services.value = [];
+    parseError.value = (err && err.message) || '解析失败';
+  } finally {
+    parsing.value = false;
+  }
+}
+
+/** 任何一次改动之后延迟一点再解析：正在敲的时候每敲一个字都解析一遍太吵 */
+function scheduleParse() {
+  if (parseTimer) clearTimeout(parseTimer);
+  parseTimer = setTimeout(function () {
+    parseTimer = null;
+    doParse();
+  }, 400);
+}
+
+watch(function () { return JSON.stringify(files.value); }, function () {
+  scheduleParse();
+});
+
+function onPick(event) {
+  const picked = Array.from((event.target && event.target.files) || []);
+  event.target.value = '';
+
+  picked.forEach(function (file) {
+    const reader = new FileReader();
+    reader.onload = function () {
+      const name = String(file.name || '').replace(/^.*[\\/]/, '');
+      const list = (grpcCfg.value.protoFiles || []).slice();
+      // 同名直接换掉内容：用户重选一个改过的文件是最常见的动作
+      const index = list.findIndex(function (item) { return item.name === name; });
+      const entry = { name: name, content: String(reader.result || '') };
+      if (index === -1) list.push(entry); else list[index] = entry;
+      grpcCfg.value.protoFiles = list;
+      activeFile.value = list.findIndex(function (item) { return item.name === name; });
+      touch();
+    };
+    reader.readAsText(file);
+  });
+}
+
+const activeValid = computed(function () {
+  return activeFile.value >= 0 && activeFile.value < files.value.length;
+});
+
+const activeContent = computed({
+  get: function () {
+    const file = files.value[activeFile.value];
+    return file ? String(file.content || '') : '';
+  },
+  set: function (value) {
+    const file = files.value[activeFile.value];
+    if (!file) return;
+    file.content = String(value || '');
+    touch();
+  }
+});
+
+const activeName = computed({
+  get: function () {
+    const file = files.value[activeFile.value];
+    return file ? String(file.name || '') : '';
+  },
+  set: function (value) {
+    const file = files.value[activeFile.value];
+    if (!file) return;
+    file.name = String(value || '');
+    touch();
+  }
+});
+
+function addFile() {
+  const list = (grpcCfg.value.protoFiles || []).slice();
+  list.push({ name: nextProtoName(list), content: 'syntax = "proto3";\n\n' });
+  grpcCfg.value.protoFiles = list;
+  activeFile.value = list.length - 1;
+  touch();
+}
+
+function removeFile(index) {
+  const list = (grpcCfg.value.protoFiles || []).slice();
+  list.splice(index, 1);
+  grpcCfg.value.protoFiles = list;
+  if (activeFile.value >= list.length) activeFile.value = list.length - 1;
+  touch();
+}
+
+/* ---------------- 消息 ---------------- */
+
+const messageText = computed({
+  get: function () { return String(grpcCfg.value.message || ''); },
+  set: function (value) { grpcCfg.value.message = String(value === undefined || value === null ? '' : value); touch(); }
+});
+
+function fillExample() {
+  const text = exampleOf(services.value, grpcCfg.value.service, grpcCfg.value.method);
+  if (!text) {
+    message.warning(isGateway.value ? '先选一个方法（proto 解析成功之后才有示例）' : '解析 proto 要在客户端里打开这个接口');
+    return;
+  }
+  messageText.value = text;
+}
+
+const savedMessages = computed(function () { return grpcCfg.value.savedMessages || []; });
+
+const savedOptions = computed(function () {
+  return savedMessages.value.map(function (item, index) {
+    return { label: item.name, value: index };
+  });
+});
+
+function useSaved(index) {
+  const item = savedMessages.value[index];
+  if (!item) return;
+  messageText.value = String(item.message || '');
+}
+
+async function saveAsSaved() {
+  const text = String(grpcCfg.value.message || '').trim();
+  if (!text) {
+    message.warning('消息是空的，先写一条');
+    return;
+  }
+
+  const name = await prompt({
+    title: '存为常用消息',
+    label: '给这条消息起个名字，下次从「常用消息」里一点就填进来',
+    value: '常用消息 ' + (savedMessages.value.length + 1),
+    placeholder: '查 1 号用户'
+  });
+  if (!name || !String(name).trim()) return;
+
+  const list = savedMessages.value.slice();
+  list.push({ name: String(name).trim(), message: text });
+  grpcCfg.value.savedMessages = list;
+  touch();
+
+  if (props.tab.apiId) {
+    try {
+      await persist();
+      message.success('已存为常用消息');
+    } catch (err) {
+      message.error(err.message);
+    }
+  } else {
+    message.success('已存为常用消息（保存到目录之后才会留下来）');
+  }
+}
+
+function removeSaved(index) {
+  const list = savedMessages.value.slice();
+  list.splice(index, 1);
+  grpcCfg.value.savedMessages = list;
+  touch();
+}
+
+/* ---------------- 调用 ---------------- */
+
+const deadline = computed({
+  get: function () { return clampDeadline(grpcCfg.value.deadlineMs); },
+  set: function (value) {
+    grpcCfg.value.deadlineMs = clampDeadline(value);
+    touch();
+  }
+});
+
+const callDisabledReason = computed(function () {
+  if (!isGateway.value) return '网页版不能调用 gRPC，请在客户端里使用';
+  if (!editable.value) return '只读角色不能发起调用';
+  if (!String(spec.value.url || '').trim()) return '先填服务地址（host:port）';
+  if (!grpcCfg.value.service || !grpcCfg.value.method) return '先选服务和方法';
+  return '';
+});
+
+async function onCall() {
+  if (running.value) {
+    grpc.cancel(props.tab.key);
+    return;
+  }
+
+  const body = {
+    apiId: props.tab.apiId || undefined,
+    environmentId: envs.selectedId || undefined,
+    url: String(spec.value.url || ''),
+    tls: grpcCfg.value.tls === true,
+    protoFiles: JSON.parse(JSON.stringify(grpcCfg.value.protoFiles || [])),
+    service: grpcCfg.value.service,
+    method: grpcCfg.value.method,
+    metadata: JSON.parse(JSON.stringify(grpcCfg.value.metadata || [])),
+    message: String(grpcCfg.value.message || ''),
+    deadlineMs: clampDeadline(grpcCfg.value.deadlineMs)
+  };
+
+  await grpc.run(props.tab.key, { projectId: projects.currentId, body });
+
+  const current = state.value;
+  if (current && current.phase === 'error' && current.error) message.error(current.error);
+}
+
+async function copyGrpcurl() {
+  const command = grpcurlCommand({
+    target: spec.value.url,
+    tls: grpcCfg.value.tls === true,
+    metadata: grpcCfg.value.metadata,
+    message: grpcCfg.value.message,
+    service: grpcCfg.value.service,
+    method: grpcCfg.value.method,
+    protoFiles: grpcCfg.value.protoFiles
+  });
+  await copyText(command);
+  message.success('已复制 grpcurl 命令');
+}
+
+/* ---------------- 保存 ---------------- */
+
+const saving = ref(false);
+
+async function persist() {
+  if (!props.tab.apiId) return null;
+  const data = await apisApi.updateApi(props.tab.apiId, {
+    url: spec.value.url,
+    grpc: spec.value.grpc
+  });
+  return data.api;
+}
+
+async function save() {
+  if (!props.tab.apiId) return;
+  saving.value = true;
+  try {
+    const api = await persist();
+    if (api) tabs.markSaved(props.tab, api);
+    message.success('已保存');
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    saving.value = false;
+  }
+}
+
+/** 标签页里改地址之后，目录树上的接口也要跟着变（和其它标签页一致） */
+onMounted(function () {
+  if (!props.tab.spec.grpc) props.tab.spec.grpc = emptyGrpc();
+  if ((props.tab.spec.grpc.protoFiles || []).length) doParse();
+});
+</script>
+
+<template>
+  <div class="grpc-tab">
+    <div class="bar">
+      <inline-rename
+        :value="tab.title"
+        :editable="editable && Boolean(tab.apiId)"
+        placeholder="接口名字"
+        class="title"
+        @commit="(name) => tabs.applyRename('api', tab.apiId, name)"
+      />
+      <span class="method" :style="{ color: methodColor('GRPC') }">gRPC</span>
+
+      <div class="bar-tools">
+        <n-button size="small" @click="copyGrpcurl">复制为 grpcurl</n-button>
+        <n-button v-if="tab.apiId && editable" size="small" :loading="saving" @click="save">保存</n-button>
+      </div>
+    </div>
+
+    <div class="addr">
+      <var-input
+        v-model="urlText"
+        :readonly="!editable"
+        :scope="scope"
+        placeholder="127.0.0.1:50051"
+        class="url"
+      />
+      <div class="tls">
+        <n-switch
+          :value="grpcCfg.tls === true"
+          :disabled="!editable"
+          size="small"
+          @update:value="(v) => { grpcCfg.tls = v; touch(); }"
+        />
+        <span class="tls-label">TLS</span>
+      </div>
+      <n-select
+        :value="selected || null"
+        :options="selectOptions"
+        :disabled="!editable"
+        size="small"
+        filterable
+        placeholder="服务 / 方法"
+        class="method-select"
+        @update:value="(v) => {
+          const parts = splitMethodValue(v);
+          grpcCfg.service = parts.service;
+          grpcCfg.method = parts.method;
+          touch();
+        }"
+      />
+      <n-button
+        size="small"
+        :type="running ? 'error' : 'primary'"
+        :ghost="running"
+        :disabled="!running && Boolean(callDisabledReason)"
+        @click="onCall"
+      >
+        {{ running ? '取消' : '调用' }}
+      </n-button>
+    </div>
+
+    <div v-if="!editable" class="notice">
+      只读角色：能看已配好的内容，但参数改不了、也存不了，调用同样不可用。
+    </div>
+    <div v-if="!isGateway" class="notice">
+      网页版不能调用 gRPC，请在客户端里使用；而且<b>在客户端里打开才能解析 proto</b>，
+      这里服务 / 方法下拉只显示已保存的那一个。
+    </div>
+
+    <n-alert v-if="parseError" type="error" :show-icon="false" class="parse-error">
+      {{ parseError }}
+    </n-alert>
+    <p v-if="parsing" class="dim">正在解析 proto…</p>
+    <n-alert
+      v-else-if="isGateway && services.length === 0 && files.length"
+      type="warning"
+      :show-icon="false"
+      class="parse-error"
+    >
+      还没有解析出服务。检查下面的 proto 文件内容对不对。
+    </n-alert>
+
+    <n-alert
+      v-if="state && state.note"
+      type="info"
+      :show-icon="false"
+      class="parse-error"
+    >
+      {{ state.note }}
+    </n-alert>
+
+    <div class="split">
+      <n-tabs v-model:value="activePane" type="line" size="small" class="panes">
+        <n-tab-pane name="message" tab="消息">
+          <div class="row">
+            <n-button size="small" :disabled="!editable" @click="fillExample">生成示例</n-button>
+            <n-select
+              :value="null"
+              :options="savedOptions"
+              :disabled="!editable || !savedOptions.length"
+              size="small"
+              placeholder="常用消息"
+              class="saved"
+              @update:value="useSaved"
+            />
+            <n-button size="small" :disabled="!editable" @click="saveAsSaved">存为常用</n-button>
+          </div>
+
+          <code-editor
+            v-model="messageText"
+            language="json"
+            :readonly="!editable"
+            min-height="220px"
+            wrap
+          />
+
+          <template v-if="savedMessages.length">
+            <p class="label">常用消息</p>
+            <div class="saved-list">
+              <div v-for="(item, index) in savedMessages" :key="index" class="saved-item">
+                <n-button size="tiny" quaternary @click="useSaved(index)">{{ item.name }}</n-button>
+                <span class="saved-text">{{ item.message }}</span>
+                <n-button v-if="editable" size="tiny" quaternary type="error" @click="removeSaved(index)">
+                  删除
+                </n-button>
+              </div>
+            </div>
+          </template>
+        </n-tab-pane>
+
+        <n-tab-pane name="metadata" tab="Metadata">
+          <p class="label">调用时带过去的 metadata（键和值都能写 <code>{{ varHint }}</code>）</p>
+          <key-value-table
+            :model-value="grpcCfg.metadata"
+            :disabled="!editable"
+            :scope="scope"
+            key-placeholder="键"
+            value-placeholder="值"
+            @update:model-value="(v) => { grpcCfg.metadata = v; touch(); }"
+          />
+        </n-tab-pane>
+
+        <n-tab-pane name="proto" tab="Proto 文件">
+          <div class="row">
+            <label class="file-pick">
+              <input type="file" accept=".proto" multiple :disabled="!editable" @change="onPick" />
+              <n-button size="small" :disabled="!editable">导入 .proto</n-button>
+            </label>
+            <n-button size="small" :disabled="!editable" @click="addFile">新建</n-button>
+            <span class="dim">改动之后会自动重新解析</span>
+          </div>
+
+          <div v-if="files.length" class="files">
+            <div
+              v-for="(file, index) in files"
+              :key="index"
+              class="file"
+              :class="{ active: index === activeFile }"
+              @click="activeFile = index"
+            >
+              <span class="fname">{{ file.name }}</span>
+              <n-button v-if="editable" size="tiny" quaternary type="error" @click.stop="removeFile(index)">
+                删除
+              </n-button>
+            </div>
+          </div>
+          <n-empty v-else size="small" description="还没有 proto 文件" />
+
+          <template v-if="activeValid">
+            <p class="label">文件名（import 别人的时候按这个名字找）</p>
+            <n-input v-model:value="activeName" size="small" :disabled="!editable" placeholder="user.proto" />
+            <code-editor
+              v-model="activeContent"
+              language="text"
+              :readonly="!editable"
+              min-height="240px"
+              wrap
+            />
+          </template>
+        </n-tab-pane>
+
+        <n-tab-pane name="settings" tab="设置">
+          <div class="field">
+            <span class="label">超时（毫秒）</span>
+            <n-input-number
+              v-model:value="deadline"
+              :min="DEADLINE_MIN"
+              :max="DEADLINE_MAX"
+              :disabled="!editable"
+              size="small"
+              class="w160"
+            />
+          </div>
+          <p class="note">
+            到点就取消这次调用，状态里会写 DEADLINE_EXCEEDED。默认 {{ DEADLINE_DEFAULT }} 毫秒。
+          </p>
+        </n-tab-pane>
+      </n-tabs>
+
+      <grpc-response :state="state" :streaming="currentStreaming" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.grpc-tab {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.method {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.bar-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.addr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.url {
+  flex: 1;
+  min-width: 0;
+}
+
+.tls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tls-label {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.method-select {
+  width: 320px;
+  flex: none;
+}
+
+.notice {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.parse-error {
+  flex: none;
+  font-size: 12px;
+}
+
+.split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panes {
+  flex: 0 0 46%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panes :deep(.n-tab-pane) {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.saved {
+  width: 200px;
+  flex: none;
+}
+
+.label {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.dim {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.w160 {
+  width: 160px;
+}
+
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.saved-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.file-pick {
+  display: inline-block;
+}
+
+.file-pick input {
+  display: none;
+}
+
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.file.active {
+  outline: 1px solid rgba(128, 128, 128, 0.5);
+}
+
+.fname {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+</style>

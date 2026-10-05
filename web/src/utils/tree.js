@@ -108,7 +108,8 @@ export function collectApiNodes(nodes, folderId) {
   walkTree(list, function (node) {
     if (node.kind !== 'api') return;
     const method = String((node.api && node.api.method) || '').toUpperCase();
-    if (method === 'WS' || method === 'SIO') return;
+    // WS / SIO / GRPC 都不是 HTTP 请求，`/send` 也不收（第十一轮第 3 节加上 GRPC）
+    if (method === 'WS' || method === 'SIO' || method === 'GRPC') return;
     out.push(node);
   });
   return out;
