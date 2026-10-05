@@ -51,8 +51,9 @@ function onPaste(event) {
 // WS 也是一种接口（契约第 17 节）：存进目录树，打开时是 WebSocket 标签页。
 // 放在这里是为了「新建接口」时能直接选它，和选 GET / POST 一样。
 // SIO（Socket.IO，第九轮第 4 节）同理，打开时是 Socket.IO 标签页；
-// GRPC（gRPC，第十一轮第 3 节）同理，打开时是 gRPC 标签页。
-const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS', 'SIO', 'GRPC'].map(function (name) {
+// GRPC（gRPC，第十一轮第 3 节）同理，打开时是 gRPC 标签页；
+// MQTT（第十三轮第 4 节）同理，打开时是 MQTT 标签页。
+const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS', 'SIO', 'GRPC', 'MQTT'].map(function (name) {
   return { label: name, value: name };
 });
 
@@ -74,13 +75,13 @@ function renderMethodOption(option) {
 }
 
 /**
- * 方法下拉：在去边框的基础上，把菜单的最大高度放到 10 行。
- * naive-ui 默认只给 7.6 行，8 个方法（再加一个自定义方法就是 9 个）会出滚动条，
- * 第一项 GET 被切掉一半。
+ * 方法下拉：在去边框的基础上，把菜单的最大高度放到 12 行。
+ * naive-ui 默认只给 7.6 行，方法一多（现在有 11 个：HTTP 七个 + WS / SIO / GRPC / MQTT，
+ * 再加一个自定义方法就是 12 个）就会出滚动条，第一项 GET 被切掉一半。
  */
 const METHOD_SELECT_THEME = {
   peers: Object.assign({}, BARE_SELECT_THEME.peers, {
-    InternalSelectMenu: { height: 'calc(var(--n-option-height) * 10)' }
+    InternalSelectMenu: { height: 'calc(var(--n-option-height) * 12)' }
   })
 };
 </script>

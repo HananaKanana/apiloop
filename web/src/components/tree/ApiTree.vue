@@ -29,7 +29,7 @@ import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.v
 import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'open-folder', 'run', 'import']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
 const prefs = usePrefsStore();
@@ -61,7 +61,10 @@ const newOptions = [
   { label: '目录', key: 'folder' },
   { label: 'WebSocket', key: 'ws' },
   // Socket.IO（第九轮第 4 节）：和 WebSocket 并列的调试标签页入口
-  { label: 'Socket.IO', key: 'sio' }
+  { label: 'Socket.IO', key: 'sio' },
+  // gRPC（第十一轮第 3 节）/ MQTT（第十三轮第 4 节）：同上，各自开一个临时调试标签页
+  { label: 'gRPC', key: 'grpc' },
+  { label: 'MQTT', key: 'mqtt' }
 ];
 
 function onNewSelect(key) {
@@ -75,6 +78,14 @@ function onNewSelect(key) {
   }
   if (key === 'sio') {
     emit('new-sio');
+    return;
+  }
+  if (key === 'grpc') {
+    emit('new-grpc');
+    return;
+  }
+  if (key === 'mqtt') {
+    emit('new-mqtt');
     return;
   }
   if (key === 'folder') {
@@ -881,7 +892,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         </n-button>
       </n-dropdown>
 
-      <!-- 新建：接口 / 目录 / WebSocket 都收在这一个 ＋ 里 -->
+      <!-- 新建：接口 / 目录 / WebSocket / Socket.IO / gRPC / MQTT 都收在这一个 ＋ 里 -->
       <n-dropdown v-if="projects.canEdit" trigger="click" :options="newOptions" @select="onNewSelect">
         <n-button size="small" quaternary title="新建">
           <template #icon>

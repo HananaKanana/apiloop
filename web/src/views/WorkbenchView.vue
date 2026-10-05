@@ -15,6 +15,7 @@ import RequestTab from '@/components/request/RequestTab.vue';
 import WsTab from '@/components/ws/WsTab.vue';
 import SioTab from '@/components/sio/SioTab.vue';
 import GrpcTab from '@/components/grpc/GrpcTab.vue';
+import MqttTab from '@/components/mqtt/MqttTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
 import LoadTab from '@/components/load/LoadTab.vue';
@@ -237,6 +238,16 @@ function onNewSio() {
   tabs.openSio();
 }
 
+/** gRPC 调试标签页（第十一轮第 3 节）：同上，不进目录树 */
+function onNewGrpc() {
+  tabs.openGrpc();
+}
+
+/** MQTT 调试标签页（第十三轮第 4 节）：同上，不进目录树 */
+function onNewMqtt() {
+  tabs.openMqtt();
+}
+
 /** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
 function onOpenFolder(folderId, options) {
   tabs.openFolder(folderId, options);
@@ -262,6 +273,8 @@ function tabMethod(tab) {
   // gRPC 调试标签页固定 GRPC（第十一轮第 3 节）：它的 spec 里没有 method 字段，
   // 不在这里拦掉的话会走到下面那个默认值、显示成「GET」
   if (tab.kind === 'grpc') return 'GRPC';
+  // MQTT 调试标签页固定 MQTT（第十三轮第 4 节）：同上，spec 里没有 method 字段
+  if (tab.kind === 'mqtt') return 'MQTT';
   // 目录页签、「运行」页签、「压测」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
   if (tab.kind === 'folder' || tab.kind === 'runner' || tab.kind === 'load' ||
       tab.kind === 'suite' || tab.kind === 'envdiff') return '';
@@ -435,6 +448,8 @@ onBeforeUnmount(function () {
           @new-api="onNewApi"
           @new-ws="onNewWs"
           @new-sio="onNewSio"
+          @new-grpc="onNewGrpc"
+          @new-mqtt="onNewMqtt"
           @open-folder="onOpenFolder"
           @run="onRun"
           @import="ui.openImport()"
@@ -536,6 +551,11 @@ onBeforeUnmount(function () {
           />
           <grpc-tab
             v-else-if="tabs.active && tabs.active.kind === 'grpc'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <mqtt-tab
+            v-else-if="tabs.active && tabs.active.kind === 'mqtt'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

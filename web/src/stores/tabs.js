@@ -13,6 +13,7 @@ import { emptyLoad, readSettings } from '@/utils/load';
 import { useWsStore } from '@/stores/ws';
 import { useSioStore } from '@/stores/sio';
 import { useGrpcStore } from '@/stores/grpc';
+import { useMqttStore } from '@/stores/mqtt';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
@@ -23,27 +24,31 @@ let draftSeq = 0;
 let wsSeq = 0;
 let sioSeq = 0;
 let grpcSeq = 0;
+let mqttSeq = 0;
 
 /**
- * 三种「非 HTTP」接口各自的调试标签页。
+ * 四种「非 HTTP」接口各自的调试标签页。
  *
- * 表放在这里是因为三者在标签页这一层要做的事**完全一样**（打开、保存后换形态、
+ * 表放在这里是因为它们在标签页这一层要做的事**完全一样**（打开、保存后换形态、
  * 关掉时收尾、失效时重载），差别只有 kind、默认标题和 spec 的形状 ——
  * 各写一份的话，下一个新方法又要再抄一遍。
  */
 const DEBUG_TABS = {
   WS: { kind: 'ws', title: 'WebSocket', spec: wsSpecFromApi },
   SIO: { kind: 'sio', title: 'Socket.IO', spec: sioSpecFromApi },
-  GRPC: { kind: 'grpc', title: 'gRPC', spec: grpcSpecFromApi }
+  GRPC: { kind: 'grpc', title: 'gRPC', spec: grpcSpecFromApi },
+  // MQTT（第十三轮第 4 节）：地址是 broker，其余全在 spec.mqtt 里
+  MQTT: { kind: 'mqtt', title: 'MQTT', spec: mqttSpecFromApi }
 };
 
 function debugTabOf(api) {
   return DEBUG_TABS[String((api && api.method) || '').toUpperCase()] || null;
 }
 
-/** 既是 WebSocket / Socket.IO 标签页又是 gRPC 标签页（状态都按 key 存、都要单独收尾） */
+/** 既是 WebSocket / Socket.IO / gRPC 标签页又是 MQTT 标签页（状态都按 key 存、都要单独收尾） */
 function isSocketTab(tab) {
-  return Boolean(tab) && (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc');
+  return Boolean(tab) &&
+    (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc' || tab.kind === 'mqtt');
 }
 
 /** 调试标签页自己的运行时状态（在对应的 store 里），关标签页时要把它一起收掉 */
@@ -51,6 +56,7 @@ function dropDebugState(tab) {
   if (!tab) return;
   if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
   else if (tab.kind === 'grpc') useGrpcStore().closeFor(tab.key);
+  else if (tab.kind === 'mqtt') useMqttStore().closeFor(tab.key);
   else if (tab.kind === 'ws') useWsStore().closeFor(tab.key);
 }
 
@@ -216,6 +222,44 @@ export function grpcSpecFromApi(api) {
     ? JSON.parse(JSON.stringify(api.grpc))
     : emptyGrpcSpec().grpc;
   return base;
+}
+
+/**
+ * MQTT 调试标签页的请求内容（第十三轮第 4 节）。
+ *
+ * 和 WebSocket / Socket.IO 不一样：MQTT **没有请求头 / query / 鉴权**那一套 ——
+ * 地址就是 broker（`mqtt://` / `mqtts://` / `ws://` / `wss://`），其余全在 `mqtt` 里：
+ * 凭据、协议版本、clean / keepalive / 超时、遗嘱、订阅列表、常用发布。
+ * 这份形状和 `apis.extra.mqtt`（`lib/api/dto.js` 的 `toApiMqtt`）**一一对应**。
+ *
+ * 默认值跟后端对齐：协议版本 4（3.1.1，兼容最广、MQTT.js 自己的默认），
+ * keepalive 60、连接超时 10 秒（见 `lib/api/dto.js` 的 MQTT_DEFAULT_KEEPALIVE）。
+ */
+export function emptyMqttSpec() {
+  return {
+    url: '',
+    mqtt: {
+      clientId: '',
+      username: '',
+      password: '',
+      protocolVersion: 4,
+      clean: true,
+      keepalive: 60,
+      connectTimeoutMs: 10000,
+      will: { topic: '', payload: '', qos: 0, retain: false },
+      subscriptions: [],
+      saved: []
+    }
+  };
+}
+
+export function mqttSpecFromApi(api) {
+  return {
+    url: api.url || '',
+    mqtt: api.mqtt
+      ? JSON.parse(JSON.stringify(api.mqtt))
+      : emptyMqttSpec().mqtt
+  };
 }
 
 /**
@@ -441,6 +485,8 @@ export const useTabsStore = defineStore('tabs', function () {
     if (data.api.method === 'SIO') return pushSioApiTab(data.api);
     // gRPC（第十一轮第 3 节）同理，走 gRPC 标签页
     if (data.api.method === 'GRPC') return pushGrpcApiTab(data.api);
+    // MQTT（第十三轮第 4 节）同理，走 MQTT 标签页
+    if (data.api.method === 'MQTT') return pushMqttApiTab(data.api);
 
     const spec = specFromApi(data.api);
     const tab = Object.assign({
@@ -660,6 +706,63 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: api.id,
       folderId: api.folderId || null,
       title: api.name || 'gRPC',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
+   * 新建一个 MQTT 调试标签页（第十三轮第 4 节）。和 WebSocket / Socket.IO / gRPC 一样：
+   * **不进目录树**，想留下来就点「保存到目录」，那时会变成绑定接口的 MQTT 标签页。
+   */
+  function openMqtt() {
+    mqttSeq += 1;
+    const key = 'mqtt:' + mqttSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'mqtt',
+      apiId: null,
+      folderId: null,
+      title: 'MQTT',
+      spec: emptyMqttSpec(),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 绑定接口的 MQTT 标签页（同一接口只会有一个标签页，key 是 `api:<id>`） */
+  function pushMqttApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = mqttSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'mqtt',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || 'MQTT',
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: { cookies: true },
@@ -1022,8 +1125,9 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      // 绑定了接口的 WebSocket / Socket.IO / gRPC 标签页（kind 是 ws / sio / grpc）也要一起收
-      return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc') &&
+      // 绑定了接口的 WebSocket / Socket.IO / gRPC / MQTT 标签页（kind 是 ws / sio / grpc / mqtt）也要一起收
+      return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
+        tab.kind === 'grpc' || tab.kind === 'mqtt') &&
         Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
@@ -1067,7 +1171,7 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function markSaved(tab, api) {
-    // WS / SIO / GRPC 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
+    // WS / SIO / GRPC / MQTT 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
     const debug = debugTabOf(api);
     if (debug) {
       const previousKey = tab.key;
@@ -1082,10 +1186,11 @@ export const useTabsStore = defineStore('tabs', function () {
       tab.savedSnapshot = snapshot(nextSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
-      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N` / `mqtt:N`，绑上接口之后 key 变成 `api:<id>`：
       // 运行时状态（日志、连接、在途的调用）要跟着搬，否则刚调出来的东西全丢
       if (debug.kind === 'sio') useSioStore().move(previousKey, tab.key);
       else if (debug.kind === 'grpc') useGrpcStore().move(previousKey, tab.key);
+      else if (debug.kind === 'mqtt') useMqttStore().move(previousKey, tab.key);
       else useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
       return;
@@ -1128,7 +1233,8 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const list = tabs.value.filter(function (tab) {
       return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
-        (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc');
+        (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
+          tab.kind === 'grpc' || tab.kind === 'mqtt');
     });
     if (!list.length) return;
 
@@ -1322,6 +1428,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openWs: openWs,
     openSio: openSio,
     openGrpc: openGrpc,
+    openMqtt: openMqtt,
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,

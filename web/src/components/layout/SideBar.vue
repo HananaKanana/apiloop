@@ -44,7 +44,7 @@ const TABS = [
   { key: 'history', label: '历史', icon: History }
 ];
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'open-folder', 'run', 'import', 'toggle']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'open-folder', 'run', 'import', 'toggle']);
 
 function onTabClick(key) {
   ui.setSidebarTab(key);
@@ -128,6 +128,8 @@ watch(
         @new-api="(folderId) => emit('new-api', folderId)"
         @new-ws="emit('new-ws')"
         @new-sio="emit('new-sio')"
+        @new-grpc="emit('new-grpc')"
+        @new-mqtt="emit('new-mqtt')"
         @open-folder="(folderId, options) => emit('open-folder', folderId, options)"
         @run="(folderId) => emit('run', folderId)"
         @import="emit('import')"
