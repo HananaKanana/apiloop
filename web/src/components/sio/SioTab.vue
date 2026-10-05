@@ -8,12 +8,14 @@ import {
   NTabPane,
   NTabs,
   NTag,
+  NTooltip,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { useSioStore } from '@/stores/sio';
 import { useTabsStore } from '@/stores/tabs';
+import { useGatewayStore } from '@/stores/gateway';
 import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import VarInput from '@/components/common/VarInput.vue';
@@ -38,6 +40,7 @@ const projects = useProjectStore();
 const envs = useEnvStore();
 const sio = useSioStore();
 const tabs = useTabsStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 
 const activePane = ref('connect');
@@ -53,6 +56,14 @@ const editable = computed(function () { return projects.canEdit; });
 const connected = computed(function () {
   const current = state.value;
   return Boolean(current && current.status === 'open' && current.sessionId);
+});
+
+/**
+ * 直接打开云端、云端又不替网页建连接（SERVER_SEND=0）：Socket.IO 的「连接」要灰掉并说明原因。
+ * 云端开了 SERVER_SEND=1 时照常能用 —— 所以用 cloudSendBlocked 判断，不是 isGateway。
+ */
+const connectBlocked = computed(function () {
+  return gateway.cloudSendBlocked;
 });
 
 const statusText = computed(function () {
@@ -131,6 +142,12 @@ function touch() {
 }
 
 async function connect() {
+  // 网页版、云端不替网页建连接：按钮已经灰了，这里兜一次（重连、常用发送也走这儿）
+  if (connectBlocked.value) {
+    message.warning('网页版不能连接，请在客户端里使用');
+    return;
+  }
+
   const payload = {
     projectId: projects.currentId,
     environmentId: envs.selectedId || undefined,
@@ -294,7 +311,16 @@ onMounted(function () {
       <n-tag size="small" :type="statusType">{{ statusText }}</n-tag>
 
       <div class="bar-tools">
-        <n-button v-if="!connected" size="small" type="primary" :disabled="!editable" @click="connect">
+        <!-- 网页版、云端不替网页建连接：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
+        <n-tooltip v-if="!connected && connectBlocked" trigger="hover">
+          <template #trigger>
+            <span class="connect-wrap">
+              <n-button size="small" type="primary" disabled>连接</n-button>
+            </span>
+          </template>
+          网页版不能连接，请在客户端里使用（或让管理员在云端开启发送）
+        </n-tooltip>
+        <n-button v-else-if="!connected" size="small" type="primary" :disabled="!editable" @click="connect">
           连接
         </n-button>
         <template v-else>
@@ -470,6 +496,12 @@ onMounted(function () {
   margin-left: auto;
   display: flex;
   gap: 6px;
+}
+
+/* 禁用的按钮不派发鼠标事件，提示要挂在外面的 span 上 */
+.connect-wrap {
+  display: inline-flex;
+  flex: none;
 }
 
 .notice {

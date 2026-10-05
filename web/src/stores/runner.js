@@ -5,6 +5,7 @@ import { specFromApi, useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
+import { useGatewayStore } from '@/stores/gateway';
 import { mockBaseFor } from '@/utils/mock';
 import { collectApiNodes } from '@/utils/tree';
 import { applyRunnerResult, runnerRow } from '@/utils/runner';
@@ -117,6 +118,17 @@ export const useRunnerStore = defineStore('runner', function () {
   async function start(tab) {
     const runner = tab && tab.runner;
     if (!runner || runner.running) return;
+
+    /*
+     * 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）时，这一轮几十个请求一个都发不出去。
+     * 界面上的「开始运行」已经灰了，这里再兜一次：万一以后有人从别处调 start（或者状态还没
+     * 探回来时先点了），也不会真的把一轮跑起来、留下一屏「云端不发送请求」的报错。
+     * 判断用 cloudSendBlocked（云端开了 SERVER_SEND=1 时是 false，照常能跑）。
+     */
+    if (useGatewayStore().cloudSendBlocked) {
+      runner.error = '网页版不能运行，请在客户端里使用';
+      return;
+    }
 
     const list = selected(tab);
     if (!list.length) {

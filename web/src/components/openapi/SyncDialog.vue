@@ -126,6 +126,12 @@ function payload() {
 
 async function check() {
   if (!props.pid) return;
+  // 网页版而且云端不替人拉地址：「地址」那一栏本来就被禁掉了，这里再兜一次
+  // （探测回来之前先切到「地址」的话，模式还停在 url）
+  if (mode.value === 'url' && urlFetchBlocked.value) {
+    message.warning('网页版不能填地址拉取，请切到「粘贴内容」或在客户端里检查');
+    return;
+  }
   if (mode.value === 'url' && !url.value.trim() && !readSavedUrl()) {
     message.warning('填一个地址，或者切到「粘贴内容」');
     return;

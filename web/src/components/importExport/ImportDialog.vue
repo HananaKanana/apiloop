@@ -303,6 +303,12 @@ async function onOpenapiFile(event) {
 
 async function parseOpenapi() {
   const url = openapiUrl.value.trim();
+  // 网页版而且云端不替人拉地址：地址输入框本来就不渲染，这里再兜一次
+  // （探测回来之前先填了地址的话，输入框会被藏起来，但值还在）
+  if (url && urlFetchBlocked.value) {
+    message.warning('网页版不能填地址拉取，请在客户端里导入');
+    return;
+  }
   if (!url && !openapiText.value.trim()) {
     message.warning('填一个地址、选一个文件，或者把内容粘进来');
     return;

@@ -7,6 +7,7 @@ import {
   NInputNumber,
   NSelect,
   NTag,
+  NTooltip,
   useMessage
 } from 'naive-ui';
 import { ChevronDown, ChevronRight, PlayerPlay, PlayerStop, DeviceFloppy } from '@vicons/tabler';
@@ -214,7 +215,20 @@ function openApiTab(row) {
 
 /* ---------------- 开始 / 停止 ---------------- */
 
+/**
+ * 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）：批量运行要一个个发请求，
+ * 在这里一样发不出去，入口灰掉并说明原因，别等点了才报错。
+ * 云端开了 SERVER_SEND=1 时照常能用（判断用的是 cloudSendBlocked，不是 isGateway）。
+ */
+const sendBlocked = computed(function () {
+  return gateway.cloudSendBlocked;
+});
+
 function onStart() {
+  if (sendBlocked.value) {
+    message.warning('网页版不能运行，请在客户端里使用');
+    return;
+  }
   runnerStore.start(props.tab);
 }
 
@@ -247,6 +261,20 @@ function onStop() {
         </template>
         停止
       </n-button>
+      <!-- 网页版、云端不替网页发请求：外面套一层 span 是因为禁用的按钮不派发鼠标事件，提示挂不上去 -->
+      <n-tooltip v-else-if="sendBlocked" trigger="hover">
+        <template #trigger>
+          <span class="start-wrap">
+            <n-button size="small" type="primary" disabled>
+              <template #icon>
+                <n-icon :component="PlayerPlay" />
+              </template>
+              开始运行
+            </n-button>
+          </span>
+        </template>
+        网页版不能运行，请在客户端里使用（或让管理员在云端开启发送）
+      </n-tooltip>
       <n-button
         v-else
         size="small"
@@ -455,6 +483,12 @@ function onStop() {
 
 .spacer {
   flex: 1;
+}
+
+/* 禁用的按钮不派发鼠标事件，提示要挂在外面的 span 上（和地址栏的发送按钮一个做法） */
+.start-wrap {
+  display: inline-flex;
+  flex: none;
 }
 
 .body {

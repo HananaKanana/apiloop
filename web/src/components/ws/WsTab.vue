@@ -14,6 +14,7 @@ import {
   NTabPane,
   NTabs,
   NTag,
+  NTooltip,
   useMessage
 } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
@@ -150,6 +151,15 @@ const busy = computed(function () {
   return state.value.status === 'connecting';
 });
 
+/**
+ * 直接打开云端、云端又不替网页建连接（SERVER_SEND=0）：WebSocket 的「连接」要灰掉并说明原因。
+ * 云端开了 SERVER_SEND=1 时照常能用 —— 所以用 cloudSendBlocked 判断，不是 isGateway。
+ * 地址栏回车（var-input 的 @enter）也会走到 onConnect，那里再兜一次。
+ */
+const connectBlocked = computed(function () {
+  return gateway.cloudSendBlocked;
+});
+
 const statusText = computed(function () {
   return STATUS_TEXT[state.value.status] || state.value.status;
 });
@@ -246,6 +256,12 @@ function setOption(key, value) {
 }
 
 async function onConnect() {
+  // 网页版、云端不替网页建连接：按钮已经灰了，但地址栏回车也会走到这里，兜一次
+  if (connectBlocked.value) {
+    message.warning('网页版不能连接，请在客户端里使用');
+    return;
+  }
+
   // 连接中再点一次会建出两个会话，前一个就漏在服务端了
   if (busy.value) return;
 
@@ -547,6 +563,15 @@ watch(
       <n-button v-if="connected" size="small" type="warning" secondary @click="onDisconnect">
         断开
       </n-button>
+      <!-- 网页版、云端不替网页建连接：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
+      <n-tooltip v-else-if="connectBlocked" trigger="hover">
+        <template #trigger>
+          <span class="connect-wrap">
+            <n-button size="small" type="primary" disabled>连接</n-button>
+          </span>
+        </template>
+        网页版不能连接，请在客户端里使用（或让管理员在云端开启发送）
+      </n-tooltip>
       <n-button v-else size="small" type="primary" :loading="busy" @click="onConnect">
         连接
       </n-button>
@@ -780,6 +805,12 @@ watch(
 .url {
   flex: 1;
   min-width: 0;
+}
+
+/* 禁用的按钮不派发鼠标事件，提示要挂在外面的 span 上（和地址栏的发送按钮一个做法） */
+.connect-wrap {
+  display: inline-flex;
+  flex: none;
 }
 
 .channel-hint {

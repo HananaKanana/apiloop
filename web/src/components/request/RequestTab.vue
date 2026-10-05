@@ -552,6 +552,12 @@ function onQueryChange(rows) {
 /* ---------------- 发送 ---------------- */
 
 function onSend() {
+  // 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）：按钮已经灰了，
+  // 但地址栏回车、响应区的「重新发送」、历史标签页这些路都会走到这里，所以在这里兜一次。
+  if (gateway.cloudSendBlocked) {
+    message.warning('网页版不能发送请求，请在客户端里使用');
+    return;
+  }
   tabs.sendRequest(projects.currentId, envs.selectedId);
 }
 

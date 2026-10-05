@@ -20,6 +20,7 @@ import * as sendApi from '@/api/send';
 import * as graphqlApi from '@/api/graphql';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
+import { useGatewayStore } from '@/stores/gateway';
 import { mockBaseFor } from '@/utils/mock';
 import { cachedSchema, formatLoadedAt, putSchema, typeCount } from '@/utils/graphqlSchema';
 
@@ -42,6 +43,16 @@ const props = defineProps({
 const message = useMessage();
 const envs = useEnvStore();
 const projects = useProjectStore();
+const gateway = useGatewayStore();
+
+/**
+ * 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）：拉 GraphQL schema 也要发一个请求，
+ * 所以「获取 Schema / 刷新」要灰掉并说明原因。
+ * 云端开了 SERVER_SEND=1 时照常能用 —— 用 cloudSendBlocked 判断，不是 isGateway。
+ */
+const schemaBlocked = computed(function () {
+  return gateway.cloudSendBlocked;
+});
 
 const MODE_OPTIONS = [
   { label: '无', value: 'none' },
@@ -124,6 +135,11 @@ function syncGqlFromCache() {
 watch(gqlUrl, syncGqlFromCache, { immediate: true });
 
 async function loadGqlSchema() {
+  // 网页版、云端不替网页发请求：按钮已经灰了，这里兜一次
+  if (schemaBlocked.value) {
+    message.warning('网页版不能获取 Schema，请在客户端里使用');
+    return;
+  }
   if (!props.projectId) {
     message.warning('还没有选中项目');
     return;
@@ -424,7 +440,22 @@ async function onFilePicked(event) {
             <span class="gql-status" :class="{ error: Boolean(gqlError) }" :title="gqlError">
               {{ gqlError || gqlStatus }}
             </span>
+            <!-- 网页版、云端不替网页发请求：拉 schema 也要发请求，灰掉并说明原因（提示挂在外层 span 上） -->
+            <n-tooltip v-if="schemaBlocked" trigger="hover">
+              <template #trigger>
+                <span class="gql-btn-wrap">
+                  <n-button size="tiny" secondary disabled>
+                    <template #icon>
+                      <n-icon :component="Refresh" />
+                    </template>
+                    {{ gqlSchema ? '刷新' : '获取 Schema' }}
+                  </n-button>
+                </span>
+              </template>
+              网页版不能获取 Schema，请在客户端里使用（或让管理员在云端开启发送）
+            </n-tooltip>
             <n-button
+              v-else
               size="tiny"
               secondary
               :loading="gqlLoading"
@@ -672,6 +703,12 @@ async function onFilePicked(event) {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+/* 禁用的按钮不派发鼠标事件，提示要挂在外面的 span 上 */
+.gql-btn-wrap {
+  display: inline-flex;
+  flex: none;
 }
 
 .gql-status {
