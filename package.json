@@ -39,6 +39,8 @@
   },
   "homepage": "http://leonaz.top:3000/liuxiuqi/apiloop",
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
     "body-parser": "^1.15.0",
     "chalk": "^1.1.3",
