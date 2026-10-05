@@ -19,7 +19,7 @@ import { useGrpcStore } from '@/stores/grpc';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
 import * as apisApi from '@/api/apis';
-import { parseProto } from '@/api/grpc';
+import { parseProto, reflect } from '@/api/grpc';
 import { copyText } from '@/utils/clipboard';
 import { usePrompt } from '@/utils/prompt';
 import { methodColor } from '@/utils/method';
@@ -28,7 +28,9 @@ import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import VarInput from '@/components/common/VarInput.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
+import AssertionsPane from '@/components/assertions/AssertionsPane.vue';
 import GrpcResponse from './GrpcResponse.vue';
+import GrpcStreamList from './GrpcStreamList.vue';
 import {
   DEADLINE_DEFAULT,
   DEADLINE_MAX,
@@ -85,6 +87,8 @@ const urlText = computed({
 /** 默认形状要和后端 `dto.toApiGrpc` 对齐（这里只是「还没配过」时界面上的初值） */
 function emptyGrpc() {
   return {
+    source: 'proto',
+    reflection: null,
     protoFiles: [],
     service: '',
     method: '',
@@ -144,9 +148,23 @@ const selected = computed(function () {
   return methodValue(grpcCfg.value.service, grpcCfg.value.method);
 });
 
+const currentMethod = computed(function () {
+  return findMethod(services.value, grpcCfg.value.service, grpcCfg.value.method);
+});
+
+/**
+ * 这个方法要不要走**流式会话**（客户端流 / 双向流，第十二轮第 2 节）。
+ * 一元和服务端流还是走 `/grpc/call`。
+ */
+const needsStream = computed(function () {
+  const found = currentMethod.value;
+  return Boolean(found && found.clientStreaming === true);
+});
+
+/** 服务端流（一元不算）：响应区按「多条消息」显示 */
 const currentStreaming = computed(function () {
-  const found = findMethod(services.value, grpcCfg.value.service, grpcCfg.value.method);
-  return Boolean(found && found.serverStreaming === true);
+  const found = currentMethod.value;
+  return Boolean(found && found.serverStreaming === true && found.clientStreaming !== true);
 });
 
 /**
@@ -170,19 +188,112 @@ const selectOptions = computed(function () {
   return list;
 });
 
+/* ---------------- 服务定义来源：proto 文件 / 服务端反射 ---------------- */
+
+/** 'proto'（导入的文件）或 'reflection'（反射拿到的描述） */
+const SOURCE_OPTIONS = [
+  { label: '导入 proto 文件', value: 'proto' },
+  { label: '服务端反射', value: 'reflection' }
+];
+
+const source = computed({
+  get: function () { return grpcCfg.value.source === 'reflection' ? 'reflection' : 'proto'; },
+  set: function (value) {
+    grpcCfg.value.source = value === 'reflection' ? 'reflection' : 'proto';
+    touch();
+    doParse();
+  }
+});
+
+/** `{ descriptorSet, fetchedAt }`；没反射过是 null */
+const reflection = computed(function () { return grpcCfg.value.reflection || null; });
+
+const reflecting = ref(false);
+
+const methodCount = computed(function () {
+  return methodList.value.length;
+});
+
+/** 有没有「服务定义」可解析：proto 文件或者存下来的反射描述 */
+const hasDefinition = computed(function () {
+  return source.value === 'reflection' ? Boolean(reflection.value && reflection.value.descriptorSet) : files.value.length > 0;
+});
+
+const fetchedText = computed(function () {
+  const info = reflection.value;
+  if (!info || !info.fetchedAt) return '';
+  const at = new Date(info.fetchedAt);
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+  return pad(at.getMonth() + 1) + '-' + pad(at.getDate()) + ' ' + pad(at.getHours()) + ':' + pad(at.getMinutes());
+});
+
+async function doReflect() {
+  if (!isGateway.value) return;
+  if (!String(spec.value.url || '').trim()) {
+    message.warning('先填服务地址（host:port）');
+    return;
+  }
+
+  reflecting.value = true;
+  try {
+    const data = await reflect(projects.currentId, {
+      apiId: props.tab.apiId || undefined,
+      environmentId: envs.selectedId || undefined,
+      url: String(spec.value.url || ''),
+      tls: grpcCfg.value.tls === true,
+      metadata: JSON.parse(JSON.stringify(grpcCfg.value.metadata || []))
+    });
+
+    grpcCfg.value.reflection = {
+      descriptorSet: data.descriptorSet || '',
+      fetchedAt: data.fetchedAt || Date.now()
+    };
+    grpcCfg.value.source = 'reflection';
+    touch();
+
+    services.value = data.services || [];
+    parseError.value = '';
+
+    if (data.tooLarge) {
+      message.warning('描述太大没有保存，每次打开需要重新获取');
+    } else {
+      message.success('已获取到 ' + services.value.length + ' 个服务');
+    }
+  } catch (err) {
+    services.value = [];
+    parseError.value = (err && err.message) || '获取失败';
+    message.error(parseError.value);
+  } finally {
+    reflecting.value = false;
+  }
+}
+
 async function doParse() {
   if (!isGateway.value) return;   // 网页版没有 /grpc/parse，提示见模板
-  if (!files.value.length) {
-    services.value = [];
-    parseError.value = '';
-    return;
+
+  const body = {};
+
+  if (source.value === 'reflection') {
+    const info = reflection.value;
+    if (!info || !info.descriptorSet) {
+      services.value = [];
+      parseError.value = '';
+      return;
+    }
+    // 用存下来的描述解析，不用再连服务端
+    body.descriptorSet = info.descriptorSet;
+  } else {
+    if (!files.value.length) {
+      services.value = [];
+      parseError.value = '';
+      return;
+    }
+    body.protoFiles = JSON.parse(JSON.stringify(files.value));
   }
 
   parsing.value = true;
   try {
-    const data = await parseProto(projects.currentId, {
-      protoFiles: JSON.parse(JSON.stringify(files.value))
-    });
+    const data = await parseProto(projects.currentId, body);
     services.value = data.services || [];
     parseError.value = '';
   } catch (err) {
@@ -342,6 +453,19 @@ function removeSaved(index) {
   touch();
 }
 
+/* ---------------- 断言 / 提取变量（第十二轮第 1 节） ---------------- */
+
+/** 和 HTTP 接口用的是同一份字段，AssertionsPane 直接用 */
+const assertions = computed({
+  get: function () { return spec.value.assertions || []; },
+  set: function (value) { spec.value.assertions = value; touch(); }
+});
+
+const extracts = computed({
+  get: function () { return spec.value.extracts || []; },
+  set: function (value) { spec.value.extracts = value; touch(); }
+});
+
 /* ---------------- 调用 ---------------- */
 
 const deadline = computed({
@@ -353,12 +477,39 @@ const deadline = computed({
 });
 
 const callDisabledReason = computed(function () {
-  if (!isGateway.value) return '网页版不能调用 gRPC，请在客户端里使用';
+  if (!isGateway.value) return needsStream.value
+    ? '网页版不能连接 gRPC，请在客户端里使用'
+    : '网页版不能调用 gRPC，请在客户端里使用';
   if (!editable.value) return '只读角色不能发起调用';
   if (!String(spec.value.url || '').trim()) return '先填服务地址（host:port）';
   if (!grpcCfg.value.service || !grpcCfg.value.method) return '先选服务和方法';
   return '';
 });
+
+/** `/grpc/call` 和流式会话共用的请求体（按来源带 protoFiles 或 descriptorSet） */
+function buildBody() {
+  const body = {
+    apiId: props.tab.apiId || undefined,
+    environmentId: envs.selectedId || undefined,
+    url: String(spec.value.url || ''),
+    tls: grpcCfg.value.tls === true,
+    service: grpcCfg.value.service,
+    method: grpcCfg.value.method,
+    metadata: JSON.parse(JSON.stringify(grpcCfg.value.metadata || [])),
+    message: String(grpcCfg.value.message || ''),
+    deadlineMs: clampDeadline(grpcCfg.value.deadlineMs),
+    assertions: JSON.parse(JSON.stringify(spec.value.assertions || [])),
+    extracts: JSON.parse(JSON.stringify(spec.value.extracts || []))
+  };
+
+  if (source.value === 'reflection') {
+    body.descriptorSet = (reflection.value && reflection.value.descriptorSet) || '';
+  } else {
+    body.protoFiles = JSON.parse(JSON.stringify(grpcCfg.value.protoFiles || []));
+  }
+
+  return body;
+}
 
 async function onCall() {
   if (running.value) {
@@ -366,23 +517,56 @@ async function onCall() {
     return;
   }
 
-  const body = {
-    apiId: props.tab.apiId || undefined,
-    environmentId: envs.selectedId || undefined,
-    url: String(spec.value.url || ''),
-    tls: grpcCfg.value.tls === true,
-    protoFiles: JSON.parse(JSON.stringify(grpcCfg.value.protoFiles || [])),
-    service: grpcCfg.value.service,
-    method: grpcCfg.value.method,
-    metadata: JSON.parse(JSON.stringify(grpcCfg.value.metadata || [])),
-    message: String(grpcCfg.value.message || ''),
-    deadlineMs: clampDeadline(grpcCfg.value.deadlineMs)
-  };
-
-  await grpc.run(props.tab.key, { projectId: projects.currentId, body });
+  await grpc.run(props.tab.key, { projectId: projects.currentId, body: buildBody() });
 
   const current = state.value;
   if (current && current.phase === 'error' && current.error) message.error(current.error);
+}
+
+/* ---------------- 流式会话（客户端流 / 双向流） ---------------- */
+
+const streamState = computed(function () { return grpc.streamOf(props.tab.key); });
+
+const streamOpen = computed(function () {
+  const current = streamState.value;
+  return Boolean(current && current.id);
+});
+
+async function onConnect() {
+  if (streamOpen.value) {
+    grpc.cancelStream(props.tab.key);
+    return;
+  }
+
+  const body = buildBody();
+  delete body.message;   // 流式会话不带初始消息，消息逐条发
+
+  await grpc.openStream(props.tab.key, { projectId: projects.currentId, body });
+
+  const current = streamState.value;
+  if (current && current.phase === 'error' && current.error) message.error(current.error);
+}
+
+async function onSend() {
+  const text = String(grpcCfg.value.message || '').trim();
+  if (!text) {
+    message.warning('先写一条消息');
+    return;
+  }
+
+  try {
+    await grpc.sendStream(props.tab.key, text);
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+async function onEndSend() {
+  try {
+    await grpc.endStreamSend(props.tab.key);
+  } catch (err) {
+    message.error(err.message);
+  }
 }
 
 async function copyGrpcurl() {
@@ -393,7 +577,9 @@ async function copyGrpcurl() {
     message: grpcCfg.value.message,
     service: grpcCfg.value.service,
     method: grpcCfg.value.method,
-    protoFiles: grpcCfg.value.protoFiles
+    protoFiles: grpcCfg.value.protoFiles,
+    source: source.value,
+    streaming: needsStream.value
   });
   await copyText(command);
   message.success('已复制 grpcurl 命令');
@@ -407,7 +593,10 @@ async function persist() {
   if (!props.tab.apiId) return null;
   const data = await apisApi.updateApi(props.tab.apiId, {
     url: spec.value.url,
-    grpc: spec.value.grpc
+    grpc: spec.value.grpc,
+    // 断言和提取变量住在接口自己的字段上（和 HTTP 接口同一份）
+    assertions: spec.value.assertions || [],
+    extracts: spec.value.extracts || []
   });
   return data.api;
 }
@@ -429,6 +618,14 @@ async function save() {
 /** 标签页里改地址之后，目录树上的接口也要跟着变（和其它标签页一致） */
 onMounted(function () {
   if (!props.tab.spec.grpc) props.tab.spec.grpc = emptyGrpc();
+  if (!props.tab.spec.assertions) props.tab.spec.assertions = [];
+  if (!props.tab.spec.extracts) props.tab.spec.extracts = [];
+
+  // 反射来源：用存下来的描述解析一遍（不用再连服务端），服务 / 方法下拉就有值了
+  if (source.value === 'reflection') {
+    if (reflection.value && reflection.value.descriptorSet) doParse();
+    return;
+  }
   if ((props.tab.spec.grpc.protoFiles || []).length) doParse();
 });
 </script>
@@ -484,6 +681,17 @@ onMounted(function () {
         }"
       />
       <n-button
+        v-if="needsStream"
+        size="small"
+        :type="streamOpen ? 'error' : 'primary'"
+        :ghost="streamOpen"
+        :disabled="!streamOpen && Boolean(callDisabledReason)"
+        @click="onConnect"
+      >
+        {{ streamOpen ? '断开' : '连接' }}
+      </n-button>
+      <n-button
+        v-else
         size="small"
         :type="running ? 'error' : 'primary'"
         :ghost="running"
@@ -507,12 +715,14 @@ onMounted(function () {
     </n-alert>
     <p v-if="parsing" class="dim">正在解析 proto…</p>
     <n-alert
-      v-else-if="isGateway && services.length === 0 && files.length"
+      v-else-if="isGateway && services.length === 0 && hasDefinition"
       type="warning"
       :show-icon="false"
       class="parse-error"
     >
-      还没有解析出服务。检查下面的 proto 文件内容对不对。
+      {{ source === 'reflection'
+        ? '存下来的描述里没有解析出服务，重新「从服务获取」一次。'
+        : '还没有解析出服务。检查下面的 proto 文件内容对不对。' }}
     </n-alert>
 
     <n-alert
@@ -549,6 +759,30 @@ onMounted(function () {
             wrap
           />
 
+          <!-- 客户端流 / 双向流：消息是逐条发的 -->
+          <div v-if="needsStream" class="row">
+            <n-button
+              size="small"
+              type="primary"
+              :disabled="!editable || !streamOpen || (streamState && streamState.halfClosed)"
+              @click="onSend"
+            >
+              发送
+            </n-button>
+            <n-button
+              size="small"
+              :disabled="!editable || !streamOpen || (streamState && streamState.halfClosed)"
+              @click="onEndSend"
+            >
+              结束发送
+            </n-button>
+            <span class="dim">
+              {{ streamOpen
+                ? ((streamState && streamState.halfClosed) ? '已经结束发送，等服务端回完' : '先「连接」，再逐条发；发完点「结束发送」')
+                : '先点上面的「连接」' }}
+            </span>
+          </div>
+
           <template v-if="savedMessages.length">
             <p class="label">常用消息</p>
             <div class="saved-list">
@@ -575,43 +809,95 @@ onMounted(function () {
           />
         </n-tab-pane>
 
-        <n-tab-pane name="proto" tab="Proto 文件">
+        <n-tab-pane name="proto" tab="服务定义">
           <div class="row">
-            <label class="file-pick">
-              <input type="file" accept=".proto" multiple :disabled="!editable" @change="onPick" />
-              <n-button size="small" :disabled="!editable">导入 .proto</n-button>
-            </label>
-            <n-button size="small" :disabled="!editable" @click="addFile">新建</n-button>
-            <span class="dim">改动之后会自动重新解析</span>
-          </div>
-
-          <div v-if="files.length" class="files">
-            <div
-              v-for="(file, index) in files"
-              :key="index"
-              class="file"
-              :class="{ active: index === activeFile }"
-              @click="activeFile = index"
-            >
-              <span class="fname">{{ file.name }}</span>
-              <n-button v-if="editable" size="tiny" quaternary type="error" @click.stop="removeFile(index)">
-                删除
-              </n-button>
-            </div>
-          </div>
-          <n-empty v-else size="small" description="还没有 proto 文件" />
-
-          <template v-if="activeValid">
-            <p class="label">文件名（import 别人的时候按这个名字找）</p>
-            <n-input v-model:value="activeName" size="small" :disabled="!editable" placeholder="user.proto" />
-            <code-editor
-              v-model="activeContent"
-              language="text"
-              :readonly="!editable"
-              min-height="240px"
-              wrap
+            <n-select
+              :value="source"
+              :options="SOURCE_OPTIONS"
+              :disabled="!editable"
+              size="small"
+              class="source-select"
+              @update:value="(v) => { source = v; }"
             />
+            <template v-if="source === 'reflection'">
+              <n-button
+                size="small"
+                type="primary"
+                :disabled="!editable || !isGateway"
+                :loading="reflecting"
+                @click="doReflect"
+              >
+                从服务获取
+              </n-button>
+              <span class="dim">{{ reflection ? '获取于 ' + fetchedText : '还没获取过' }}</span>
+            </template>
+            <span v-else class="dim">改动之后会自动重新解析</span>
+          </div>
+
+          <!-- 服务端反射 -->
+          <template v-if="source === 'reflection'">
+            <p v-if="reflection" class="label">
+              拿到 <b>{{ services.length }}</b> 个服务、<b>{{ methodCount }}</b> 个方法，获取于 {{ fetchedText }}。
+              描述已经随接口保存，之后打开不用再连服务端。
+            </p>
+            <n-empty v-else size="small" description="还没从服务端获取过描述" />
+            <p v-if="!isGateway" class="dim">
+              网页版没有这个接口：服务 / 方法下拉只显示已保存的那一个，要重新获取请在客户端里打开。
+            </p>
           </template>
+
+          <!-- 导入 proto 文件 -->
+          <template v-else>
+            <div class="row">
+              <label class="file-pick">
+                <input type="file" accept=".proto" multiple :disabled="!editable" @change="onPick" />
+                <n-button size="small" :disabled="!editable">导入 .proto</n-button>
+              </label>
+              <n-button size="small" :disabled="!editable" @click="addFile">新建</n-button>
+            </div>
+
+            <div v-if="files.length" class="files">
+              <div
+                v-for="(file, index) in files"
+                :key="index"
+                class="file"
+                :class="{ active: index === activeFile }"
+                @click="activeFile = index"
+              >
+                <span class="fname">{{ file.name }}</span>
+                <n-button v-if="editable" size="tiny" quaternary type="error" @click.stop="removeFile(index)">
+                  删除
+                </n-button>
+              </div>
+            </div>
+            <n-empty v-else size="small" description="还没有 proto 文件" />
+
+            <template v-if="activeValid">
+              <p class="label">文件名（import 别人的时候按这个名字找）</p>
+              <n-input v-model:value="activeName" size="small" :disabled="!editable" placeholder="user.proto" />
+              <code-editor
+                v-model="activeContent"
+                language="text"
+                :readonly="!editable"
+                min-height="240px"
+                wrap
+              />
+            </template>
+          </template>
+        </n-tab-pane>
+
+        <n-tab-pane name="assertions" tab="断言">
+          <p class="label">
+            调用结束之后按下面的「响应」跑断言、提取变量（和 HTTP 接口的用法一样）：
+            状态码是 gRPC 的状态码，响应头是 metadata 和 trailers 合起来，响应体是一元那条消息、
+            服务端流是全部消息组成的数组。
+          </p>
+          <assertions-pane
+            v-model:assertions="assertions"
+            v-model:extracts="extracts"
+            :disabled="!editable"
+            :has-environment="Boolean(envs.selectedId)"
+          />
         </n-tab-pane>
 
         <n-tab-pane name="settings" tab="设置">
@@ -632,7 +918,8 @@ onMounted(function () {
         </n-tab-pane>
       </n-tabs>
 
-      <grpc-response :state="state" :streaming="currentStreaming" />
+      <grpc-stream-list v-if="needsStream" :state="streamState" />
+      <grpc-response v-else :state="state" :streaming="currentStreaming" />
     </div>
   </div>
 </template>
@@ -697,6 +984,19 @@ onMounted(function () {
 .method-select {
   width: 320px;
   flex: none;
+}
+
+.source-select {
+  width: 160px;
+  flex: none;
+}
+
+.reflect-info {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.1);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .notice {

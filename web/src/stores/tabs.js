@@ -189,7 +189,13 @@ export function emptyGrpcSpec() {
     url: '',
     params: { headers: [], query: [] },
     auth: null,
+    // 断言和提取变量（第十二轮第 1 节）：和 HTTP 接口用的是同一份字段，
+    // gRPC 的「断言」页签直接复用 AssertionsPane
+    assertions: [],
+    extracts: [],
     grpc: {
+      source: 'proto',
+      reflection: null,
       protoFiles: [],
       service: '',
       method: '',
@@ -204,6 +210,8 @@ export function emptyGrpcSpec() {
 
 export function grpcSpecFromApi(api) {
   const base = wsSpecFromApi(api);
+  base.assertions = JSON.parse(JSON.stringify(api.assertions || []));
+  base.extracts = JSON.parse(JSON.stringify(api.extracts || []));
   base.grpc = api.grpc
     ? JSON.parse(JSON.stringify(api.grpc))
     : emptyGrpcSpec().grpc;

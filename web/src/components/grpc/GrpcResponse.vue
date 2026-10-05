@@ -41,6 +41,20 @@ const trailersText = computed(function () {
   return value && Object.keys(value).length ? JSON.stringify(value, null, 2) : '';
 });
 
+/** 断言和提取变量（第十二轮第 1 节）：结果跟在 end 那一行里 */
+const tests = computed(function () { return (props.state && props.state.tests) || []; });
+const extracted = computed(function () { return (props.state && props.state.extracted) || []; });
+
+const passedCount = computed(function () {
+  return tests.value.filter(function (item) { return item.passed; }).length;
+});
+
+const testsTab = computed(function () {
+  if (!tests.value.length && !extracted.value.length) return '测试结果';
+  return '测试结果（' + passedCount.value + '/' + tests.value.length + '）' +
+    (extracted.value.length ? ' · 提取 ' + extracted.value.length : '');
+});
+
 /** 响应区自己的页签：只在组件内部用，不进 store（切标签页本来就会重建组件） */
 const activePane = ref('messages');
 
@@ -127,6 +141,26 @@ function sizeOf(item) {
         <pre v-if="trailersText" class="json">{{ trailersText }}</pre>
         <n-empty v-else size="small" description="没有 Trailers" />
       </n-tab-pane>
+
+      <n-tab-pane name="tests" :tab="testsTab">
+        <template v-if="!tests.length && !extracted.length">
+          <n-empty size="small" description="没有断言和提取（在「断言」页签里加）" />
+        </template>
+
+        <div v-if="tests.length" class="tests">
+          <div v-for="(item, index) in tests" :key="index" class="test" :class="{ bad: !item.passed }">
+            {{ item.passed ? '通过' : '失败' }}：{{ item.name }}
+            <span v-if="item.message" class="msg">{{ item.message }}</span>
+          </div>
+        </div>
+
+        <div v-if="extracted.length" class="extracted">
+          <p class="label">提取到的变量</p>
+          <div v-for="(item, index) in extracted" :key="index" class="test">
+            {{ item.key }} = {{ item.value }}（{{ item.scope === 'environment' ? '环境' : '项目' }}）
+          </div>
+        </div>
+      </n-tab-pane>
     </n-tabs>
   </div>
 </template>
@@ -209,5 +243,35 @@ function sizeOf(item) {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.tests,
+.extracted {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.extracted {
+  margin-top: 10px;
+}
+
+.extracted .label {
+  margin: 0 0 2px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.test {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.test.bad {
+  color: #d03050;
+}
+
+.test .msg {
+  opacity: 0.7;
 }
 </style>

@@ -1,5 +1,5 @@
-import { post } from './client';
-import { postNdjson } from './stream';
+import { del, post } from './client';
+import { getNdjson, postNdjson } from './stream';
 
 /**
  * gRPC 调试（第十一轮第 3 节）。
@@ -30,4 +30,48 @@ export function callPath(pid) {
  */
 export function call(pid, body, options) {
   return postNdjson(callPath(pid), body, options);
+}
+
+/**
+ * 服务端反射（第十二轮第 1 节）：不用导 proto，直接问服务端要描述。
+ *
+ * @returns {Promise<{services: Array, descriptorSet: string, fetchedAt: number, tooLarge: boolean}>}
+ *   `descriptorSet` 是 base64 的 FileDescriptorSet，存进 `extra.grpc.reflection` 随接口保存；
+ *   超过 2 MB 时 `tooLarge: true`（没存下来，每次打开要重新获取）。
+ */
+export function reflect(pid, payload) {
+  return post('/projects/' + encodeURIComponent(pid) + '/grpc/reflect', payload);
+}
+
+/* ---------------- 客户端流 / 双向流的流式会话（第十二轮第 2 节） ---------------- */
+
+/** 建流式会话，建好后服务端立刻开始连接 */
+export function createStream(pid, payload) {
+  return post('/projects/' + encodeURIComponent(pid) + '/grpc/streams', payload);
+}
+
+/** 发一条消息（half-close 之前可以一直发） */
+export function sendStreamMessage(id, message) {
+  return post('/grpc/streams/' + encodeURIComponent(id) + '/send', { message: message });
+}
+
+/** 结束发送（half-close）：之后服务端还可以继续回消息直到结束 */
+export function endStream(id) {
+  return post('/grpc/streams/' + encodeURIComponent(id) + '/end');
+}
+
+/** 取消并删掉会话 */
+export function destroyStream(id) {
+  return del('/grpc/streams/' + encodeURIComponent(id));
+}
+
+/** events 长连接的路径。after 是最后收到的 seq，重连时靠它补齐断掉的那一段 */
+export function streamEventsPath(id, after) {
+  return '/grpc/streams/' + encodeURIComponent(id) + '/events?after=' + (Number(after) || 0);
+}
+
+/** 收流式会话的事件（NDJSON 长连接） */
+export function readStreamEvents(id, options) {
+  const opts = options || {};
+  return getNdjson(streamEventsPath(id, opts.after), opts);
 }

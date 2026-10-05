@@ -85,8 +85,15 @@ export function grpcurlCommand(input) {
 
   if (source.tls !== true) parts.push('-plaintext');
 
+  const streaming = source.streaming === true;
   const message = String(source.message || '').trim();
-  if (message) parts.push('-d', shellQuote(message));
+
+  if (streaming) {
+    // 客户端流 / 双向流：从标准输入逐条喂，空行结束
+    parts.push('-d', '@');
+  } else if (message) {
+    parts.push('-d', shellQuote(message));
+  }
 
   (source.metadata || []).forEach(function (row) {
     if (!row || row.enabled === false) return;
@@ -95,7 +102,8 @@ export function grpcurlCommand(input) {
     parts.push('-H', shellQuote(key + ': ' + String(row.value === undefined || row.value === null ? '' : row.value)));
   });
 
-  const files = source.protoFiles || [];
+  // 反射来源不用 -proto（grpcurl 自己去问服务端）
+  const files = source.source === 'reflection' ? [] : (source.protoFiles || []);
   if (files.length) {
     parts.push('-import-path', '.', '-proto', shellQuote(files[0].name));
   }
@@ -108,7 +116,12 @@ export function grpcurlCommand(input) {
   let command = parts.join(' ');
 
   const notes = [];
-  if (files.length > 1) {
+  if (streaming) {
+    notes.push('这条命令是客户端流 / 双向流：跑起来之后逐条粘贴 JSON 消息、每行一条，空行表示结束发送');
+  }
+  if (source.source === 'reflection') {
+    notes.push('用的是服务端反射，所以不带 -proto；服务端没开反射的话要先导出 proto 文件再改成 -proto 的写法');
+  } else if (files.length > 1) {
     notes.push('这个接口有 ' + files.length + ' 个 proto 文件，命令里只带了第一个；把 import 到的其它文件也放到 -import-path 那一层');
   } else if (files.length) {
     notes.push('先把 ' + files[0].name + ' 存到当前目录（proto 存在接口里，grpcurl 读的是本地文件）');
