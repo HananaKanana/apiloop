@@ -3,16 +3,18 @@
 import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
-import { Activity, BrandGithub, Help, Search, Settings } from '@vicons/tabler';
+import { Activity, BrandGithub, Help, PlayerRecord, Search, Settings } from '@vicons/tabler';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
 import { useUiStore } from '@/stores/ui';
 import { useGatewayStore } from '@/stores/gateway';
+import { FAST_POLL_MS, SLOW_POLL_MS, useRecordStore } from '@/stores/record';
 import * as mockLogApi from '@/api/mockLog';
 import ConnectionStatus from './ConnectionStatus.vue';
 import NotificationBell from './NotificationBell.vue';
 import UserMenu from './UserMenu.vue';
+import RecordDrawer from '@/components/record/RecordDrawer.vue';
 
 /**
  * 顶栏：左（Logo + 项目切换 + 标签）、中（搜索）、右（Mock 日志 / 系统设置 / 头像）。
@@ -98,6 +100,50 @@ watch(
   }
 );
 
+/* ---------------- Mock 录制 ---------------- */
+
+const record = useRecordStore();
+const recordVisible = ref(false);
+
+/**
+ * 轮询：抽屉开着 1 秒一次（列表要实时刷新）；关着只在客户端里 5 秒一次 ——
+ * 顶栏那个红点（「录制中：N 条」）要靠它，网页版没有这些接口，一次都不拉。
+ */
+function syncRecordPolling() {
+  if (!gateway.isGateway) {
+    record.stopPolling();
+    return;
+  }
+  record.startPolling(recordVisible.value ? FAST_POLL_MS : SLOW_POLL_MS);
+}
+
+// 是不是客户端、以及当前项目，两个都变了才重新拉
+watch(
+  function () { return gateway.isGateway; },
+  function (yes) {
+    if (!yes) {
+      record.stopPolling();
+      return;
+    }
+    record.load(projects.currentId);
+    syncRecordPolling();
+  },
+  { immediate: true }
+);
+
+watch(
+  function () { return projects.currentId; },
+  function (pid) {
+    if (!gateway.isGateway) return;
+    record.load(pid);
+  }
+);
+
+watch(
+  function () { return recordVisible.value; },
+  function () { syncRecordPolling(); }
+);
+
 /* ---------------- 搜索 ---------------- */
 
 const isMac = computed(function () {
@@ -124,6 +170,7 @@ onMounted(function () {
 onBeforeUnmount(function () {
   window.removeEventListener('keydown', onKeydown);
   stopPolling();
+  record.stopPolling();
 });
 </script>
 
@@ -147,6 +194,19 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="group right">
+      <n-tooltip v-if="gateway.isGateway" trigger="hover">
+        <template #trigger>
+          <button class="icon-button" @click="recordVisible = true">
+            <n-icon size="18" :component="PlayerRecord" />
+            <span v-if="record.isRecording" class="dot recording" />
+            <span v-else-if="record.busy" class="dot idle" />
+          </button>
+        </template>
+        <template v-if="record.isRecording">录制中：{{ record.count }} 条</template>
+        <template v-else-if="record.busy">正在录制项目「{{ record.busy.projectName }}」</template>
+        <template v-else>Mock 录制</template>
+      </n-tooltip>
+
       <n-tooltip v-if="gateway.cloudFeaturesAvailable" trigger="hover">
         <template #trigger>
           <button class="icon-button" @click="openMockLog">
@@ -191,6 +251,9 @@ onBeforeUnmount(function () {
 
       <user-menu @about="emit('about')" />
     </div>
+
+    <!-- Mock 录制抽屉：只在客户端里渲染（网页版没有那几个接口） -->
+    <record-drawer v-if="gateway.isGateway" v-model:show="recordVisible" />
   </n-layout-header>
 </template>
 
@@ -291,5 +354,20 @@ onBeforeUnmount(function () {
   height: 6px;
   border-radius: 50%;
   background: #eb2013;
+}
+
+/* 正在录的是当前项目：红点轻轻闪一下，一眼能看出在录 */
+.dot.recording {
+  animation: record-blink 1.4s ease-in-out infinite;
+}
+
+/* 正在录别的项目：灰点，悬停能看到是哪个项目 */
+.dot.idle {
+  background: #9ca3af;
+}
+
+@keyframes record-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 </style>
