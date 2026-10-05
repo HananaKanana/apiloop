@@ -35,10 +35,13 @@ export const useRecordStore = defineStore('record', function () {
 
   let timer = null;
   let projectId = '';
-  /** 已经有拉取在途时不再发第二个 */
-  let inFlight = false;
-  /** 每次「换项目 / 清空」都 +1，用来把之前那批在途结果作废 */
-  let generation = 0;
+  /**
+   * 正在途的那次拉取属于哪一代（0 = 没有在途）。同一代里只允许一次在途请求。
+   * 用「代」而不是布尔：重拉 / 切项目之后，旧请求回来时不能把新一代的在途标记清掉。
+   */
+  let inFlightGen = 0;
+  /** 每次「换项目 / 清空 / 保存后重拉」都 +1，用来把之前那批在途结果作废 */
+  let generation = 1;
 
   const isRecording = computed(function () {
     return !!status.value;
@@ -64,14 +67,16 @@ export const useRecordStore = defineStore('record', function () {
   /** 拉一次增量。`pid` 不传就用记住的那个项目 */
   async function refresh(pid) {
     const target = pid || projectId;
-    if (!target || inFlight) return;
+    if (!target) return;
+    // 这一代已经有在途的了（比如重拉正在进行），别再发第二个
+    if (inFlightGen === generation) return;
 
-    inFlight = true;
     const mine = generation;
+    inFlightGen = mine;
 
     try {
       const data = await recordApi.listRecord(target, lastSeq.value);
-      // 这一批是「切项目 / 清空」之前发出的，整批丢掉
+      // 这一批是「切项目 / 清空 / 保存后重拉」之前发出的，整批丢掉
       if (mine !== generation) return;
       apply(data);
       loaded.value = true;
@@ -79,13 +84,14 @@ export const useRecordStore = defineStore('record', function () {
     } catch (err) {
       if (mine === generation) error.value = err.message;
     } finally {
-      inFlight = false;
+      if (inFlightGen === mine) inFlightGen = 0;
     }
   }
 
   /** 换项目（或首次打开）：把这一份清干净重新拉 */
   async function load(pid) {
     generation += 1;
+    inFlightGen = 0;
     projectId = pid || '';
     status.value = null;
     busy.value = null;
@@ -96,6 +102,41 @@ export const useRecordStore = defineStore('record', function () {
 
     if (!projectId) return;
     await refresh(projectId);
+  }
+
+  /**
+   * 整份重拉当前项目的记录（保存之后用）。
+   *
+   * 保存会新建接口 / 加示例，列表里那些行的「对应接口」就变了 —— 但增量轮询只拉
+   * `seq > lastSeq` 的新记录，**已经在列表里的行不会再拉**，所以那些行会一直挂着「新接口」，
+   * 要关掉抽屉重开才变。这里用 `after=0` 整份拉一遍替换掉 entries。
+   *
+   * 拉的过程中把这一代标成「有在途」，轮询就不会插进来；同时 generation +1，
+   * 保存前发出的那次轮询结果整批作废（不然它回来会把旧的 match 写回去）。
+   */
+  async function reload(pid) {
+    const target = pid || projectId;
+    if (!target) return;
+
+    const mine = generation + 1;
+    generation = mine;
+    inFlightGen = mine;
+
+    try {
+      const data = await recordApi.listRecord(target, 0);
+      if (mine !== generation) return;
+
+      entries.value = (data.entries || []).slice().reverse().slice(0, MAX_ROWS);
+      if (typeof data.lastSeq === 'number') lastSeq.value = data.lastSeq;
+      status.value = data.recording || null;
+      busy.value = data.busy || null;
+      loaded.value = true;
+      error.value = '';
+    } catch (err) {
+      if (mine === generation) error.value = err.message;
+    } finally {
+      if (inFlightGen === mine) inFlightGen = 0;
+    }
   }
 
   function startPolling(intervalMs) {
@@ -124,13 +165,28 @@ export const useRecordStore = defineStore('record', function () {
 
   async function clear(pid) {
     const target = pid || projectId;
-    generation += 1;
-    entries.value = [];
-    lastSeq.value = 0;
+    if (!target) return;
 
-    // 服务端回的是清空之后的那一份（lastSeq 不回退，接着用）
-    apply(await recordApi.clearRecord(target));
-    loaded.value = true;
+    const mine = generation + 1;
+    generation = mine;
+    inFlightGen = mine;
+
+    try {
+      const data = await recordApi.clearRecord(target);
+      if (mine !== generation) return;
+
+      entries.value = [];
+      if (typeof data.lastSeq === 'number') lastSeq.value = data.lastSeq;
+      status.value = data.recording || null;
+      busy.value = data.busy || null;
+      loaded.value = true;
+      error.value = '';
+    } catch (err) {
+      if (mine === generation) error.value = err.message;
+      throw err;
+    } finally {
+      if (inFlightGen === mine) inFlightGen = 0;
+    }
   }
 
   async function save(pid, payload) {
@@ -147,6 +203,7 @@ export const useRecordStore = defineStore('record', function () {
     isRecording: isRecording,
     count: count,
     load: load,
+    reload: reload,
     refresh: refresh,
     startPolling: startPolling,
     stopPolling: stopPolling,

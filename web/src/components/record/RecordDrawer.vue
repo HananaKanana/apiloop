@@ -267,6 +267,9 @@ async function save(options) {
     results.forEach(function (item) { if (!item.error) done[item.entryId] = true; });
     selected.value = selected.value.filter(function (id) { return !done[id]; });
 
+    // 列表整份重拉：保存之后那些行的「对应接口」变了，而增量轮询只拉新记录、不会更新旧行
+    await record.reload(projects.currentId);
+
     if (failed.length) {
       const byId = new Map();
       rows.value.forEach(function (entry) { byId.set(entry.id, entry); });
