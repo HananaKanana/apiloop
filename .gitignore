@@ -25,3 +25,4 @@ agent-installer/dist/
 # Windows 版（agent-installer/windows）：dotnet 编译的中间产物不入库，产物在 agent-installer/dist/
 agent-installer/windows/**/bin/
 agent-installer/windows/**/obj/
+.ateam/
