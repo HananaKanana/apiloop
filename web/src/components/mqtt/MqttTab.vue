@@ -154,12 +154,17 @@ const channelHint = computed(function () {
 });
 
 /**
- * 直接打开云端、云端又不替网页建连接（SERVER_SEND=0）：MQTT 的「连接」灰掉并说明原因。
- * 云端开了 SERVER_SEND=1 时照常能用 —— 用 cloudSendBlocked 判断，不是 isGateway。
+ * MQTT 的「连接」在网页版要灰掉 —— 这条**只在客户端里才有**。
+ *
+ * 判断用 `isGateway`，**不是** `cloudSendBlocked`：MQTT 的路由只挂在本机网关上
+ * （`lib/api/mqtt.js` 在 `ctx.localSend` 为假时直接返回空 router），云端不管
+ * `SERVER_SEND` 开没开都没有 `/mqtt` —— 用 cloudSendBlocked 的话，管理员一开
+ * SERVER_SEND=1 按钮就亮了，点下去是 404。和 GrpcTab 的 `isGateway` 一个口径。
+ *
  * 地址栏回车（var-input 的 @enter）也会走到 onConnect，那里再兜一次。
  */
 const connectBlocked = computed(function () {
-  return gateway.cloudSendBlocked;
+  return !gateway.isGateway;
 });
 
 /** 变量作用域：broker 地址、主题、发布内容里的 `{{变量}}` 都用它高亮 */
@@ -241,7 +246,7 @@ function connectPayload() {
 }
 
 async function onConnect() {
-  // 网页版、云端不替网页建连接：按钮已经灰了，但地址栏回车也会走到这里，兜一次
+  // 网页版没有 /mqtt（只在客户端里有）：按钮已经灰了，但地址栏回车也会走到这里，兜一次
   if (connectBlocked.value) {
     message.warning('网页版不能连接 MQTT，请在客户端里使用');
     return;
@@ -700,7 +705,7 @@ watch(
       <n-button v-if="connected" size="small" type="warning" secondary @click="onDisconnect">
         断开
       </n-button>
-      <!-- 网页版、云端不替网页建连接：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
+      <!-- 网页版没有 /mqtt：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
       <n-tooltip v-else-if="connectBlocked" trigger="hover">
         <template #trigger>
           <span class="connect-wrap">
