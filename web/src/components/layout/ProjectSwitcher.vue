@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NForm,
@@ -36,6 +37,7 @@ const envs = useEnvStore();
 const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const show = ref(false);
 const keyword = ref('');
@@ -129,7 +131,7 @@ const sections = computed(function () {
   if (prefs.projectGroups.length || rest.length) {
     list.push({
       id: '__ungrouped',
-      name: '未分组',
+      name: t('layout.ungrouped'),
       collapsed: searching.value ? false : ungroupedCollapsed.value,
       projects: rest,
       empty: rest.length === 0,
@@ -186,10 +188,10 @@ function selectProject(id) {
 
   if (tabs.hasDirty) {
     dialog.warning({
-      title: '切换项目',
-      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
-      positiveText: '切换',
-      negativeText: '取消',
+      title: t('layout.switchProjectTitle'),
+      content: t('layout.switchProjectBody'),
+      positiveText: t('layout.switchAction'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () {
         tabs.closeAll();
         projects.setCurrent(id);
@@ -221,7 +223,7 @@ async function exportCollection() {
   try {
     const data = await importExportApi.exportCollection(projects.currentId);
     downloadJson(data.filename, data.json);
-    message.success('已导出');
+    message.success(t('layout.exported'));
   } catch (err) {
     message.error(err.message);
   }
@@ -229,7 +231,7 @@ async function exportCollection() {
 
 async function submitCreate() {
   if (!form.value.name.trim()) {
-    message.warning('请填写项目名称');
+    message.warning(t('layout.projectNameRequired'));
     return;
   }
 
@@ -240,7 +242,7 @@ async function submitCreate() {
 
     const project = await projects.create(payload);
     showCreate.value = false;
-    message.success('项目已创建');
+    message.success(t('layout.projectCreated'));
     emit('change', project.id);
   } catch (err) {
     message.error(err.message);
@@ -259,14 +261,14 @@ const duplicating = ref(false);
 function openDuplicate() {
   const current = projects.current;
   if (!current) return;
-  duplicateName.value = current.name + ' 副本';
+  duplicateName.value = current.name + t('layout.duplicateNameSuffix');
   showDuplicate.value = true;
 }
 
 async function submitDuplicate() {
   const name = duplicateName.value.trim();
   if (!name) {
-    message.warning('请填写项目名称');
+    message.warning(t('layout.projectNameRequired'));
     return;
   }
 
@@ -275,7 +277,7 @@ async function submitDuplicate() {
     const data = await copyApi.duplicateProject(projects.currentId, { name: name });
     await projects.load();
     showDuplicate.value = false;
-    message.success('已复制为新项目「' + data.project.name + '」');
+    message.success(t('layout.duplicatedAs', { name: data.project.name }));
     // 直接切过去：用户点这个菜单多半就是为了在新项目里接着改
     tabs.closeAll();
     projects.setCurrent(data.project.id);
@@ -307,7 +309,7 @@ async function createDemo() {
     await envs.load(data.project.id);
     if (data.environmentId) envs.select(data.environmentId);
     emit('change', data.project.id);
-    message.success('已创建「' + data.project.name + '」，项目说明里写了可以怎么试');
+    message.success(t('layout.demoCreated', { name: data.project.name }));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -336,7 +338,7 @@ function syncDraft() {
 
 /** 分组下拉的选项：第一个是「未分组」（值为空字符串） */
 const groupOptions = computed(function () {
-  return [{ label: '未分组', value: '' }].concat(prefs.projectGroups.map(function (group) {
+  return [{ label: t('layout.ungrouped'), value: '' }].concat(prefs.projectGroups.map(function (group) {
     return { label: group.name, value: group.id };
   }));
 });
@@ -364,7 +366,7 @@ async function commitRename(group) {
 async function createGroup() {
   const name = newGroupName.value.trim();
   if (!name) {
-    message.warning('请填写分组名称');
+    message.warning(t('layout.groupNameRequired'));
     return;
   }
   try {
@@ -378,10 +380,10 @@ async function createGroup() {
 
 function removeGroup(group) {
   dialog.warning({
-    title: '删除分组',
-    content: '删除「' + group.name + '」后，里面的项目会回到「未分组」，项目本身不受影响。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('layout.deleteGroupTitle'),
+    content: t('layout.deleteGroupBody', { name: group.name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await prefs.removeGroup(group.id);
@@ -415,7 +417,7 @@ async function assign(projectId, groupId) {
     <template #trigger>
       <button class="switcher" :class="{ open: show }">
         <n-icon size="15" :component="Package" />
-        <span class="name">{{ projects.current ? projects.current.name : '选择项目' }}</span>
+        <span class="name">{{ projects.current ? projects.current.name : t('layout.selectProject') }}</span>
         <n-icon size="14" :component="ChevronDown" />
       </button>
     </template>
@@ -427,7 +429,7 @@ async function assign(projectId, groupId) {
           v-model:value="keyword"
           size="small"
           clearable
-          placeholder="搜索项目"
+          :placeholder="t('layout.searchProjects')"
           @keydown.esc="show = false"
         >
           <template #prefix>
@@ -439,7 +441,7 @@ async function assign(projectId, groupId) {
       <div class="list">
         <!-- 收藏：排在最上面 -->
         <div v-if="favoriteProjects.length" class="section">
-          <div class="section-title">收藏</div>
+          <div class="section-title">{{ t('layout.favorites') }}</div>
           <div
             v-for="project in favoriteProjects"
             :key="'fav-' + project.id"
@@ -450,7 +452,7 @@ async function assign(projectId, groupId) {
             <span class="row-name">{{ project.name }}</span>
             <button
               class="star on"
-              :title="'取消收藏'"
+              :title="t('layout.removeFavorite')"
               @click.stop="toggleFavorite(project)"
             >
               <n-icon size="15" :component="Star" />
@@ -478,54 +480,54 @@ async function assign(projectId, groupId) {
               <button
                 class="star"
                 :class="{ on: prefs.isProjectFavorite(project.id) }"
-                :title="prefs.isProjectFavorite(project.id) ? '取消收藏' : '收藏'"
+                :title="prefs.isProjectFavorite(project.id) ? t('layout.removeFavorite') : t('layout.addFavorite')"
                 @click.stop="toggleFavorite(project)"
               >
                 <n-icon size="15" :component="Star" />
               </button>
             </div>
-            <div v-if="!section.projects.length" class="section-empty">这个分组里还没有项目</div>
+            <div v-if="!section.projects.length" class="section-empty">{{ t('layout.emptyGroup') }}</div>
           </template>
         </div>
 
-        <div v-if="nothingFound" class="section-empty">没有匹配的项目</div>
+        <div v-if="nothingFound" class="section-empty">{{ t('layout.noMatchingProjects') }}</div>
       </div>
 
       <div class="section foot">
         <div class="row action" @click="run(openGroups)">
           <n-icon class="row-icon" size="15" :component="Settings" />
-          <span class="row-name">管理分组…</span>
+          <span class="row-name">{{ t('layout.manageGroups') }}</span>
         </div>
         <div class="row action" @click="run(function () { emit('change', '__settings'); })">
-          <span class="row-name">项目设置</span>
+          <span class="row-name">{{ t('layout.projectSettings') }}</span>
         </div>
         <div class="row action" @click="run(exportCollection)">
-          <span class="row-name">导出为 JSON</span>
+          <span class="row-name">{{ t('layout.exportJson') }}</span>
         </div>
         <div class="row action" @click="run(function () { showOpenapi = true; })">
-          <span class="row-name">导出为 OpenAPI</span>
+          <span class="row-name">{{ t('layout.exportOpenapi') }}</span>
         </div>
         <div class="row action" @click="run(function () { showExportDoc = true; })">
-          <span class="row-name">导出文档…</span>
+          <span class="row-name">{{ t('layout.exportDocument') }}</span>
         </div>
         <!-- 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口 -->
         <div class="row action" @click="run(function () { tabs.openEnvDiff(); })">
-          <span class="row-name">环境对比</span>
+          <span class="row-name">{{ t('layout.environmentDiff') }}</span>
         </div>
         <!-- 查找替换（第五轮第 2 节）：快捷键 ⌘⇧F / Ctrl+Shift+F -->
         <div class="row action" @click="run(function () { ui.openFindReplace(); })">
-          <span class="row-name">查找替换</span>
+          <span class="row-name">{{ t('layout.findReplace') }}</span>
         </div>
         <!-- 复制为新项目（第六轮第 3 节）：拿现成的项目当模板 -->
         <div class="row action" @click="run(openDuplicate)">
-          <span class="row-name">复制为新项目…</span>
+          <span class="row-name">{{ t('layout.duplicateAsNew') }}</span>
         </div>
         <div class="row action" @click="run(openCreate)">
-          <span class="row-name">新建项目</span>
+          <span class="row-name">{{ t('layout.newProject') }}</span>
         </div>
         <!-- 样例项目：点一下就有一个什么都配齐了的项目，拿来试功能 -->
         <div class="row action" @click="run(createDemo)">
-          <span class="row-name">{{ creatingDemo ? '正在创建样例项目…' : '创建样例项目' }}</span>
+          <span class="row-name">{{ creatingDemo ? t('layout.creatingDemo') : t('layout.createDemo') }}</span>
         </div>
       </div>
     </div>
@@ -535,42 +537,42 @@ async function assign(projectId, groupId) {
   <n-modal
     v-model:show="showGroups"
     preset="card"
-    title="管理分组"
+    :title="t('layout.manageGroups')"
     style="width: 520px; max-width: 92vw"
   >
     <div class="manage-section">
-      <div class="manage-title">分组</div>
+      <div class="manage-title">{{ t('layout.groupSection') }}</div>
 
       <div v-for="group in draftGroups" :key="group.id" class="manage-row">
         <n-input
           v-model:value="group.name"
           size="small"
-          placeholder="分组名称"
+          :placeholder="t('layout.groupNamePlaceholder')"
           @blur="commitRename(group)"
           @keyup.enter="commitRename(group)"
         />
-        <n-button size="small" quaternary @click="removeGroup(group)">删除</n-button>
+        <n-button size="small" quaternary @click="removeGroup(group)">{{ t('app.delete') }}</n-button>
       </div>
-      <div v-if="!draftGroups.length" class="manage-empty">还没有分组</div>
+      <div v-if="!draftGroups.length" class="manage-empty">{{ t('layout.noGroups') }}</div>
 
       <n-space class="manage-add" align="center">
         <n-input
           v-model:value="newGroupName"
           size="small"
-          placeholder="新分组名称"
+          :placeholder="t('layout.newGroupNamePlaceholder')"
           @keyup.enter="createGroup"
         />
         <n-button size="small" @click="createGroup">
           <template #icon>
             <n-icon :component="Plus" />
           </template>
-          新建分组
+          {{ t('layout.createGroupAction') }}
         </n-button>
       </n-space>
     </div>
 
     <div class="manage-section">
-      <div class="manage-title">项目分组</div>
+      <div class="manage-title">{{ t('layout.projectGroups') }}</div>
       <div v-for="project in projects.projects" :key="project.id" class="manage-row">
         <span class="manage-name" :title="project.name">{{ project.name }}</span>
         <n-select
@@ -585,7 +587,7 @@ async function assign(projectId, groupId) {
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="showGroups = false">关闭</n-button>
+        <n-button @click="showGroups = false">{{ t('app.close') }}</n-button>
       </n-space>
     </template>
   </n-modal>
@@ -593,22 +595,22 @@ async function assign(projectId, groupId) {
   <n-modal
     v-model:show="showCreate"
     preset="card"
-    title="新建项目"
+    :title="t('layout.newProject')"
     style="width: 440px; max-width: 92vw"
   >
     <n-form>
-      <n-form-item label="名称">
-        <n-input v-model:value="form.name" placeholder="项目名称" />
+      <n-form-item :label="t('layout.name')">
+        <n-input v-model:value="form.name" :placeholder="t('layout.projectNamePlaceholder')" />
       </n-form-item>
-      <n-form-item label="说明">
-        <n-input v-model:value="form.description" placeholder="可留空" />
+      <n-form-item :label="t('layout.description')">
+        <n-input v-model:value="form.description" :placeholder="t('layout.optionalPlaceholder')" />
       </n-form-item>
     </n-form>
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="showCreate = false">取消</n-button>
-        <n-button type="primary" :loading="creating" @click="submitCreate">创建</n-button>
+        <n-button @click="showCreate = false">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="creating" @click="submitCreate">{{ t('layout.createAction') }}</n-button>
       </n-space>
     </template>
   </n-modal>
@@ -633,24 +635,26 @@ async function assign(projectId, groupId) {
   <n-modal
     v-model:show="showDuplicate"
     preset="card"
-    title="复制为新项目"
+    :title="t('layout.duplicateAsNew')"
     style="width: 460px; max-width: 92vw"
   >
     <n-form>
-      <n-form-item label="新项目名称">
-        <n-input v-model:value="duplicateName" placeholder="新项目名称" @keyup.enter="submitDuplicate" />
+      <n-form-item :label="t('layout.newProjectName')">
+        <n-input
+          v-model:value="duplicateName"
+          :placeholder="t('layout.newProjectName')"
+          @keyup.enter="submitDuplicate"
+        />
       </n-form-item>
     </n-form>
     <p class="duplicate-tip">
-      会把「{{ projects.current ? projects.current.name : '' }}」的目录、接口、示例、Mock 期望、
-      环境、项目变量、公共请求头、鉴权和脚本都复制一份。成员、历史、评论和分享链接不复制
-      （新项目里只有你一个 owner）；保密变量只复制名字，值是空的。
+      {{ t('layout.duplicateBody', { name: projects.current ? projects.current.name : '' }) }}
     </p>
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="showDuplicate = false">取消</n-button>
-        <n-button type="primary" :loading="duplicating" @click="submitDuplicate">复制</n-button>
+        <n-button @click="showDuplicate = false">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="duplicating" @click="submitDuplicate">{{ t('layout.duplicateAction') }}</n-button>
       </n-space>
     </template>
   </n-modal>

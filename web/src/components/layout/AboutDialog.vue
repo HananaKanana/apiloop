@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NModal, NSpace, useMessage } from 'naive-ui';
 import { useSessionStore } from '@/stores/session';
 import { copyText } from '@/utils/clipboard';
@@ -13,6 +14,7 @@ const emit = defineEmits(['update:show']);
 
 const session = useSessionStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const meta = computed(function () {
   return session.meta || {};
@@ -23,15 +25,15 @@ const meta = computed(function () {
  * 补上 `<项目ID>/` 把完整格式说清楚（根项目仍然挂在根路径，不带这个前缀）。
  */
 const mockPrefixHint = computed(function () {
-  return (meta.value.mockBase || '/mock-') + '<项目ID>/';
+  return (meta.value.mockBase || '/mock-') + t('layout.mockIdPlaceholder') + '/';
 });
 
 async function copyPath() {
   try {
     await copyText(meta.value.configPath || '');
-    message.success('已复制');
+    message.success(t('app.copied'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 </script>
@@ -40,33 +42,33 @@ async function copyPath() {
   <n-modal
     :show="show"
     preset="card"
-    title="关于"
+    :title="t('layout.aboutTitle')"
     style="width: 520px; max-width: 92vw"
     @update:show="emit('update:show', $event)"
   >
     <div class="about">
       <div class="line">
-        <span class="label">产品</span>
+        <span class="label">{{ t('layout.product') }}</span>
         <span class="value">{{ session.appName }}</span>
       </div>
       <div class="line">
-        <span class="label">版本</span>
+        <span class="label">{{ t('layout.version') }}</span>
         <span class="value">{{ meta.version ? 'v' + meta.version : '—' }}</span>
       </div>
       <div class="line">
-        <span class="label">数据库</span>
+        <span class="label">{{ t('layout.database') }}</span>
         <span class="value path">{{ meta.configPath || '—' }}</span>
       </div>
       <div class="line">
-        <span class="label">mock 前缀</span>
+        <span class="label">{{ t('layout.mockPrefix') }}</span>
         <span class="value path">{{ mockPrefixHint }}</span>
       </div>
     </div>
 
     <template #footer>
       <n-space justify="end">
-        <n-button size="small" @click="copyPath">复制数据库路径</n-button>
-        <n-button size="small" type="primary" @click="emit('update:show', false)">关闭</n-button>
+        <n-button size="small" @click="copyPath">{{ t('layout.copyDatabasePath') }}</n-button>
+        <n-button size="small" type="primary" @click="emit('update:show', false)">{{ t('app.close') }}</n-button>
       </n-space>
     </template>
   </n-modal>

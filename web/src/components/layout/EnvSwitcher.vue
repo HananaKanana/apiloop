@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NIcon, NPopover } from 'naive-ui';
 import { Bolt, Check, ChevronDown, Pencil, Server, Settings, Table } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -20,6 +21,7 @@ const projects = useProjectStore();
 const envs = useEnvStore();
 const gateway = useGatewayStore();
 const ui = useUiStore();
+const { t } = useI18n();
 
 const show = ref(false);
 
@@ -94,7 +96,7 @@ function compareAll() {
   >
     <template #trigger>
       <button class="switcher" :class="{ open: show, empty: !envs.selected }">
-        <span class="name">{{ envs.selected ? envs.selected.name : '无环境' }}</span>
+        <span class="name">{{ envs.selected ? envs.selected.name : t('layout.noEnvironment') }}</span>
         <n-icon size="14" :component="ChevronDown" />
       </button>
     </template>
@@ -102,11 +104,11 @@ function compareAll() {
     <div class="panel">
       <!-- 上半截：切换环境 -->
       <div class="section">
-        <div class="section-title">环境</div>
+        <div class="section-title">{{ t('layout.environmentSection') }}</div>
 
         <div class="item" :class="{ active: !envs.selectedId }" @click="select('')">
           <span class="item-icon none" />
-          <span class="item-name">无环境</span>
+          <span class="item-name">{{ t('layout.noEnvironment') }}</span>
           <n-icon v-if="!envs.selectedId" class="tick" size="16" :component="Check" />
         </div>
 
@@ -114,12 +116,12 @@ function compareAll() {
         <div
           class="item"
           :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: !gateway.mockAvailable }"
-          :title="!gateway.mockAvailable ? '登录后可用' : 'host 变量就是这个项目的 mock 地址'"
+          :title="gateway.mockAvailable ? t('layout.mockHostHint') : t('layout.signInToUse')"
           @click="selectMock"
         >
           <n-icon class="item-icon" size="15" :component="Bolt" />
           <span class="item-name">Mock</span>
-          <span class="tag">{{ gateway.mockAvailable ? '内置' : '登录后可用' }}</span>
+          <span class="tag">{{ gateway.mockAvailable ? t('layout.builtin') : t('layout.signInToUse') }}</span>
           <n-icon v-if="envs.selectedId === MOCK_ENV_ID" class="tick" size="16" :component="Check" />
         </div>
 
@@ -139,30 +141,30 @@ function compareAll() {
       <!-- 下半截：当前环境里的变量（只看，改去环境标签页） -->
       <div v-if="envs.selected" class="section vars">
         <div class="vars-head">
-          <span class="section-title flat">「{{ envs.selected.name }}」的变量</span>
+          <span class="section-title flat">{{ t('layout.envVarsTitle', { name: envs.selected.name }) }}</span>
           <button class="text-button" @click="editCurrent">
             <n-icon size="13" :component="Pencil" />
-            编辑
+            {{ t('layout.edit') }}
           </button>
         </div>
         <div v-if="rows.length" class="rows">
           <div v-for="row in rows" :key="row.key" class="row" :class="{ off: row.off }">
             <span class="key" :title="row.key">{{ row.key }}</span>
-            <span class="value" :class="{ secret: row.secret }" :title="row.secret ? '' : row.value">{{ row.value || '（空）' }}</span>
+            <span class="value" :class="{ secret: row.secret }" :title="row.secret ? '' : row.value">{{ row.value || t('layout.emptyValue') }}</span>
           </div>
         </div>
-        <div v-else class="empty">这个环境里还没有变量</div>
+        <div v-else class="empty">{{ t('layout.noVariables') }}</div>
       </div>
 
       <div class="section foot">
         <!-- 环境对比（第五轮第 3 节）：所有环境的变量并排看，找「少了一个变量」这种问题 -->
         <div class="item" @click="compareAll">
           <n-icon class="item-icon" size="15" :component="Table" />
-          <span class="item-name">对比所有环境</span>
+          <span class="item-name">{{ t('layout.compareAllEnvs') }}</span>
         </div>
         <div class="item" @click="manage">
           <n-icon class="item-icon" size="15" :component="Settings" />
-          <span class="item-name">管理环境…</span>
+          <span class="item-name">{{ t('layout.manageEnvs') }}</span>
         </div>
       </div>
     </div>

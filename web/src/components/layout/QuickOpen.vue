@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NIcon, NInput, NModal } from 'naive-ui';
 import { Search } from '@vicons/tabler';
 import { useDialog } from '@/utils/dialog';
@@ -24,6 +25,7 @@ const ui = useUiStore();
 const prefs = usePrefsStore();
 const projects = useProjectStore();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const MAX_ROWS = 50;
 
@@ -49,7 +51,7 @@ const projectNameById = computed(function () {
 });
 
 function projectNameOf(id) {
-  return projectNameById.value.get(id) || '（项目已不存在）';
+  return projectNameById.value.get(id) || t('layout.projectMissing');
 }
 
 /** 目录树里所有接口，带上级目录的路径 */
@@ -65,7 +67,7 @@ const allApis = computed(function () {
       if (!node.api) return;
       list.push({
         id: node.api.id,
-        name: node.name || '(未命名接口)',
+        name: node.name || t('layout.untitledApi'),
         method: String(node.api.method || 'GET').toUpperCase(),
         url: node.api.url || '',
         path: folderChain(tree.folders, node.folderId).map(function (folder) {
@@ -155,10 +157,10 @@ async function open(item) {
 function confirmSwitchProject() {
   return new Promise(function (resolve) {
     dialog.warning({
-      title: '切换项目',
-      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
-      positiveText: '切换',
-      negativeText: '取消',
+      title: t('layout.switchProjectTitle'),
+      content: t('layout.switchProjectBody'),
+      positiveText: t('layout.switchAction'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -254,7 +256,7 @@ watch(activeList, function () {
         ref="inputRef"
         v-model:value="keyword"
         size="large"
-        placeholder="搜索接口名或地址"
+        :placeholder="t('layout.searchPlaceholder')"
         :theme-overrides="{ borderRadius: '0' }"
         @keydown="onKeydown"
       >
@@ -266,7 +268,7 @@ watch(activeList, function () {
       <div class="list">
         <!-- 没输入时：最近打开的 20 个接口（跨项目），点了切到那个项目并打开 -->
         <template v-if="!searching">
-          <div class="hint">最近打开</div>
+          <div class="hint">{{ t('layout.recentOpened') }}</div>
 
           <div
             v-for="(item, index) in recents"
@@ -282,11 +284,11 @@ watch(activeList, function () {
               <div class="line">
                 <span class="name">{{ projectNameOf(item.projectId) }} / {{ item.name }}</span>
               </div>
-              <div class="url">{{ item.url || '(没有地址)' }}</div>
+              <div class="url">{{ item.url || t('layout.noUrl') }}</div>
             </div>
           </div>
 
-          <div v-if="!recents.length" class="empty">还没有打开过接口</div>
+          <div v-if="!recents.length" class="empty">{{ t('layout.noRecent') }}</div>
         </template>
 
         <template v-else>
@@ -313,7 +315,7 @@ watch(activeList, function () {
               </div>
               <div class="url">
                 <span
-                  v-for="(part, i) in segments(item.url || '(没有地址)', keyword)"
+                  v-for="(part, i) in segments(item.url || t('layout.noUrl'), keyword)"
                   :key="i"
                   :class="{ hit: part.hit }"
                 >{{ part.text }}</span>
@@ -321,14 +323,14 @@ watch(activeList, function () {
             </div>
           </div>
 
-          <div v-if="!results.length" class="empty">没有匹配的接口</div>
+          <div v-if="!results.length" class="empty">{{ t('layout.noMatchingApis') }}</div>
         </template>
       </div>
 
       <div class="foot">
-        <span>↑↓ 选择</span>
-        <span>回车打开</span>
-        <span>Esc 关闭</span>
+        <span>{{ t('layout.footerSelect') }}</span>
+        <span>{{ t('layout.footerOpen') }}</span>
+        <span>{{ t('layout.footerClose') }}</span>
       </div>
     </div>
   </n-modal>

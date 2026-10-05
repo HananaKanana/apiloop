@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NIcon, NTooltip } from 'naive-ui';
 import {
   Folder,
@@ -38,11 +39,20 @@ const tree = useTreeStore();
 const envs = useEnvStore();
 const trash = useTrashStore();
 
-const TABS = [
-  { key: 'tree', label: '目录', icon: Folder },
-  { key: 'env', label: '环境', icon: Variable },
-  { key: 'history', label: '历史', icon: History }
-];
+const { t } = useI18n();
+
+/** 用 computed 包住：切换语言后页签上的文字要立刻变 */
+const TABS = computed(function () {
+  return [
+    { key: 'tree', label: t('layout.tabTree'), icon: Folder },
+    { key: 'env', label: t('layout.tabEnv'), icon: Variable },
+    { key: 'history', label: t('layout.tabHistory'), icon: History }
+  ];
+});
+
+const toggleTitle = computed(function () {
+  return props.collapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar');
+});
 
 const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'open-folder', 'run', 'import', 'toggle']);
 
@@ -111,16 +121,15 @@ watch(
           :class="{ active: treeView === 'apis' }"
           @click="treeView = 'apis'"
         >
-          接口
+          {{ t('layout.viewApis') }}
         </button>
         <button
           class="switch-item"
           :class="{ active: treeView === 'suites' }"
           @click="treeView = 'suites'"
         >
-          测试集
-        </button>
-      </div>
+          {{ t('layout.viewSuites') }}
+        </button>      </div>
 
       <api-tree
         v-show="ui.sidebarTab === 'tree' && treeView === 'apis'"
@@ -143,18 +152,18 @@ watch(
     <button
       class="trash-entry"
       :class="{ collapsed: collapsed }"
-      title="回收站"
+      :title="t('layout.trash')"
       @click="openTrash"
     >
       <n-icon size="15" :component="Trash" />
-      <span v-show="!collapsed" class="label">回收站</span>
+      <span v-show="!collapsed" class="label">{{ t('layout.trash') }}</span>
       <span v-if="trash.count" class="badge">{{ trash.count }}</span>
     </button>
 
     <!-- 展开 / 收起：两种状态都在最底下，位置一样 -->
     <button
       class="toggle"
-      :title="collapsed ? '展开侧栏（⌘\）' : '收起侧栏（⌘\）'"
+      :title="toggleTitle"
       @click="emit('toggle')"
     >
       <n-icon size="16" :component="collapsed ? LayoutSidebarLeftExpand : LayoutSidebarLeftCollapse" />

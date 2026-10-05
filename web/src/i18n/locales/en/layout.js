@@ -1,0 +1,224 @@
+/**
+ * layout region: user-visible text under `web/src/components/layout/`
+ * (top bar, sidebar, project / environment switchers, account menu, notifications,
+ * quick open, about, install).
+ *
+ * Terminology follows the glossary in README.md: Project, Folder, API, Environment,
+ * Variable, Mock, Test suite, Assertion, Extract, Example, Expectation, Workbench.
+ */
+export default {
+  /* ---------------- TopBar ---------------- */
+  readonly: 'Read-only',
+  searchHint: 'Search APIs {key}',
+  recordRecording: 'Recording: {n}',
+  recordBusy: 'Recording project "{name}"',
+  recordTitle: 'Mock recording',
+  mockLog: 'Mock log',
+  help: 'Help: variables, scripts, and Mock',
+  github: 'GitHub repository',
+  systemSettings: 'System settings',
+
+  /* ---------------- SideBar ---------------- */
+  tabTree: 'APIs',
+  tabEnv: 'Environments',
+  tabHistory: 'History',
+  viewApis: 'APIs',
+  viewSuites: 'Test suites',
+  trash: 'Trash',
+  expandSidebar: 'Expand sidebar (⌘\\)',
+  collapseSidebar: 'Collapse sidebar (⌘\\)',
+
+  /* ---------------- UserMenu ---------------- */
+  notSignedIn: 'Not signed in',
+  language: 'Language',
+  signIn: 'Sign in',
+  about: 'About',
+  deleteLocalData: 'Delete local data',
+  signInToSync: 'Sign in to sync to the cloud',
+  changePassword: 'Change password',
+  myShares: 'My shares',
+  userManagement: 'User management',
+  userManagementPending: 'User management ({n} pending)',
+  signOut: 'Sign out',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  confirmNewPassword: 'Confirm new password',
+  passwordMinLength: 'At least 6 characters',
+  passwordTooShort: 'The new password must be at least 6 characters',
+  passwordMismatch: 'The two new passwords do not match',
+  passwordChanged: 'Password changed. Sign-ins on other devices are now invalid.',
+  deleteDataTitle: 'Delete local data',
+  signOutAndDeleteTitle: 'Sign out and delete local data',
+  deleteDataBody:
+    'Deletes all data on this computer (projects, history, cookies). Afterwards you go back to "Local only".',
+  signOutDeleteDataBody: 'Signs out and deletes all data on this computer (projects, history, cookies).',
+  unsyncedWarning: ' {n} item(s) have not been synced and will be lost after deletion.',
+  signOutTitle: 'Sign out',
+  signOutBody:
+    'After signing out, syncing to the cloud stops. Your local data stays and keeps working; signing in again resumes syncing.',
+  signOutDeleteCheckbox: 'Also delete the data on this computer (projects, history, cookies)',
+  signOutDeletePending: '{n} item(s) have not been synced to the cloud and will be lost after deletion.',
+  signOutAndDelete: 'Sign out and delete',
+
+  /* ---------------- AboutDialog ---------------- */
+  aboutTitle: 'About',
+  product: 'Product',
+  version: 'Version',
+  database: 'Database',
+  mockPrefix: 'Mock prefix',
+  mockIdPlaceholder: '<project ID>',
+  copyDatabasePath: 'Copy database path',
+
+  /* ---------------- InstallDialog / UpdateAction ---------------- */
+  installNewVersion: 'Install new version',
+  installLocal: 'Install local apiloop',
+  archArm64: 'Mac · Apple silicon (M1, M2, …)',
+  archX64: 'Mac · Intel',
+  archWinX64: 'Windows 10 / 11',
+  installStepMacOpen:
+    'Mac: double-click the downloaded file to install. If you see "cannot be opened because the developer cannot be verified", open System Settings → Privacy & Security and click "Open Anyway" below.',
+  installStepWindowsOpen:
+    'Windows: double-click the downloaded file to run. If you see "Windows protected your PC", click "More info → Run anyway". Administrator rights are not required.',
+  installStepAfter:
+    'apiloop opens automatically when installation finishes. Later, open it from Applications (on Windows, from the Start menu or desktop).',
+  installStepGatewayData: 'Just install over the old version; your data is not affected.',
+  installStepCloudData: 'It works right away; sign in to use the projects in the cloud.',
+  installStepMacNetwork:
+    'Mac: the first time you access a LAN address, the system asks to let node find devices on your local network — click Allow.',
+  download: 'Download',
+  installStepsTitle: 'Installation steps',
+  availableAfterSignIn: 'Available after signing in.',
+  noPackages: 'The administrator has not uploaded any installation package yet.',
+  newVersionTitle: 'New version {cloud} available (this computer runs {local})',
+  autoUpdateHint:
+    'Downloads the package for this computer automatically and opens the installer; your data is not affected. You can also download it manually below.',
+  downloading: 'Downloading the new version {percent}%',
+  installingWindows: 'Installing. apiloop reopens automatically when it finishes.',
+  installingMac:
+    'The installer is open: enter your computer password to finish, then apiloop reopens automatically.',
+  installWindowRetry: 'No installer window? Try again',
+  updateNow: 'Update now',
+
+  /* ---------------- ConnectionStatus ---------------- */
+  entityProject: 'Project',
+  entityEnvironment: 'Environment',
+  entityFolder: 'Folder',
+  entityApi: 'API',
+  entityExample: 'Example',
+  entityExpectation: 'Expectation',
+  cloudSendBlocked: 'Web version cannot send requests',
+  cloudSendBlockedHint:
+    'This cloud does not send requests for you (the APIs are mostly on a LAN the cloud cannot reach). Click here to download the apiloop client so requests are sent from your own computer.',
+  cloudSend: 'Sent from the cloud',
+  cloudSendHint:
+    'Requests are sent from the cloud server, which cannot reach your computer or LAN addresses. Install the local apiloop to send them from your own computer.',
+  conflictCount: '{n} conflict(s)',
+  conflictHint: 'Some changes do not match the cloud. Click to review.',
+  syncing: 'Syncing',
+  syncingHint: 'Syncing with the cloud',
+  pendingCount: '{n} to sync',
+  offlinePendingPrefix: 'Offline · ',
+  pendingHint: 'You have local changes that have not been synced to the cloud',
+  offlinePendingHint: 'Cannot reach the cloud, so changes stay local and sync automatically once online',
+  offline: 'Offline',
+  offlineHint: 'Cannot reach the cloud. Changes stay local and sync automatically once online.',
+  synced: 'Synced',
+  syncedAt: 'Last synced: {time}',
+  syncedHint: 'Synced with the cloud',
+  loginExpired: 'Sign-in expired',
+  loginExpiredHint: 'Syncing is paused; everything local keeps working. Click here to sign in again.',
+  notSyncing: 'Signed out · not syncing',
+  notSyncingHint: 'Data is only stored on this computer and changes are not synced. Click here to sign in.',
+  localOnly: 'Local only',
+  localOnlyHint:
+    'Data is only stored on this computer. After you sign in, local projects sync to that account automatically.',
+  installNewVersionMenu: 'Install new version…',
+  hasNewVersion: 'New version',
+  versionMismatch: 'This computer runs apiloop {local}, the cloud runs {cloud}',
+
+  /* ---------------- EnvSwitcher ---------------- */
+  noEnvironment: 'No environment',
+  environmentSection: 'Environments',
+  builtin: 'Built-in',
+  signInToUse: 'Sign in to use',
+  mockHostHint: 'The host variable is this project\u2019s Mock address',
+  envVarsTitle: 'Variables in "{name}"',
+  edit: 'Edit',
+  emptyValue: '(empty)',
+  noVariables: 'This environment has no variables yet',
+  compareAllEnvs: 'Compare all environments',
+  manageEnvs: 'Manage environments…',
+
+  /* ---------------- NotificationBell ---------------- */
+  notifications: 'Notifications',
+  markAllRead: 'Mark all as read',
+  noNotifications: 'No notifications yet. When someone @-mentions you in a comment, it shows up here.',
+  loading: 'Loading…',
+  mentionedIn: ' mentioned you in "{api}": ',
+  apiFallback: 'an API',
+  deletedContent: '(content deleted)',
+
+  /* ---------------- ProjectSwitcher ---------------- */
+  selectProject: 'Select project',
+  searchProjects: 'Search projects',
+  favorites: 'Favorites',
+  addFavorite: 'Add to favorites',
+  removeFavorite: 'Remove from favorites',
+  ungrouped: 'Ungrouped',
+  emptyGroup: 'No projects in this group yet',
+  noMatchingProjects: 'No matching projects',
+  manageGroups: 'Manage groups…',
+  projectSettings: 'Project settings',
+  exportJson: 'Export as JSON',
+  exportOpenapi: 'Export as OpenAPI',
+  exportDocument: 'Export document…',
+  environmentDiff: 'Compare environments',
+  findReplace: 'Find and replace',
+  duplicateAsNew: 'Duplicate as new project…',
+  duplicateNameSuffix: ' copy',
+  newProject: 'New project',
+  createAction: 'Create',
+  duplicateAction: 'Duplicate',
+  creatingDemo: 'Creating sample project…',
+  createDemo: 'Create sample project',
+  projectNameRequired: 'Please enter a project name',
+  projectCreated: 'Project created',
+  groupNameRequired: 'Please enter a group name',
+  exported: 'Exported',
+  duplicatedAs: 'Duplicated as new project "{name}"',
+  demoCreated: '"{name}" created. The project description explains how to try it.',
+  duplicateBody:
+    'Copies folders, APIs, examples, Mock expectations, environments, project variables, shared headers, authorization and scripts from "{name}". Members, history, comments and share links are not copied (you are the only owner of the new project); secret variables keep only their names, with empty values.',
+  newProjectName: 'New project name',
+  name: 'Name',
+  description: 'Description',
+  projectNamePlaceholder: 'Project name',
+  optionalPlaceholder: 'Optional',
+  groupSection: 'Groups',
+  groupNamePlaceholder: 'Group name',
+  newGroupNamePlaceholder: 'New group name',
+  createGroupAction: 'New group',
+  noGroups: 'No groups yet',
+  projectGroups: 'Project groups',
+  deleteGroupTitle: 'Delete group',
+  deleteGroupBody:
+    'After deleting "{name}", its projects go back to "Ungrouped". The projects themselves are not affected.',
+
+  /* ---------------- QuickOpen ---------------- */
+  searchPlaceholder: 'Search API name or URL',
+  recentOpened: 'Recently opened',
+  noRecent: 'No APIs opened yet',
+  noMatchingApis: 'No matching API',
+  noUrl: '(no URL)',
+  projectMissing: '(project no longer exists)',
+  untitledApi: '(untitled API)',
+  footerSelect: '↑↓ Select',
+  footerOpen: 'Enter to open',
+  footerClose: 'Esc to close',
+
+  /* ---------------- Shared dialogs ---------------- */
+  switchProjectTitle: 'Switch project',
+  switchProjectBody:
+    'There are unsaved tabs. Switching projects closes them all and unsaved changes will be lost. Switch anyway?',
+  switchAction: 'Switch'
+};

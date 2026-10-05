@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, useMessage } from 'naive-ui';
 import { useGatewayStore } from '@/stores/gateway';
 
@@ -12,6 +13,7 @@ import { useGatewayStore } from '@/stores/gateway';
  */
 const gateway = useGatewayStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const starting = ref(false);
 
@@ -46,23 +48,23 @@ async function start() {
 <template>
   <span v-if="update.supported" class="update-action">
     <template v-if="update.state === 'downloading'">
-      <span class="text">正在下载新版本 {{ percent }}%</span>
+      <span class="text">{{ t('layout.downloading', { percent: percent }) }}</span>
       <span class="bar"><span class="fill" :style="{ width: percent + '%' }" /></span>
     </template>
 
     <template v-else-if="update.state === 'installing'">
       <span class="text">
-        <template v-if="isWindows">正在安装，装完 apiloop 会自动重新打开。</template>
-        <template v-else>已打开安装程序：按提示输入电脑密码完成安装，装完 apiloop 会自动重新打开。</template>
+        <template v-if="isWindows">{{ t('layout.installingWindows') }}</template>
+        <template v-else>{{ t('layout.installingMac') }}</template>
       </span>
       <!-- 安装窗口被关掉、或者没弹出来：重新下一次、再打开一次 -->
-      <a class="retry" @click="start">没看到安装窗口？重试</a>
+      <a class="retry" @click="start">{{ t('layout.installWindowRetry') }}</a>
     </template>
 
     <template v-else>
       <span v-if="update.state === 'error'" class="text error">{{ update.error }}</span>
       <n-button size="small" type="primary" :loading="busy" @click="start">
-        {{ update.state === 'error' ? '重试' : '立即更新' }}
+        {{ update.state === 'error' ? t('app.retry') : t('layout.updateNow') }}
       </n-button>
     </template>
   </span>

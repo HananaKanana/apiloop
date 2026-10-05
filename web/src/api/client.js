@@ -7,6 +7,8 @@
  * - 失败时抛出的 Error.message 一定是可以直接给用户看的中文。
  */
 
+import { currentLocale } from '@/i18n';
+
 export const API_PREFIX = '/__admin/api';
 
 /**
@@ -17,6 +19,21 @@ export const API_PREFIX = '/__admin/api';
  * 见 `lib/gateway/index.js` 的 `createGuard`。
  */
 export const CUSTOM_HEADERS = { 'X-Apiloop': '1' };
+
+/**
+ * 界面语言（第十五轮）：每个请求都带上，给后端以后按语言返回错误信息用
+ * （这一轮后端还没用，先发过去）。
+ */
+function acceptLanguage() {
+  return currentLocale() === 'en' ? 'en' : 'zh-CN';
+}
+
+/**
+ * 请求头：自定义头 + 语言。请求体相关的头（Content-Type）由调用处再补。
+ */
+function baseHeaders() {
+  return Object.assign({}, CUSTOM_HEADERS, { 'Accept-Language': acceptLanguage() });
+}
 
 /** 当前 hash 形式的路径，用来在登录后跳回来。不是 #/ 开头就退回首页 */
 export function currentHashPath() {
@@ -88,7 +105,7 @@ export function request(method, path, body, options) {
   const opts = options || {};
   const init = {
     method: method,
-    headers: Object.assign({}, CUSTOM_HEADERS, opts.headers),
+    headers: Object.assign(baseHeaders(), opts.headers),
     credentials: 'same-origin'
   };
 
@@ -166,7 +183,7 @@ export function del(path) {
 export async function requestBlob(method, path) {
   const res = await fetch(API_PREFIX + path, {
     method: method,
-    headers: Object.assign({}, CUSTOM_HEADERS),
+    headers: baseHeaders(),
     credentials: 'same-origin'
   });
   if (res.status === 401) {

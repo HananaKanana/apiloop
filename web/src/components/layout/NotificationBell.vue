@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NBadge, NButton, NIcon, NPopover } from 'naive-ui';
 import { Bell } from '@vicons/tabler';
 import { useDialog } from '@/utils/dialog';
@@ -26,6 +27,7 @@ const projects = useProjectStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const show = ref(false);
 /** 下拉里的相对时间要跟着刷新，打开时算一次就够 */
@@ -48,10 +50,10 @@ function onUpdateShow(value) {
 function confirmSwitch() {
   return new Promise(function (resolve) {
     dialog.warning({
-      title: '切换项目',
-      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
-      positiveText: '切换',
-      negativeText: '取消',
+      title: t('layout.switchProjectTitle'),
+      content: t('layout.switchProjectBody'),
+      positiveText: t('layout.switchAction'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -105,7 +107,7 @@ onBeforeUnmount(function () {
   >
     <template #trigger>
       <n-badge :value="unread" :max="99" :show="unread > 0" :offset="[-2, 2]">
-        <button class="bell" :class="{ active: show }" title="提醒">
+        <button class="bell" :class="{ active: show }" :title="t('layout.notifications')">
           <n-icon size="18" :component="Bell" />
         </button>
       </n-badge>
@@ -113,15 +115,15 @@ onBeforeUnmount(function () {
 
     <div class="panel">
       <div class="head">
-        <span class="title">提醒</span>
+        <span class="title">{{ t('layout.notifications') }}</span>
         <button v-if="unread > 0" class="text-button" @click="notifications.markAll()">
-          全部标为已读
+          {{ t('layout.markAllRead') }}
         </button>
       </div>
 
       <div class="list">
         <div v-if="!notifications.items.length" class="empty">
-          {{ notifications.loaded ? '还没有提醒。别人在评论里 @ 你时会出现在这里。' : '加载中…' }}
+          {{ notifications.loaded ? t('layout.noNotifications') : t('layout.loading') }}
         </div>
 
         <button
@@ -133,9 +135,7 @@ onBeforeUnmount(function () {
         >
           <span class="dot" :class="{ on: !item.read }" />
           <span class="text">
-            <span class="actor">{{ item.actorName }}</span>
-            在「{{ item.apiName || '接口' }}」里提到了你：
-            <span class="summary">{{ item.summary || '（内容已删除）' }}</span>
+            <span class="actor">{{ item.actorName }}</span>{{ t('layout.mentionedIn', { api: item.apiName || t('layout.apiFallback') }) }}<span class="summary">{{ item.summary || t('layout.deletedContent') }}</span>
           </span>
           <span class="time" :title="formatFullTime(item.createdAt)">
             {{ formatRelativeTime(item.createdAt, now) }}

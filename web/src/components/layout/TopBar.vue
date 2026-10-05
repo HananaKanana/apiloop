@@ -2,6 +2,7 @@
 // 和 Mac / Windows 客户端同一个图标：make-icon.swift 画的 1024 图裁掉四周留白、缩到 96px
 import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
 import { Activity, BrandGithub, Help, PlayerRecord, Search, Settings } from '@vicons/tabler';
 import { useRouter } from 'vue-router';
@@ -32,6 +33,7 @@ const session = useSessionStore();
 const projects = useProjectStore();
 const ui = useUiStore();
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 /* ---------------- Mock 日志的新记录小红点 ---------------- */
 
@@ -151,7 +153,7 @@ const isMac = computed(function () {
 });
 
 const searchHint = computed(function () {
-  return '搜索接口 ' + (isMac.value ? '⌘K' : 'Ctrl+K');
+  return t('layout.searchHint', { key: isMac.value ? '⌘K' : 'Ctrl+K' });
 });
 
 /** ⌘K / Ctrl+K 打开快速搜索 */
@@ -182,7 +184,7 @@ onBeforeUnmount(function () {
 
       <slot name="project" />
       <n-tag v-if="projects.current && !projects.canEdit" size="tiny" :bordered="false">
-        只读
+        {{ t('layout.readonly') }}
       </n-tag>
     </div>
 
@@ -202,9 +204,9 @@ onBeforeUnmount(function () {
             <span v-else-if="record.busy" class="dot idle" />
           </button>
         </template>
-        <template v-if="record.isRecording">录制中：{{ record.count }} 条</template>
-        <template v-else-if="record.busy">正在录制项目「{{ record.busy.projectName }}」</template>
-        <template v-else>Mock 录制</template>
+        <template v-if="record.isRecording">{{ t('layout.recordRecording', { n: record.count }) }}</template>
+        <template v-else-if="record.busy">{{ t('layout.recordBusy', { name: record.busy.projectName }) }}</template>
+        <template v-else>{{ t('layout.recordTitle') }}</template>
       </n-tooltip>
 
       <n-tooltip v-if="gateway.cloudFeaturesAvailable" trigger="hover">
@@ -214,7 +216,7 @@ onBeforeUnmount(function () {
             <span v-if="mockDot" class="dot" />
           </button>
         </template>
-        Mock 日志
+        {{ t('layout.mockLog') }}
       </n-tooltip>
 
       <n-tooltip trigger="hover">
@@ -223,7 +225,7 @@ onBeforeUnmount(function () {
             <n-icon size="18" :component="Help" />
           </button>
         </template>
-        帮助：变量、脚本、Mock 怎么用
+        {{ t('layout.help') }}
       </n-tooltip>
 
       <n-tooltip trigger="hover">
@@ -232,7 +234,7 @@ onBeforeUnmount(function () {
             <n-icon size="18" :component="BrandGithub" />
           </a>
         </template>
-        GitHub 仓库
+        {{ t('layout.github') }}
       </n-tooltip>
 
       <n-tooltip v-if="session.isAdmin" trigger="hover">
@@ -241,7 +243,7 @@ onBeforeUnmount(function () {
             <n-icon size="18" :component="Settings" />
           </button>
         </template>
-        系统设置
+        {{ t('layout.systemSettings') }}
       </n-tooltip>
 
       <connection-status />

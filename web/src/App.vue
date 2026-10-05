@@ -1,19 +1,30 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NConfigProvider,
   NDialogProvider,
   NMessageProvider,
   NNotificationProvider,
   darkTheme,
+  dateEnUS,
   dateZhCN,
   useOsTheme,
+  enUS,
   zhCN
 } from 'naive-ui';
 
 // 跟随系统的亮色 / 暗色
 const osTheme = useOsTheme();
 const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null));
+
+/**
+ * 界面语言（第十五轮）。`locale` 是 vue-i18n 的全局 locale，头像菜单里切换后这里跟着变，
+ * naive-ui 内置组件（日期选择、分页、空状态……）的文案也跟着切。
+ */
+const { locale } = useI18n();
+const naiveLocale = computed(() => (locale.value === 'en' ? enUS : zhCN));
+const naiveDateLocale = computed(() => (locale.value === 'en' ? dateEnUS : dateZhCN));
 
 /**
  * 主色用 Postman 橙（用户 2026-09-30 选定），替换 naive-ui 默认的绿色。
@@ -65,8 +76,8 @@ const themeOverrides = computed(() => ({
     abstract
     :theme="theme"
     :theme-overrides="themeOverrides"
-    :locale="zhCN"
-    :date-locale="dateZhCN"
+    :locale="naiveLocale"
+    :date-locale="naiveDateLocale"
   >
     <n-message-provider>
       <n-dialog-provider>

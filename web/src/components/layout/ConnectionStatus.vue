@@ -1,21 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { NDropdown, NTooltip } from 'naive-ui';
 import { useGatewayStore } from '@/stores/gateway';
 import { useUiStore } from '@/stores/ui';
 import InstallDialog from './InstallDialog.vue';
 import ConflictDialog from '@/components/sync/ConflictDialog.vue';
-
-/** 冲突列表里那个后缀：说清楚冲突的是接口还是目录 */
-const ENTITY_LABEL = {
-  project: '项目',
-  environment: '环境',
-  folder: '目录',
-  api: '接口',
-  example: '示例',
-  expectation: '期望'
-};
 
 /**
  * 顶栏右侧的状态点（设计稿第 7 节）。
@@ -34,6 +25,19 @@ const ENTITY_LABEL = {
 const router = useRouter();
 const gateway = useGatewayStore();
 const ui = useUiStore();
+const { t } = useI18n();
+
+/** 冲突列表里那个后缀：说清楚冲突的是接口还是目录 */
+const ENTITY_LABEL = computed(function () {
+  return {
+    project: t('layout.entityProject'),
+    environment: t('layout.entityEnvironment'),
+    folder: t('layout.entityFolder'),
+    api: t('layout.entityApi'),
+    example: t('layout.entityExample'),
+    expectation: t('layout.entityExpectation')
+  };
+});
 
 const showInstall = ref(false);
 
@@ -45,7 +49,10 @@ const hasNewVersion = computed(function () {
 const versionHint = computed(function () {
   const mismatch = gateway.versionMismatch;
   if (!mismatch) return '';
-  return '本机 apiloop 是 ' + mismatch.gatewayVersion + '，云端是 ' + mismatch.cloudVersion;
+  return t('layout.versionMismatch', {
+    local: mismatch.gatewayVersion,
+    cloud: mismatch.cloudVersion
+  });
 });
 
 /** 同步时间戳：数字当毫秒、字符串按 ISO 解析，认不出来就不显示 */
@@ -65,15 +72,15 @@ const indicator = computed(function () {
     if (gateway.cloudSendBlocked) {
       return {
         color: '#f59e0b',
-        text: '网页版不能发请求',
-        hint: '这个云端不替你发请求（接口多在内网，云端访问不到）。点这里下载 apiloop 客户端，请求从你自己的电脑发出',
+        text: t('layout.cloudSendBlocked'),
+        hint: t('layout.cloudSendBlockedHint'),
         action: 'install'
       };
     }
     return {
       color: '#6b7280',
-      text: '云端发送',
-      hint: '请求从云端服务器发出，访问不了你电脑上和内网的地址。安装本机的 apiloop 后可以从本机发送',
+      text: t('layout.cloudSend'),
+      hint: t('layout.cloudSendHint'),
       action: 'install'
     };
   }
@@ -92,24 +99,30 @@ const indicator = computed(function () {
     if (sync.conflicts > 0) {
       return {
         color: '#eb2013',
-        text: sync.conflicts + ' 个冲突',
-        hint: '有几处改动和云端对不上，点开看看',
+        text: t('layout.conflictCount', { n: sync.conflicts }),
+        hint: t('layout.conflictHint'),
         action: 'conflicts'
       };
     }
 
     if (sync.running) {
-      return { color: '#0cbb52', text: '同步中', hint: '正在和云端同步', action: '', spin: true };
+      return {
+        color: '#0cbb52',
+        text: t('layout.syncing'),
+        hint: t('layout.syncingHint'),
+        action: '',
+        spin: true
+      };
     }
 
     if (sync.pending > 0) {
       const offline = sync.online === false;
       return {
         color: '#f0a020',
-        text: (offline ? '离线 · ' : '') + sync.pending + ' 项待同步',
+        text: (offline ? t('layout.offlinePendingPrefix') : '') + t('layout.pendingCount', { n: sync.pending }),
         hint: offline
-          ? '连不上云端，改动都留在本机，联网后会自动同步'
-          : '本机有改动还没同步到云端',
+          ? t('layout.offlinePendingHint')
+          : t('layout.pendingHint'),
         action: ''
       };
     }
@@ -118,8 +131,8 @@ const indicator = computed(function () {
     if (sync.online === false) {
       return {
         color: '#f0a020',
-        text: '离线',
-        hint: sync.lastError || '连不上云端，改动会留在本机，联网后自动同步',
+        text: t('layout.offline'),
+        hint: sync.lastError || t('layout.offlineHint'),
         action: ''
       };
     }
@@ -127,8 +140,8 @@ const indicator = computed(function () {
     const at = formatSyncTime(sync.lastSyncAt);
     return {
       color: '#0cbb52',
-      text: '已同步',
-      hint: at ? '最近同步：' + at : '已和云端同步',
+      text: t('layout.synced'),
+      hint: at ? t('layout.syncedAt', { time: at }) : t('layout.syncedHint'),
       action: ''
     };
   }
@@ -146,24 +159,24 @@ const indicator = computed(function () {
     if (sync.expired) {
       return {
         color: '#eb2013',
-        text: '登录已过期',
-        hint: '同步暂停了，本机照常能用。点这里重新登录',
+        text: t('layout.loginExpired'),
+        hint: t('layout.loginExpiredHint'),
         action: 'login'
       };
     }
 
     return {
       color: '#6b7280',
-      text: '未登录 · 不同步',
-      hint: '数据只保存在这台电脑上，改动不会同步。点这里登录',
+      text: t('layout.notSyncing'),
+      hint: t('layout.notSyncingHint'),
       action: 'login'
     };
   }
 
   return {
     color: '#6b7280',
-    text: '仅本机',
-    hint: '数据只保存在这台电脑上。登录后，本机的项目会自动同步到这个账号',
+    text: t('layout.localOnly'),
+    hint: t('layout.localOnlyHint'),
     action: 'login'
   };
 });
@@ -177,7 +190,7 @@ const menuEnabled = computed(function () {
 const conflictOptions = computed(function () {
   return gateway.conflicts.map(function (item) {
     return {
-      label: item.name + '（' + (ENTITY_LABEL[item.entity] || item.entity) + '）',
+      label: item.name + '（' + (ENTITY_LABEL.value[item.entity] || item.entity) + '）',
       key: item.entity + ':' + item.id
     };
   });
@@ -185,7 +198,7 @@ const conflictOptions = computed(function () {
 
 const menuOptions = computed(function () {
   if (indicator.value.action === 'conflicts') return conflictOptions.value;
-  return hasNewVersion.value ? [{ label: '安装新版本…', key: 'install' }] : [];
+  return hasNewVersion.value ? [{ label: t('layout.installNewVersionMenu'), key: 'install' }] : [];
 });
 
 /** 光标要不要变成手型：点了有事发生才变 */
@@ -230,7 +243,7 @@ function onIndicatorClick() {
           <span v-if="indicator.spin" class="spinner" />
           <span v-else class="dot" :style="{ background: indicator.color }" />
           <span class="text">{{ indicator.text }}</span>
-          <span v-if="hasNewVersion" class="new-version">有新版本</span>
+          <span v-if="hasNewVersion" class="new-version">{{ t('layout.hasNewVersion') }}</span>
         </button>
       </template>
       <!-- 原来那句提示照旧；版本不一致时再补一行说明，不替换掉它 -->

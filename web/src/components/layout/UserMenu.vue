@@ -1,6 +1,7 @@
 <script setup>
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   NBadge,
   NButton,
@@ -23,6 +24,7 @@ import * as usersApi from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
 import { useGatewayStore } from '@/stores/gateway';
+import { LOCALES, LOCALE_LABELS, setLocale } from '@/i18n';
 import MySharesDialog from '@/components/share/MySharesDialog.vue';
 
 const emit = defineEmits(['about']);
@@ -33,6 +35,7 @@ const tabs = useTabsStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const showPassword = ref(false);
 const saving = ref(false);
@@ -84,13 +87,27 @@ const signedOutLook = computed(function () {
 });
 
 const avatarTitle = computed(function () {
-  if (signedOutLook.value) return '未登录';
-  return session.displayName || '未登录';
+  if (signedOutLook.value) return t('layout.notSignedIn');
+  return session.displayName || t('layout.notSignedIn');
 });
 
 const avatarText = computed(function () {
   const name = String(session.displayName || session.username || '').trim();
   return name ? name.charAt(0).toUpperCase() : '?';
+});
+
+/**
+ * 「语言 / Language」子菜单（第十五轮）：两种语言，选中后立刻切换、不刷新页面。
+ * 三种账号状态下都挂，谁都能切。
+ */
+const languageOption = computed(function () {
+  return {
+    label: t('layout.language'),
+    key: 'language',
+    children: LOCALES.map(function (locale) {
+      return { label: LOCALE_LABELS[locale], key: 'locale:' + locale };
+    })
+  };
 });
 
 /**
@@ -104,37 +121,42 @@ const options = computed(function () {
   if (gateway.isGateway && !gateway.signedIn) {
     if (gateway.spaceState === 'signedOut') {
       return [
-        { label: '登录', key: 'login' },
-        { label: '关于', key: 'about' },
+        { label: t('layout.signIn'), key: 'login' },
+        { label: t('layout.about'), key: 'about' },
+        languageOption.value,
         { type: 'divider', key: 'd1' },
-        { label: '删除本机数据', key: 'delete' }
+        { label: t('layout.deleteLocalData'), key: 'delete' }
       ];
     }
     return [
-      { label: '登录以同步到云端', key: 'login' },
-      { label: '关于', key: 'about' }
+      { label: t('layout.signInToSync'), key: 'login' },
+      { label: t('layout.about'), key: 'about' },
+      languageOption.value
     ];
   }
 
   const items = [
-    { label: '修改密码', key: 'password' },
-    { label: '关于', key: 'about' }
+    { label: t('layout.changePassword'), key: 'password' },
+    { label: t('layout.about'), key: 'about' }
   ];
   // 「我的分享」紧跟在「关于」下面。分享的数据在云端，所以只在能用云端时给这个入口
   // （网页版一直有，客户端里要登录）—— 和项目设置里的分享页签是同一个判断。
   if (gateway.cloudFeaturesAvailable) {
-    items.push({ label: '我的分享', key: 'shares' });
+    items.push({ label: t('layout.myShares'), key: 'shares' });
   }
   // 系统设置不放这里：顶栏已经有齿轮按钮直达，两处入口重复（2026-10-01 用户反馈）
   if (session.isAdmin) {
     items.push({
-      label: pendingUsers.value > 0 ? '用户管理（' + pendingUsers.value + ' 人待审核）' : '用户管理',
+      label: pendingUsers.value > 0
+        ? t('layout.userManagementPending', { n: pendingUsers.value })
+        : t('layout.userManagement'),
       key: 'users'
     });
   }
+  items.push(languageOption.value);
   items.push({ type: 'divider', key: 'd1' });
   // 只有一个「退出登录」：要不要顺带删本机数据，在确认框里勾（用户 2026-10-02）
-  items.push({ label: '退出登录', key: 'logout' });
+  items.push({ label: t('layout.signOut'), key: 'logout' });
   return items;
 });
 
@@ -142,17 +164,17 @@ const options = computed(function () {
 function confirmDelete(title, withLogout) {
   const pending = (gateway.sync && gateway.sync.pending) || 0;
   const base = withLogout
-    ? '退出登录并删掉这台电脑上的全部数据（项目、历史、Cookie）。'
-    : '删掉这台电脑上的全部数据（项目、历史、Cookie），之后会回到「仅本机」。';
+    ? t('layout.signOutDeleteDataBody')
+    : t('layout.deleteDataBody');
 
   return new Promise(function (resolve) {
     dialog.warning({
       title: title,
       content: pending > 0
-        ? base + '还有 ' + pending + ' 项没同步，删除后会丢失。'
+        ? base + t('layout.unsyncedWarning', { n: pending })
         : base,
-      positiveText: '删除',
-      negativeText: '取消',
+      positiveText: t('app.delete'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -180,26 +202,26 @@ function confirmSignOut() {
     }
 
     const instance = dialog.warning({
-      title: '退出登录',
+      title: t('layout.signOutTitle'),
       content: function () {
         return h('div', { class: 'logout-confirm' }, [
-          h('p', { style: 'margin: 0 0 12px' }, '退出后不再和云端同步。本机的数据还在，照常能用，下次登录会接着同步。'),
+          h('p', { style: 'margin: 0 0 12px' }, t('layout.signOutBody')),
           h(NCheckbox, {
             checked: removeLocal.value,
             'onUpdate:checked': function (value) {
               removeLocal.value = value;
-              instance.positiveText = value ? '退出并删除' : '退出登录';
+              instance.positiveText = value ? t('layout.signOutAndDelete') : t('layout.signOut');
               instance.type = value ? 'error' : 'default';
             }
-          }, { default: function () { return '同时删除这台电脑上的数据（项目、历史、Cookie）'; } }),
+          }, { default: function () { return t('layout.signOutDeleteCheckbox'); } }),
           removeLocal.value && pending > 0
             ? h('p', { style: 'margin: 8px 0 0 24px; color: #d03050; font-size: 12px' },
-                '还有 ' + pending + ' 项没同步到云端，删除后会丢失。')
+                t('layout.signOutDeletePending', { n: pending }))
             : null
         ]);
       },
-      positiveText: '退出登录',
-      negativeText: '取消',
+      positiveText: t('layout.signOut'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { done(removeLocal.value ? 'delete' : 'logout'); },
       onNegativeClick: function () { done('cancel'); },
       onClose: function () { done('cancel'); },
@@ -230,7 +252,10 @@ async function signOut() {
  * `confirmed`：退出登录的确认框里已经勾过、问过了，不再问第二遍。
  */
 async function deleteLocal(withLogout, confirmed) {
-  if (!confirmed && !(await confirmDelete(withLogout ? '退出并删除本机数据' : '删除本机数据', withLogout))) return;
+  if (!confirmed && !(await confirmDelete(
+    withLogout ? t('layout.signOutAndDeleteTitle') : t('layout.deleteDataTitle'),
+    withLogout
+  ))) return;
 
   tabs.closeAll();
   try {
@@ -250,11 +275,11 @@ function openPassword() {
 
 async function submitPassword() {
   if (form.value.newPassword.length < 6) {
-    message.warning('新密码至少 6 位');
+    message.warning(t('layout.passwordTooShort'));
     return;
   }
   if (form.value.newPassword !== form.value.confirm) {
-    message.warning('两次输入的新密码不一致');
+    message.warning(t('layout.passwordMismatch'));
     return;
   }
 
@@ -262,7 +287,7 @@ async function submitPassword() {
   try {
     await changePassword(form.value.oldPassword, form.value.newPassword);
     showPassword.value = false;
-    message.success('密码已修改，其他设备上的登录已失效');
+    message.success(t('layout.passwordChanged'));
   } catch (err) {
     // 改密码是「只有云端有的功能」，没登录时返回 409 —— 那是要先登录，不是出错
     if (isLoginRequired(err)) message.warning(err.message);
@@ -273,6 +298,13 @@ async function submitPassword() {
 }
 
 async function onSelect(key) {
+  // 语言子菜单：`locale:zh-CN` / `locale:en`。切完就完事（不跳转、不刷新）
+  const value = String(key);
+  if (value.indexOf('locale:') === 0) {
+    setLocale(value.slice('locale:'.length));
+    return;
+  }
+
   if (key === 'login') return router.push('/login');
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
@@ -319,30 +351,30 @@ async function onSelect(key) {
   <n-modal
     v-model:show="showPassword"
     preset="card"
-    title="修改密码"
+    :title="t('layout.changePassword')"
     style="width: 420px; max-width: 92vw"
   >
     <n-form>
-      <n-form-item label="当前密码">
+      <n-form-item :label="t('layout.currentPassword')">
         <n-input v-model:value="form.oldPassword" type="password" show-password-on="click" />
       </n-form-item>
-      <n-form-item label="新密码">
+      <n-form-item :label="t('layout.newPassword')">
         <n-input
           v-model:value="form.newPassword"
           type="password"
           show-password-on="click"
-          placeholder="至少 6 位"
+          :placeholder="t('layout.passwordMinLength')"
         />
       </n-form-item>
-      <n-form-item label="确认新密码">
+      <n-form-item :label="t('layout.confirmNewPassword')">
         <n-input v-model:value="form.confirm" type="password" show-password-on="click" />
       </n-form-item>
     </n-form>
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="showPassword = false">取消</n-button>
-        <n-button type="primary" :loading="saving" @click="submitPassword">确定</n-button>
+        <n-button @click="showPassword = false">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="saving" @click="submitPassword">{{ t('app.confirm') }}</n-button>
       </n-space>
     </template>
   </n-modal>

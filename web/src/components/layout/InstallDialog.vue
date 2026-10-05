@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NModal, NSpace, NSpin, NTag } from 'naive-ui';
 import * as downloadsApi from '@/api/downloads';
 import { useGatewayStore } from '@/stores/gateway';
@@ -26,6 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['update:show']);
 
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 const loading = ref(false);
 const loadError = ref('');
@@ -38,15 +40,17 @@ const visible = computed({
 });
 
 const title = computed(function () {
-  return props.isGateway ? '安装新版本' : '安装本机 apiloop';
+  return props.isGateway ? t('layout.installNewVersion') : t('layout.installLocal');
 });
 
 /** 架构名要说人话，不能只写 arm64 / x64 */
-const ARCH_LABELS = {
-  arm64: 'Mac · Apple 芯片（M1、M2…）',
-  x64: 'Mac · Intel 芯片',
-  'win-x64': 'Windows 10 / 11'
-};
+const ARCH_LABELS = computed(function () {
+  return {
+    arm64: t('layout.archArm64'),
+    x64: t('layout.archX64'),
+    'win-x64': t('layout.archWinX64')
+  };
+});
 
 /**
  * 安装步骤。前两步和最后一步两种场景一样，第三步不一样：
@@ -54,15 +58,15 @@ const ARCH_LABELS = {
  */
 const steps = computed(function () {
   return [
-    'Mac：下载后双击安装。如果提示「无法打开，因为来自身份不明的开发者」：打开「系统设置 → 隐私与安全性」，在下方点「仍要打开」。',
-    'Windows：下载后双击运行。如果提示「Windows 已保护你的电脑」，点「更多信息 → 仍要运行」；不需要管理员权限。',
-    '装完会自动打开 apiloop 窗口；以后从「应用程序」（Windows 是开始菜单或桌面）里打开。',
+    t('layout.installStepMacOpen'),
+    t('layout.installStepWindowsOpen'),
+    t('layout.installStepAfter'),
     props.isGateway
-      ? '覆盖安装即可，数据不受影响。'
+      ? t('layout.installStepGatewayData')
       // L1 起云端地址打包时写死（app/cloud.json），装完不用填任何地址；
       // 想用云端的项目就登录
-      : '装完可以直接用；要使用云端的项目就登录。',
-    'Mac：第一次访问局域网地址时，系统会弹「允许 node 查找本地网络上的设备」，点允许。'
+      : t('layout.installStepCloudData'),
+    t('layout.installStepMacNetwork')
   ];
 });
 
@@ -114,7 +118,7 @@ function download(file) {
 }
 
 function archLabel(arch) {
-  return ARCH_LABELS[arch] || arch;
+  return ARCH_LABELS.value[arch] || arch;
 }
 </script>
 
@@ -130,10 +134,13 @@ function archLabel(arch) {
         <!-- 网关上、云端有更新的版本：一键更新放最上面，下面的列表是手动下载的备用 -->
         <div v-if="isGateway && gateway.versionMismatch" class="update-box">
           <p class="update-title">
-            有新版本 {{ gateway.versionMismatch.cloudVersion }}（本机是 {{ gateway.versionMismatch.gatewayVersion }}）
+            {{ t('layout.newVersionTitle', {
+              cloud: gateway.versionMismatch.cloudVersion,
+              local: gateway.versionMismatch.gatewayVersion
+            }) }}
           </p>
           <update-action />
-          <p class="update-hint">自动下载这台电脑对应的安装包并打开安装；数据不受影响。也可以在下面手动下载。</p>
+          <p class="update-hint">{{ t('layout.autoUpdateHint') }}</p>
         </div>
 
         <n-alert v-if="loadError" type="error" :show-icon="false" class="notice">
@@ -142,12 +149,12 @@ function archLabel(arch) {
 
         <!-- 安装包在云端，没登录拿不到列表（也就没得下） -->
         <n-alert v-else-if="!gateway.cloudFeaturesAvailable" type="info" :show-icon="false" class="notice">
-          登录后可用。
+          {{ t('layout.availableAfterSignIn') }}
         </n-alert>
 
         <template v-else-if="loaded && !files.length">
           <n-alert type="info" :show-icon="false" class="notice">
-            管理员还没有上传安装包。
+            {{ t('layout.noPackages') }}
           </n-alert>
         </template>
 
@@ -158,13 +165,13 @@ function archLabel(arch) {
               <span class="file-name">{{ file.name }}</span>
             </div>
             <span class="file-size">{{ formatBytes(file.size) }}</span>
-            <n-button size="small" type="primary" @click="download(file)">下载</n-button>
+            <n-button size="small" type="primary" @click="download(file)">{{ t('layout.download') }}</n-button>
           </div>
         </template>
 
         <!-- 登录后才有得下，步骤就等登录了再看 -->
         <div v-if="gateway.cloudFeaturesAvailable" class="steps">
-          <p class="steps-title">安装步骤</p>
+          <p class="steps-title">{{ t('layout.installStepsTitle') }}</p>
           <ol class="steps-list">
             <li v-for="(step, index) in steps" :key="index">{{ step }}</li>
           </ol>
@@ -174,7 +181,7 @@ function archLabel(arch) {
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="visible = false">关闭</n-button>
+        <n-button @click="visible = false">{{ t('app.close') }}</n-button>
       </n-space>
     </template>
   </n-modal>

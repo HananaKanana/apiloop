@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
+import { i18n } from './i18n';
 
 /**
  * 整个页面不弹浏览器自带的右键菜单（返回 / 重新加载 / 检查元素那一套），用户 2026-09-30 要求。
@@ -16,4 +17,4 @@ document.addEventListener('contextmenu', function (event) {
   event.preventDefault();
 });
 
-createApp(App).use(createPinia()).use(router).mount('#app');
+createApp(App).use(createPinia()).use(i18n).use(router).mount('#app');
