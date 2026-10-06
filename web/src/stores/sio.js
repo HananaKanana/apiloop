@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as sioApi from '@/api/sio';
 import { getNdjson } from '@/api/stream';
+import { t } from '@/i18n';
 
 /**
  * Socket.IO 调试会话的运行时状态（第九轮第 4 节）。
@@ -229,7 +230,7 @@ export const useSioStore = defineStore('sio', function () {
     state.sessionId = '';
     state.status = 'closed';
     state.channel = 'idle';
-    pushLocal(state, '已断开连接');
+    pushLocal(state, t('stores.disconnected'));
 
     if (id) {
       try {

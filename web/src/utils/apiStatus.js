@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 接口状态（第四轮第 1 节）。
  *
@@ -8,10 +9,10 @@
 
 /** 顺序就是下拉里的顺序；颜色和「已废弃」那种灰名字、删除线配着看 */
 export const API_STATUSES = [
-  { value: 'designing', label: '设计中', color: '#8c8c8c' },
-  { value: 'developing', label: '开发中', color: '#f0a020' },
-  { value: 'done', label: '已完成', color: '#0cbb52' },
-  { value: 'deprecated', label: '已废弃', color: '#eb2013' }
+  { value: 'designing', color: '#8c8c8c', get label() { return t('utils.stDesigning'); } },
+  { value: 'developing', color: '#f0a020', get label() { return t('utils.stDeveloping'); } },
+  { value: 'done', color: '#0cbb52', get label() { return t('utils.stDone'); } },
+  { value: 'deprecated', color: '#eb2013', get label() { return t('utils.stDeprecated'); } }
 ];
 
 const BY_VALUE = new Map(API_STATUSES.map(function (item) { return [item.value, item]; }));
@@ -22,14 +23,14 @@ export function statusMeta(value) {
 }
 
 /** 状态的下拉选项（含「未设置」，值是 null） */
-export const STATUS_OPTIONS = [{ label: '未设置', value: null }].concat(
+export const STATUS_OPTIONS = [{ value: null, get label() { return t('utils.stUnset'); } }].concat(
   API_STATUSES.map(function (item) { return { label: item.label, value: item.value }; })
 );
 
 /** 目录树筛选的下拉选项：全部 / 某个状态 / 我负责的 */
-export const STATUS_FILTER_OPTIONS = [{ label: '全部', value: 'all' }].concat(
+export const STATUS_FILTER_OPTIONS = [{ value: 'all', get label() { return t('utils.stAll'); } }].concat(
   API_STATUSES.map(function (item) { return { label: item.label, value: item.value }; }),
-  [{ label: '我负责的', value: 'mine' }]
+  [{ value: 'mine', get label() { return t('utils.stMine'); } }]
 );
 
 export const FILTER_ALL = 'all';
@@ -51,8 +52,8 @@ export function filterCondition(key, myUserId) {
 export function statusTooltip(status, ownerName) {
   const parts = [];
   const meta = statusMeta(status);
-  if (meta) parts.push('状态：' + meta.label);
-  if (ownerName) parts.push('负责人：' + ownerName);
+  if (meta) parts.push(t('utils.stPrefix') + meta.label);
+  if (ownerName) parts.push(t('utils.ownerPrefix') + ownerName);
   return parts.join(' · ');
 }
 

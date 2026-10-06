@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 在浏览器里生成文件下载。
  * 导出接口返回的是 `{ filename, text }`（JSON / YAML 都是文本），这里只负责落盘。
@@ -55,7 +56,7 @@ export function readFileAsText(file) {
       resolve(String(reader.result || ''));
     };
     reader.onerror = function () {
-      reject(new Error('读取文件失败'));
+      reject(new Error(t('utils.readFileFailed')));
     };
     reader.readAsText(file);
   });

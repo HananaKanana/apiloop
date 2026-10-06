@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * GraphQL schema 的缓存与几个纯函数（第七轮第 3 节）。
  *
@@ -38,10 +39,10 @@ export function formatLoadedAt(ts, now) {
   if (!Number.isFinite(at) || at <= 0) return '';
 
   const diff = (now || Date.now()) - at;
-  if (diff < 60 * 1000) return '刚刚';
-  if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
-  if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + ' 小时前';
-  return Math.floor(diff / 86400000) + ' 天前';
+  if (diff < 60 * 1000) return t('utils.timeJustNow');
+  if (diff < 60 * 60 * 1000) return t('utils.timeMinutes', { n: Math.floor(diff / 60000) });
+  if (diff < 24 * 60 * 60 * 1000) return t('utils.timeHours', { n: Math.floor(diff / 3600000) });
+  return t('utils.timeDays', { n: Math.floor(diff / 86400000) });
 }
 
 /** 类型引用 → `[User!]!` 这种好读的写法 */
@@ -80,7 +81,7 @@ export function typeDoc(type) {
       return {
         name: value.name,
         description: value.description || '',
-        deprecated: value.isDeprecated === true ? (value.deprecationReason || '已废弃') : ''
+        deprecated: value.isDeprecated === true ? (value.deprecationReason || t('utils.deprecated')) : ''
       };
     })
   };
@@ -92,7 +93,7 @@ function fieldDoc(field) {
     description: field.description || '',
     type: typeText(field.type),
     typeName: bareTypeName(field.type),
-    deprecated: field.isDeprecated === true ? (field.deprecationReason || '已废弃') : '',
+    deprecated: field.isDeprecated === true ? (field.deprecationReason || t('utils.deprecated')) : '',
     args: (field.args || []).map(function (arg) {
       return {
         name: arg.name,

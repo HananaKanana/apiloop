@@ -1,4 +1,5 @@
 import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
+import { t } from '@/i18n';
 
 /**
  * 导出接口文档（第九轮第 2 节）。
@@ -54,7 +55,7 @@ export async function downloadDoc(pid, options) {
 
   if (res.status === 401) {
     redirectToLogin();
-    throw new Error('登录已过期，请重新登录');
+    throw new Error(t('api.loginExpired'));
   }
   if (!res.ok) throw await toError(res);
 

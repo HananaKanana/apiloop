@@ -1,6 +1,7 @@
 import { h, ref } from 'vue';
 import { NInput } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
+import { t } from '@/i18n';
 
 /**
  * 一句话要个名字的小弹窗（新建目录、新建接口、重命名都用它）。
@@ -45,8 +46,8 @@ export function usePrompt() {
             })
           ]);
         },
-        positiveText: options.confirmText || '确定',
-        negativeText: '取消',
+        positiveText: options.confirmText || t('app.confirm'),
+        negativeText: t('app.cancel'),
         onPositiveClick: function () { finish(value.value); },
         onNegativeClick: function () { finish(null); },
         onClose: function () { finish(null); },

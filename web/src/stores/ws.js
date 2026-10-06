@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as wsApi from '@/api/ws';
 import { getNdjson } from '@/api/stream';
+import { t } from '@/i18n';
 
 /**
  * WebSocket 调试会话的运行时状态（契约第 15 节）。
@@ -257,7 +258,7 @@ export const useWsStore = defineStore('ws', function () {
     state.sessionId = '';
     state.status = 'closed';
     state.channel = 'idle';
-    pushLocal(state, '已断开连接');
+    pushLocal(state, t('stores.disconnected'));
 
     if (id) {
       try {

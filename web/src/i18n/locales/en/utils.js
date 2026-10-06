@@ -1,0 +1,211 @@
+/**
+ * utils region: user-visible text inside the utility modules (`utils/`) —
+ * dropdown options, table headers, hints, error messages, report templates.
+ *
+ * These modules cannot use `useI18n()`, so they use the `t` exported from
+ * `@/i18n`. Option lists that used to be plain `export const` objects now use
+ * **getters**, so `.label` is evaluated on access and a language switch applies
+ * without a reload.
+ */
+export default {
+  /* ---------------- shared ---------------- */
+  untitledApi: '(untitled API)',
+  emptyValue: '(empty)',
+  notJson: 'not valid JSON',
+  jsonAt: 'line {line}, column {column}: ',
+  deprecated: 'deprecated',
+  clipboardBlocked: 'The browser refused the copy; please select and copy manually',
+  readFileFailed: 'Could not read the file',
+  noResult: 'The server returned no result',
+  requestFailed: 'The request failed',
+  bodyEmpty: 'The response body is empty',
+  bodyNotJson: 'The response is not valid JSON',
+  itemsSuffix: '[{n} item(s)]',
+  fieldsCount: '{n} field(s)',
+
+  /* ---------------- relative time ---------------- */
+  timeJustNow: 'just now',
+  timeMinutes: '{n} minute(s) ago',
+  timeHours: '{n} hour(s) ago',
+  timeDays: '{n} day(s) ago',
+
+  /* ---------------- API status ---------------- */
+  stDesigning: 'Designing',
+  stDeveloping: 'In development',
+  stDone: 'Done',
+  stDeprecated: 'Deprecated',
+  stUnset: 'Not set',
+  stAll: 'All',
+  stMine: 'Assigned to me',
+  stPrefix: 'Status: ',
+  ownerPrefix: 'Owner: ',
+
+  /* ---------------- assertions / extraction ---------------- */
+  srcStatus: 'Status code',
+  srcTime: 'Response time (ms)',
+  srcTimeShort: 'Response time',
+  srcHeader: 'Headers',
+  srcJson: 'JSON field',
+  srcText: 'Response text',
+  srcExtractRegex: 'First regex group in the response text',
+  opEq: 'equals',
+  opNe: 'does not equal',
+  opGt: 'is greater than',
+  opLt: 'is less than',
+  opContains: 'contains',
+  opNotContains: 'does not contain',
+  opExists: 'exists',
+  opNotExists: 'does not exist',
+  opEmpty: 'is empty',
+  opNotEmpty: 'is not empty',
+  opRegex: 'matches the regex',
+  opType: 'has type',
+  pathHeader: 'Header name, e.g. X-Trace-Id',
+  pathJson: 'Field path, e.g. data.list[0].id',
+  extractPathJson: 'Field path, e.g. data.token',
+  extractPathHeader: 'Header name, e.g. Authorization',
+  extractPathRegex: 'Regex; the content of the 1st group',
+  scopeEnv: 'Environment',
+  scopeProject: 'Project',
+  presetStatus: 'Status code is 200',
+  presetTime: 'Response time < 1000ms',
+  presetCode: 'code equals 0',
+
+  /* ---------------- Mock expectation conditions ---------------- */
+  condNoCondition: 'no condition (always matches)',
+  condAnd: ' and ',
+
+  /* ---------------- authorization ---------------- */
+  authNone: 'No authorization',
+  authNoParent: 'No level above configures authorization, so this request sends none.',
+  authInheritFrom: 'Inherited from {from}: {type}.',
+
+  /* ---------------- shared headers / variable scopes ---------------- */
+  layerProject: 'Project',
+  layerFolder: 'Folder {name}',
+  scopeProjectPlain: 'Project',
+  scopeFolderName: 'Folder “{name}”',
+  scopeEnvName: 'Environment “{name}”',
+
+  /* ---------------- preflight ---------------- */
+  pfInherit: 'Follow the level above',
+  pfNone: 'No preflight request',
+  pfOffHere: 'This level uses no preflight request',
+  pfDeleted: 'The preflight API was deleted, please pick another one',
+  pfWhenMissing: 'when the variable {name} has no value',
+  pfWhen401: 'when the response is 401',
+  pfNeverCalls: ' (neither trigger is checked, so it will never actually be called)',
+  pfCalls: ' (called automatically on {list})',
+  pfListSep: ', ',
+
+  /* ---------------- database operations ---------------- */
+  dbPre: 'Before the request',
+  dbPost: 'After the response',
+  dbPathRedis: 'Empty means the whole return value; you can also write [0]',
+  dbPathSql: 'Empty means the whole result set; [0].code takes the code column of the first row',
+  dbStmtRedis: 'Redis command, e.g. GET the verification code (quote arguments that contain spaces)',
+  dbStmtSql: 'SQL statement, e.g. SELECT * FROM users LIMIT 5',
+  dbPasswordWarnLead: 'The password is synced to everyone in the project and everyone can read it in plain text; put a secret variable in an environment and write ',
+  dbPasswordWarnTail: ' here instead.',
+  dbNoStatement: 'No statement yet',
+  dbNoConnection: 'No connection selected',
+
+  /* ---------------- cURL parsing ---------------- */
+  curlPaste: 'Paste a cURL command',
+  curlNotCurl: 'This is not a cURL command (it should start with curl)',
+  curlNoUrl: 'There is no URL in this cURL',
+  curlHeaderNoColon: 'Header “{name}” has no colon, skipped',
+  curlFieldNoEq: 'Form field “{name}” has no equals sign, skipped',
+  curlFieldFromFile: 'Form field “{name}” comes from the local file {path}; pick the file in the request body instead',
+  curlBodyFromFile: 'The request body comes from the local file {path}; import it and paste the content manually',
+  curlUnknownFlag: 'Skipped the unknown argument {flag} {value}',
+  curlUnknownFlagOnly: 'Skipped the unknown argument {flag}',
+  curlBadUrl: 'Invalid URL: {url}',
+
+  /* ---------------- response fields ---------------- */
+  fieldsNoBody: 'This example has no response body',
+  fieldsNotJson: 'This example is not valid JSON, so its fields cannot be listed by structure',
+  fieldsNotObject: 'The response body is neither an object nor an array, so there are no fields to list',
+
+  /* ---------------- sharing ---------------- */
+  shareFolder: 'Folder: {name}',
+  shareWholeProject: 'The whole project',
+  shareForever: 'Never expires',
+  shareExpired: 'Expired',
+
+  /* ---------------- built-in dynamic variables ---------------- */
+  dynGuid: 'Random UUID',
+  dynTimestamp: 'Current timestamp (seconds)',
+  dynTimestampMs: 'Current timestamp (milliseconds)',
+  dynIso: 'Current time (ISO format)',
+  dynRandomInt: 'Random integer in the range; 0–1000 when called without arguments',
+  dynRandomIntCn: 'Random integer in the range (Chinese alias)',
+  dynPhone: '11-digit mobile number (real prefix)',
+  dynIdCard: '18-digit ID card number (checksum valid)',
+  dynChineseName: 'Chinese personal name',
+  dynEmail: 'Email address',
+  dynDate: 'Date within the last year, YYYY-MM-DD',
+  dynDateTime: 'Date and time within the last year, YYYY-MM-DD HH:mm:ss',
+  dynAddress: 'Province, city, district and street address',
+  dynCompany: 'Company name',
+  dynBankCard: '16 / 19-digit bank card number (Luhn valid)',
+  dynCreditCode: '18-digit unified social credit code (checksum valid)',
+  dynPlate: 'Vehicle plate number',
+  dynIp: 'IPv4 address',
+
+  /* ---------------- load test “copy result” ---------------- */
+  loadStatusRange: '“Status codes counted as success” only takes integers between 100 and 599, separated by commas (e.g. 200,201)',
+  loadSeconds: '{n} s',
+  loadMinutesSeconds: '{m} min {s} s',
+  loadResultTitle: 'Load test result',
+  loadMethodUrl: '({method} {url})',
+  loadEnv: 'Environment: {name}',
+  loadConcurrency: 'Concurrency {n}',
+  loadByDuration: 'for {n} s',
+  loadByCount: '{n} time(s)',
+  loadRampUp: ' · {n} s warm-up',
+  loadSentOk: 'Sent {sent}　OK {ok}',
+  loadFailedRate: '　Failed {failed}　Error rate {rate}',
+  loadElapsed: 'Took {value}',
+  loadResponseMin: 'Response time: min {value}',
+  loadResponseAvg: '　avg {value}',
+  loadResponseMax: '　max {value}',
+  loadStatusCodes: 'Status codes: ',
+  loadErrors: 'Error: ',
+
+  /* ---------------- test suite report ---------------- */
+  repPassed: 'Passed',
+  repFailed: 'Failed',
+  repStopped: 'Stopped',
+  repError: 'Error',
+  repReqResp: 'The request actually sent / the response',
+  repRequest: 'Request',
+  repResponse: 'Response (HTTP {status})',
+  repSkipped: 'Skipped',
+  repColon: ': ',
+  repResult: 'Result',
+  repIterations: 'Iterations',
+  repRequests: 'Requests',
+  repPassFail: 'Passed / failed',
+  repErrors: 'Errors',
+  repAsserts: 'Assertions passed / failed',
+  repTotalTime: 'Total time',
+  repAvgTime: 'Average response time',
+  repEnv: 'Environment',
+  repNoEnv: '(no environment selected)',
+  repSource: 'Source',
+  repCli: 'Command line',
+  repClient: 'Client',
+  repStartedAt: 'Started at',
+  repFinishedAt: 'Finished at',
+  repRound: 'Iteration {n}',
+  repHasFail: 'has failures',
+  repTitle: 'Test suite report · {name}',
+  repSuite: 'Test suite',
+  repRunReport: 'Run report',
+  repBuild: 'build {label}',
+  repSummary: 'Summary',
+  repDetail: 'Details',
+  repNoSteps: 'This run had no steps.',
+  repFileName: 'test-suite-report-{name}-{stamp}.html'
+};

@@ -1,4 +1,5 @@
 import { CUSTOM_HEADERS } from './client';
+import { t } from '@/i18n';
 
 /**
  * 网关自己的地址。
@@ -30,7 +31,7 @@ async function requestGateway(method, path, body) {
     } catch (err) {
       // 不是 JSON，用兜底文案
     }
-    throw new Error(message || '请求失败（HTTP ' + res.status + '）');
+    throw new Error(message || t('api.httpFailed', { status: res.status }));
   }
   return res.json();
 }

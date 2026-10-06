@@ -13,6 +13,7 @@
 
 import { folderChain } from './tree';
 import { DYNAMIC_NAMES } from './suggestions';
+import { t } from '@/i18n';
 
 /** 和 lib/variables.js、lib/url-utils.js 同一套占位符写法 */
 const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/g;
@@ -51,15 +52,15 @@ export function resolveScope(input) {
     });
   }
 
-  add(options.project && options.project.variables, '项目');
+  add(options.project && options.project.variables, t('utils.scopeProjectPlain'));
 
   // folderChain 给的是「从内到外」，拼变量要反过来：外层先，内层覆盖外层
   folderChain(options.folders, options.folderId).reverse().forEach(function (folder) {
-    add(folder.variables, '目录「' + folder.name + '」');
+    add(folder.variables, t('utils.scopeFolderName', { name: folder.name }));
   });
 
   if (options.environment) {
-    add(options.environment.variables, '环境「' + options.environment.name + '」');
+    add(options.environment.variables, t('utils.scopeEnvName', { name: options.environment.name }));
   }
 
   return map;

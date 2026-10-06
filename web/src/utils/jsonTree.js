@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 把一段 JSON 摊平成「字段列表」（第六轮第 1 节）。
  *
@@ -31,12 +32,12 @@ export function keepHugeIntegers(key, value, context) {
 
 export function parseJson(text) {
   const source = String(text === undefined || text === null ? '' : text);
-  if (!source.trim()) return { ok: false, reason: '响应体是空的' };
+  if (!source.trim()) return { ok: false, reason: t('utils.bodyEmpty') };
 
   try {
     return { ok: true, value: JSON.parse(source, keepHugeIntegers) };
   } catch (err) {
-    return { ok: false, reason: '响应不是合法的 JSON' };
+    return { ok: false, reason: t('utils.bodyNotJson') };
   }
 }
 
@@ -102,7 +103,7 @@ export function buildJsonRows(text) {
       label,
       depth,
       type,
-      preview: count ? (container ? '[' + count + ' 项]' : count + ' 个字段') : '（空）',
+      preview: count ? (container ? t('utils.itemsSuffix', { n: count }) : t('utils.fieldsCount', { n: count })) : t('utils.emptyValue'),
       value,
       container: true
     });

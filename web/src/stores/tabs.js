@@ -19,6 +19,7 @@ import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
 import { usePrefsStore } from '@/stores/prefs';
+import { t } from '@/i18n';
 
 let draftSeq = 0;
 let wsSeq = 0;
@@ -494,7 +495,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'api',
       apiId: apiId,
       folderId: data.api.folderId || null,
-      title: data.api.name || '未命名接口',
+      title: data.api.name || t('stores.untitledApi'),
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: emptyOptions(),
@@ -527,7 +528,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'draft',
       apiId: null,
       folderId: folderId || null,
-      title: '新建请求',
+      title: t('stores.newRequest'),
       spec: spec ? JSON.parse(JSON.stringify(spec)) : emptySpec(),
       savedSnapshot: null,
       options: emptyOptions(),
@@ -808,7 +809,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'folder',
       apiId: null,
       folderId: folderId,
-      title: folder.name || '目录设置',
+      title: folder.name || t('stores.folderSettings'),
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: emptyOptions(),
@@ -846,14 +847,14 @@ export const useTabsStore = defineStore('tabs', function () {
 
     const folder = folderId ? useTreeStore().folderById.get(folderId) : null;
     const project = useProjectStore().current;
-    const name = (folder && folder.name) || (project && project.name) || '项目';
+    const name = (folder && folder.name) || (project && project.name) || t('stores.project');
 
     const tab = {
       key: key,
       kind: 'runner',
       apiId: null,
       folderId: folderId || null,
-      title: '运行：' + name,
+      title: t('stores.runnerTitle', { name: name }),
       spec: null,
       savedSnapshot: null,
       options: emptyOptions(),
@@ -893,7 +894,7 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: null,
       folderId: null,
       suiteId: suiteId,
-      title: name || '测试集',
+      title: name || t('stores.testSuite'),
       spec: null,
       savedSnapshot: null,
       options: emptyOptions(),
@@ -946,7 +947,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'load',
       apiId: apiId,
       folderId: null,
-      title: '压测 · ' + ((node && node.name) || '接口'),
+      title: t('stores.loadTitle', { name: (node && node.name) || t('stores.apiFallback') }),
       spec: null,
       savedSnapshot: null,
       options: emptyOptions(),
@@ -986,7 +987,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'envdiff',
       apiId: null,
       folderId: null,
-      title: '环境对比',
+      title: t('stores.envDiff'),
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: emptyOptions(),
@@ -1053,7 +1054,7 @@ export const useTabsStore = defineStore('tabs', function () {
       kind: 'history',
       apiId: record.apiId || null,
       folderId: null,
-      title: spec.url || '历史记录',
+      title: spec.url || t('stores.historyRecord'),
       spec: spec,
       savedSnapshot: null,
       options: emptyOptions(),
@@ -1201,7 +1202,7 @@ export const useTabsStore = defineStore('tabs', function () {
     tab.apiId = api.id;
     tab.kind = 'api';
     tab.key = 'api:' + api.id;
-    tab.title = api.name || '未命名接口';
+    tab.title = api.name || t('stores.untitledApi');
     tab.folderId = api.folderId || null;
     tab.spec = spec;
     tab.savedSnapshot = snapshot(spec);
@@ -1212,7 +1213,7 @@ export const useTabsStore = defineStore('tabs', function () {
   /** 目录设置保存成功后：用服务端返回的 folder 重算快照，dirty 自然就消了 */
   function markFolderSaved(tab, folder) {
     const spec = folderSpecFrom(folder);
-    tab.title = folder.name || '目录设置';
+    tab.title = folder.name || t('stores.folderSettings');
     tab.spec = spec;
     tab.savedSnapshot = snapshot(spec);
     tab.dirty = false;
@@ -1323,7 +1324,7 @@ export const useTabsStore = defineStore('tabs', function () {
       controller: new AbortController()
     });
 
-    if (forcePreflight) tab.preflightNotice = 'token 失效，已自动登录并重发';
+    if (forcePreflight) tab.preflightNotice = t('stores.preflightRetried');
 
     // 只在确认是 SSE 之后才建解析器
     const sse = { parser: null };

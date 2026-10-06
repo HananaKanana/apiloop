@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as mqttApi from '@/api/mqtt';
 import { getNdjson } from '@/api/stream';
+import { t } from '@/i18n';
 
 /**
  * MQTT 调试会话的运行时状态（第十三轮）。
@@ -327,7 +328,7 @@ export const useMqttStore = defineStore('mqtt', function () {
     state.sessionId = '';
     state.status = 'closed';
     state.channel = 'idle';
-    pushLocal(state, '已断开连接');
+    pushLocal(state, t('stores.disconnected'));
 
     if (id) {
       try {

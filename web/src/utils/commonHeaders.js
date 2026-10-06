@@ -1,4 +1,5 @@
 import { folderChain } from '@/utils/tree';
+import { t } from '@/i18n';
 
 /**
  * 公共请求头（第五轮第 1 节）——**服务端那一份的前端镜像**。
@@ -44,10 +45,10 @@ export function headersOf(entity) {
  */
 export function headerLayers(project, folders, folderId) {
   const inner = folderChain(folders, folderId).slice().reverse();
-  const layers = [{ label: '项目', rows: headersOf(project) }];
+  const layers = [{ label: t('utils.layerProject'), rows: headersOf(project) }];
 
   inner.forEach(function (folder) {
-    layers.push({ label: '目录 ' + folder.name, rows: headersOf(folder) });
+    layers.push({ label: t('utils.layerFolder', { name: folder.name }), rows: headersOf(folder) });
   });
 
   return layers;

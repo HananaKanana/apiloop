@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 响应字段说明的纯函数（第六轮第 2 节）。
  *
@@ -72,17 +73,17 @@ function walk(value, prefix, out, depth) {
  */
 export function fieldsFromExample(text) {
   const source = String(text === undefined || text === null ? '' : text).trim();
-  if (!source) return { ok: false, error: '这个示例没有响应体' };
+  if (!source) return { ok: false, error: t('utils.fieldsNoBody') };
 
   let parsed;
   try {
     parsed = JSON.parse(source);
   } catch (err) {
-    return { ok: false, error: '这个示例不是合法 JSON，没法按结构列出字段' };
+    return { ok: false, error: t('utils.fieldsNotJson') };
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    return { ok: false, error: '响应体不是对象或数组，没有字段可列' };
+    return { ok: false, error: t('utils.fieldsNotObject') };
   }
 
   return { ok: true, fields: fieldsFromJson(parsed) };

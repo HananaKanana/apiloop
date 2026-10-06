@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as prefsApi from '@/api/prefs';
 import { getTree } from '@/api/tree';
+import { t } from '@/i18n';
 
 /**
  * 个人偏好（第七轮第 2 节）：项目分组、收藏、最近打开。
@@ -114,7 +115,7 @@ export const usePrefsStore = defineStore('prefs', function () {
     const id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     return saveGroups(projectGroups.value.concat([{
       id: id,
-      name: String(name || '').trim() || '新分组',
+      name: String(name || '').trim() || t('stores.newGroup'),
       projectIds: [],
       collapsed: false
     }]));
@@ -260,7 +261,7 @@ export const usePrefsStore = defineStore('prefs', function () {
         projectId: item.projectId,
         apiId: item.apiId,
         openedAt: item.openedAt,
-        name: api.name || '未命名接口',
+        name: api.name || t('stores.untitledApi'),
         method: api.method || 'GET',
         url: api.url || ''
       };

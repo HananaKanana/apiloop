@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * JSON 美化，**带 `{{变量}}` 和注释也能美化**。
  *
@@ -499,11 +500,11 @@ export function formatJson(text, indent) {
   try {
     JSON.parse(extracted.text);
   } catch (err) {
-    const reason = cleanReason(err.message) || '不是合法的 JSON';
+    const reason = cleanReason(err.message) || t('utils.notJson');
     const spot = locate(err.message, extracted.text, extracted.edits, source);
     return {
       ok: false,
-      error: spot ? '第 ' + spot.line + ' 行第 ' + spot.column + ' 列：' + reason : reason
+      error: spot ? t('utils.jsonAt', { line: spot.line, column: spot.column }) + reason : reason
     };
   }
 

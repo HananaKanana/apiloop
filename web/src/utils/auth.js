@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 鉴权继承的解析（契约第 5 节第 2 步）。
  *
@@ -10,7 +11,7 @@
  */
 
 const TYPE_NAMES = {
-  noauth: '无鉴权',
+  get noauth() { return t('utils.authNone'); },
   bearer: 'Bearer Token',
   basic: 'Basic Auth',
   apikey: 'API Key'
@@ -48,6 +49,6 @@ export function findInheritedAuth(levels) {
  */
 export function inheritHint(levels) {
   const found = findInheritedAuth(levels);
-  if (!found) return '上级都没有配置鉴权，这次请求不带鉴权。';
-  return '继承自 ' + found.label + '：' + authTypeName(found.auth) + '。';
+  if (!found) return t('utils.authNoParent');
+  return t('utils.authInheritFrom', { from: found.label, type: authTypeName(found.auth) });
 }

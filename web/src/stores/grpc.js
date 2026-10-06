@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 import * as grpcApi from '@/api/grpc';
+import { t } from '@/i18n';
 
 /**
  * gRPC 调用的运行时状态（第十一轮第 3 节）。
@@ -114,7 +115,7 @@ export const useGrpcStore = defineStore('grpc', function () {
       return;
     }
     if (event.type === 'error') {
-      state.error = String(event.error || '调用失败');
+      state.error = String(event.error || t('stores.grpcCallFailed'));
       state.phase = 'error';
     }
   }
@@ -148,7 +149,7 @@ export const useGrpcStore = defineStore('grpc', function () {
         // 用户在界面上点了「取消」：这不算错
         state.phase = 'cancelled';
       } else {
-        state.error = (err && err.message) || '调用失败';
+        state.error = (err && err.message) || t('stores.grpcCallFailed');
         state.phase = 'error';
       }
     } finally {
@@ -156,7 +157,7 @@ export const useGrpcStore = defineStore('grpc', function () {
       // 事件流断了但一条 end / error 都没收到（服务端进程没了、连接被掐）：
       // 别让界面一直停在「调用中」
       if (state.phase === 'running') {
-        state.error = state.error || '连接中断了，没有收到调用结果';
+        state.error = state.error || t('stores.grpcNoResult');
         state.phase = 'error';
       }
     }
@@ -294,14 +295,14 @@ export const useGrpcStore = defineStore('grpc', function () {
       state.phase = 'open';
       pushEntry(state, {
         kind: 'system',
-        text: '已连接 ' + state.target + (state.tls ? '（TLS）' : '') +
-          (state.missing.length ? '；这些变量没有值：' + state.missing.join('、') : '')
+        text: t('stores.grpcConnected', { target: state.target }) + (state.tls ? t('stores.grpcTls') : '') +
+          (state.missing.length ? t('stores.grpcMissing', { list: state.missing.join('、') }) : '')
       });
       return;
     }
     if (event.type === 'metadata') {
       state.metadata = event.metadata || null;
-      pushEntry(state, { kind: 'system', text: '握手 metadata 已收到' });
+      pushEntry(state, { kind: 'system', text: t('stores.grpcMetadata') });
       return;
     }
     if (event.type === 'sent') {
@@ -321,16 +322,16 @@ export const useGrpcStore = defineStore('grpc', function () {
       state.phase = (state.status && state.status.code === 0) ? 'closed' : 'error';
       pushEntry(state, {
         kind: 'system',
-        text: '调用结束：' + ((state.status && state.status.name) || '未知状态') +
-          (state.status && state.status.details ? '（' + state.status.details + '）' : '') +
-          (state.durationMs === null ? '' : '，用时 ' + state.durationMs + 'ms') +
-          (state.tests.length ? '；' + state.tests.filter(function (t) { return t.passed; }).length + '/' + state.tests.length + ' 条断言通过' : '') +
-          (state.extracted.length ? '；提取了 ' + state.extracted.length + ' 个变量' : '')
+        text: t('stores.grpcCallEnd', { status: (state.status && state.status.name) || t('stores.grpcUnknownStatus') }) +
+          (state.status && state.status.details ? t('stores.grpcDetails', { details: state.status.details }) : '') +
+          (state.durationMs === null ? '' : t('stores.grpcDuration', { ms: state.durationMs })) +
+          (state.tests.length ? t('stores.grpcTests', { passed: state.tests.filter(function (item) { return item.passed; }).length, total: state.tests.length }) : '') +
+          (state.extracted.length ? t('stores.grpcExtracted', { n: state.extracted.length }) : '')
       });
       return;
     }
     if (event.type === 'error') {
-      state.error = String(event.error || '流式会话失败');
+      state.error = String(event.error || t('stores.grpcStreamFailed'));
       state.phase = 'error';
       pushEntry(state, { kind: 'system', text: state.error });
     }
@@ -372,7 +373,7 @@ export const useGrpcStore = defineStore('grpc', function () {
 
       if (controller.signal.aborted) return;
       if (state.phase === 'open' || state.phase === 'connecting') {
-        state.error = state.error || '连接中断了，没有收到结束状态';
+        state.error = state.error || t('stores.grpcNoEndStatus');
         state.phase = 'error';
       }
     } catch (err) {
@@ -390,7 +391,7 @@ export const useGrpcStore = defineStore('grpc', function () {
         return;
       }
 
-      state.error = (err && err.message) || '连接中断了';
+      state.error = (err && err.message) || t('stores.grpcDisconnected');
       state.phase = 'error';
     } finally {
       if (streamReaders.value.get(key) === controller) streamReaders.value.delete(key);
@@ -423,10 +424,10 @@ export const useGrpcStore = defineStore('grpc', function () {
     try {
       const data = await grpcApi.createStream(payload.projectId, payload.body);
       state.id = data.id || '';
-      if (!state.id) throw new Error('服务端没有返回会话 id');
+      if (!state.id) throw new Error(t('stores.grpcNoSessionId'));
       readStreamEvents(key);
     } catch (err) {
-      state.error = (err && err.message) || '建会话失败';
+      state.error = (err && err.message) || t('stores.grpcCreateFailed');
       state.phase = 'error';
     }
 
@@ -446,7 +447,7 @@ export const useGrpcStore = defineStore('grpc', function () {
     if (!state || !state.id || state.halfClosed) return;
     await grpcApi.endStream(state.id);
     state.halfClosed = true;
-    pushEntry(state, { kind: 'system', text: '已结束发送，等服务端把剩下的消息发完' });
+    pushEntry(state, { kind: 'system', text: t('stores.grpcHalfClosed') });
   }
 
   /** 取消 / 断开：删会话，服务端那边 call.cancel() */

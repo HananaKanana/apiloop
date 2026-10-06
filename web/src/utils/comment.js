@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 评论用到的几个纯函数（第五轮第 4 节）。
  *
@@ -13,16 +14,16 @@ export function formatRelativeTime(ts, now) {
 
   const base = now || Date.now();
   const diff = base - at;
-  if (diff < 0) return '刚刚';
+  if (diff < 0) return t('utils.timeJustNow');
 
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (diff < minute) return '刚刚';
-  if (diff < hour) return Math.floor(diff / minute) + ' 分钟前';
-  if (diff < day) return Math.floor(diff / hour) + ' 小时前';
-  if (diff < 7 * day) return Math.floor(diff / day) + ' 天前';
+  if (diff < minute) return t('utils.timeJustNow');
+  if (diff < hour) return t('utils.timeMinutes', { n: Math.floor(diff / minute) });
+  if (diff < day) return t('utils.timeHours', { n: Math.floor(diff / hour) });
+  if (diff < 7 * day) return t('utils.timeDays', { n: Math.floor(diff / day) });
   return formatFullTime(at);
 }
 

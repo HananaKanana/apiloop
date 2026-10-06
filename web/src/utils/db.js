@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 数据库连接与数据库操作这两张表的纯逻辑（第九轮第 3 节）。
  *
@@ -20,26 +21,26 @@ export const DEFAULT_PORTS = { mysql: 3306, postgres: 5432, redis: 6379 };
 
 /** 一行操作的时机：发请求前 / 拿到响应后 */
 export const PHASE_OPTIONS = [
-  { label: '请求前', value: 'pre' },
-  { label: '响应后', value: 'post' }
+  { value: 'pre', get label() { return t('utils.dbPre'); } },
+  { value: 'post', get label() { return t('utils.dbPost'); } }
 ];
 
 export const SCOPE_OPTIONS = [
-  { label: '环境', value: 'environment' },
-  { label: '项目', value: 'project' }
+  { value: 'environment', get label() { return t('utils.scopeEnv'); } },
+  { value: 'project', get label() { return t('utils.scopeProject'); } }
 ];
 
 /** Redis 的返回是个值、SQL 是行数组，路径提示不一样 */
 export function pathPlaceholder(connection) {
   return connection && connection.type === 'redis'
-    ? '留空 = 整个返回值，也可以写 [0]'
-    : '留空 = 整张结果，比如 [0].code 取第一行的 code 列';
+    ? t('utils.dbPathRedis')
+    : t('utils.dbPathSql');
 }
 
 /** 语句输入框的提示（SQL 和 Redis 命令长得完全不一样） */
 export function statementPlaceholder(type) {
-  if (type === 'redis') return 'Redis 命令，比如 GET 验证码（带空格的参数用双引号包起来）';
-  return 'SQL 语句，比如 SELECT * FROM users LIMIT 5';
+  if (type === 'redis') return t('utils.dbStmtRedis');
+  return t('utils.dbStmtSql');
 }
 
 export function typeLabel(type) {
@@ -112,7 +113,8 @@ export function passwordWarning(connection) {
   const password = String((connection && connection.password) || '');
   if (!password) return '';
   if (password.indexOf('{{') !== -1) return '';
-  return '密码会同步给项目里所有人，明文写在这里大家都能看到；建议在环境里设一个保密变量，这里写 {{变量名}}。';
+  // 这句里有 {{变量名}}，不能整句写进语言文件（vue-i18n 会把 {{ 当成嵌套插值）
+  return t('utils.dbPasswordWarnLead') + '{{变量名}}' + t('utils.dbPasswordWarnTail');
 }
 
 /** 下拉里那一行：`本地 MySQL（127.0.0.1:3306/demo）` */
@@ -127,8 +129,8 @@ export function connectionOptions(databases) {
 
 /** 这一行操作有什么问题（缺行的话在下发前提示一下，服务端会直接丢掉它） */
 export function opProblem(op) {
-  if (!String((op && op.statement) || '').trim()) return '还没有写语句';
-  if (!String((op && op.connectionId) || '').trim()) return '还没有选连接';
+  if (!String((op && op.statement) || '').trim()) return t('utils.dbNoStatement');
+  if (!String((op && op.connectionId) || '').trim()) return t('utils.dbNoConnection');
   return '';
 }
 

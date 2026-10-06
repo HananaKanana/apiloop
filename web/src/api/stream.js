@@ -1,4 +1,5 @@
 import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
+import { t } from '@/i18n';
 
 /**
  * NDJSON 长连接的读取（契约第 14、15 节）。
@@ -13,7 +14,7 @@ import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
  */
 
 function abortError() {
-  const error = new Error('请求已取消');
+  const error = new Error(t('api.cancelled'));
   error.aborted = true;
   return error;
 }
@@ -70,7 +71,7 @@ async function run(promise, onEvent, onOpen) {
     res = await promise;
   } catch (err) {
     if (err && err.name === 'AbortError') throw abortError();
-    throw new Error('网络请求失败：' + (err && err.message ? err.message : '未知错误'));
+    throw new Error(t('api.networkFailed', { message: (err && err.message) || t('api.unknownError') }));
   }
 
   if (res.status === 401) {
@@ -79,7 +80,7 @@ async function run(promise, onEvent, onOpen) {
     throw abortError();
   }
   if (!res.ok) throw await toError(res);
-  if (!res.body) throw new Error('这个浏览器不支持流式响应');
+  if (!res.body) throw new Error(t('api.noStreamSupport'));
 
   // 长连接建立了（响应头到了）。重连成功时靠它把「重连中」的状态收回来 ——
   // 重连后服务端只补发 seq 之后的事件，不会再发一次 open 事件。

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 查找替换弹窗里的纯逻辑（第五轮第 2 节）。
  *
@@ -24,7 +25,7 @@ export function groupMatches(matches) {
     if (!map.has(match.apiId)) {
       map.set(match.apiId, {
         apiId: match.apiId,
-        name: match.apiName || '(未命名接口)',
+        name: match.apiName || t('utils.untitledApi'),
         method: String(match.method || 'GET').toUpperCase(),
         items: []
       });

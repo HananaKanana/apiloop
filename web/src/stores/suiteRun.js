@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { postNdjson } from '@/api/stream';
 import { stopSuite } from '@/api/suites';
+import { t } from '@/i18n';
 
 /**
  * 测试集运行的状态（第八轮第 1 节）。
@@ -114,7 +115,7 @@ export const useSuiteRunStore = defineStore('suiteRun', function () {
         return;
       }
       state.phase = 'error';
-      state.error = (err && err.message) || '运行失败';
+      state.error = (err && err.message) || t('stores.suiteRunFailed');
     }).then(function () {
       delete controllers[suiteId];
     });

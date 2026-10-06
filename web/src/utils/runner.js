@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 批量运行的纯逻辑（第 2 节）：状态形状、一行结果的形状、以及把服务端返回的一次发送
  * 折算成「这一行过没过」。
@@ -54,7 +55,7 @@ export function runnerRow(round, node) {
     key: round + ':' + node.id,
     round: round,
     apiId: node.id,
-    name: node.name || '(未命名接口)',
+    name: node.name || t('utils.untitledApi'),
     method: String((node.api && node.api.method) || 'GET').toUpperCase(),
     url: (node.api && node.api.url) || '',
     pending: true,
@@ -87,7 +88,7 @@ export function applyRunnerResult(row, result) {
   row.pending = false;
 
   if (!result) {
-    row.error = '服务端没有返回结果';
+    row.error = t('utils.noResult');
     row.failed = true;
     return row;
   }
@@ -104,7 +105,7 @@ export function applyRunnerResult(row, result) {
   row.passed = row.tests.filter(function (item) { return item.passed; }).length;
   row.total = row.tests.length;
 
-  if (result.error) row.error = result.error.message || result.error.code || '请求失败';
+  if (result.error) row.error = result.error.message || result.error.code || t('utils.requestFailed');
   row.failed = Boolean(result.error) || row.passed !== row.total;
 
   return row;

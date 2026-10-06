@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 复制文字到剪贴板。
  *
@@ -47,5 +48,5 @@ export async function copyText(text) {
   }
   area.remove();
   if (active && typeof active.focus === 'function') active.focus();
-  if (!ok) throw new Error('浏览器不允许复制，请手动选中复制');
+  if (!ok) throw new Error(t('utils.clipboardBlocked'));
 }

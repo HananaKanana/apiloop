@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 输入时的补全候选。请求头名字这类固定清单、以及内置动态变量的清单都放这里，
  * 别在每个表格里各写一份。
@@ -33,35 +34,35 @@ export const HEADER_NAMES = [
  * 插入文本里 —— 插进去之后用户自己改数字就行。
  */
 export const DYNAMIC_VARIABLES = [
-  { label: '$guid', detail: '随机 UUID' },
-  { label: '$timestamp', detail: '当前时间戳（秒）' },
-  { label: '$timestampMs', detail: '当前毫秒时间戳' },
-  { label: '$isoTimestamp', detail: '当前时间（ISO 格式）' },
-  { label: '$randomInt(1,100)', detail: '区间内的随机整数，不带参数时 0~1000' },
-  { label: '$整数(1,100)', detail: '区间内的随机整数（中文写法）' },
-  { label: '$randomPhone', detail: '11 位手机号（真实号段）' },
-  { label: '$手机号', detail: '11 位手机号（真实号段）' },
-  { label: '$randomIdCard', detail: '18 位身份证号（校验位正确）' },
-  { label: '$身份证', detail: '18 位身份证号（校验位正确）' },
-  { label: '$randomChineseName', detail: '中文姓名' },
-  { label: '$中文名', detail: '中文姓名' },
-  { label: '$randomEmail', detail: '邮箱' },
-  { label: '$邮箱', detail: '邮箱' },
-  { label: '$randomDate', detail: '近一年内的日期 YYYY-MM-DD' },
-  { label: '$日期', detail: '近一年内的日期 YYYY-MM-DD' },
-  { label: '$randomDateTime', detail: '近一年内的日期时间 YYYY-MM-DD HH:mm:ss' },
-  { label: '$时间', detail: '近一年内的日期时间 YYYY-MM-DD HH:mm:ss' },
-  { label: '$randomAddress', detail: '省市区 + 详细地址' },
-  { label: '$地址', detail: '省市区 + 详细地址' },
-  { label: '$randomCompany', detail: '公司名' },
-  { label: '$公司', detail: '公司名' },
-  { label: '$randomBankCard', detail: '16 / 19 位银行卡号（Luhn 校验正确）' },
-  { label: '$银行卡', detail: '16 / 19 位银行卡号（Luhn 校验正确）' },
-  { label: '$randomCreditCode', detail: '18 位统一社会信用代码（校验位正确）' },
-  { label: '$信用代码', detail: '18 位统一社会信用代码（校验位正确）' },
-  { label: '$randomPlate', detail: '车牌号' },
-  { label: '$车牌', detail: '车牌号' },
-  { label: '$randomIp', detail: 'IPv4 地址' }
+  { label: '$guid', get detail() { return t('utils.dynGuid'); } },
+  { label: '$timestamp', get detail() { return t('utils.dynTimestamp'); } },
+  { label: '$timestampMs', get detail() { return t('utils.dynTimestampMs'); } },
+  { label: '$isoTimestamp', get detail() { return t('utils.dynIso'); } },
+  { label: '$randomInt(1,100)', get detail() { return t('utils.dynRandomInt'); } },
+  { label: '$整数(1,100)', get detail() { return t('utils.dynRandomIntCn'); } },
+  { label: '$randomPhone', get detail() { return t('utils.dynPhone'); } },
+  { label: '$手机号', get detail() { return t('utils.dynPhone'); } },
+  { label: '$randomIdCard', get detail() { return t('utils.dynIdCard'); } },
+  { label: '$身份证', get detail() { return t('utils.dynIdCard'); } },
+  { label: '$randomChineseName', get detail() { return t('utils.dynChineseName'); } },
+  { label: '$中文名', get detail() { return t('utils.dynChineseName'); } },
+  { label: '$randomEmail', get detail() { return t('utils.dynEmail'); } },
+  { label: '$邮箱', get detail() { return t('utils.dynEmail'); } },
+  { label: '$randomDate', get detail() { return t('utils.dynDate'); } },
+  { label: '$日期', get detail() { return t('utils.dynDate'); } },
+  { label: '$randomDateTime', get detail() { return t('utils.dynDateTime'); } },
+  { label: '$时间', get detail() { return t('utils.dynDateTime'); } },
+  { label: '$randomAddress', get detail() { return t('utils.dynAddress'); } },
+  { label: '$地址', get detail() { return t('utils.dynAddress'); } },
+  { label: '$randomCompany', get detail() { return t('utils.dynCompany'); } },
+  { label: '$公司', get detail() { return t('utils.dynCompany'); } },
+  { label: '$randomBankCard', get detail() { return t('utils.dynBankCard'); } },
+  { label: '$银行卡', get detail() { return t('utils.dynBankCard'); } },
+  { label: '$randomCreditCode', get detail() { return t('utils.dynCreditCode'); } },
+  { label: '$信用代码', get detail() { return t('utils.dynCreditCode'); } },
+  { label: '$randomPlate', get detail() { return t('utils.dynPlate'); } },
+  { label: '$车牌', get detail() { return t('utils.dynPlate'); } },
+  { label: '$randomIp', get detail() { return t('utils.dynIp'); } }
 ];
 
 /**

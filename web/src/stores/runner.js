@@ -9,6 +9,7 @@ import { useGatewayStore } from '@/stores/gateway';
 import { mockBaseFor } from '@/utils/mock';
 import { collectApiNodes } from '@/utils/tree';
 import { applyRunnerResult, runnerRow } from '@/utils/runner';
+import { t } from '@/i18n';
 
 /**
  * 批量运行（第 2 节）。
@@ -91,9 +92,9 @@ export const useRunnerStore = defineStore('runner', function () {
       row.pending = false;
       if (err && err.aborted) {
         row.aborted = true;
-        row.error = '已停止';
+        row.error = t('stores.runnerStopped');
       } else {
-        row.error = (err && err.message) || '请求失败';
+        row.error = (err && err.message) || t('stores.runnerFailed');
         row.failed = true;
       }
     } finally {
@@ -126,13 +127,13 @@ export const useRunnerStore = defineStore('runner', function () {
      * 判断用 cloudSendBlocked（云端开了 SERVER_SEND=1 时是 false，照常能跑）。
      */
     if (useGatewayStore().cloudSendBlocked) {
-      runner.error = '网页版不能运行，请在客户端里使用';
+      runner.error = t('stores.runnerWebBlocked');
       return;
     }
 
     const list = selected(tab);
     if (!list.length) {
-      runner.error = '没有勾选任何接口';
+      runner.error = t('stores.runnerNoSelection');
       return;
     }
 

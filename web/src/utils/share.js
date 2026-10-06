@@ -1,5 +1,6 @@
 import { h } from 'vue';
 import { useGatewayStore } from '@/stores/gateway';
+import { t } from '@/i18n';
 
 /**
  * 分享链接的地址拼装（第 4 节 接口文档分享）。
@@ -50,7 +51,7 @@ export function formatShareTime(ts) {
 
 /** 范围那一列：目录名，或「整个项目」 */
 export function shareScopeText(share) {
-  return share && share.folderName ? '目录：' + share.folderName : '整个项目';
+  return share && share.folderName ? t('utils.shareFolder', { name: share.folderName }) : t('utils.shareWholeProject');
 }
 
 /**
@@ -64,11 +65,11 @@ export function shareScopeText(share) {
  */
 export function shareExpiresText(share, now) {
   const at = share && share.expiresAt ? Number(share.expiresAt) : 0;
-  if (!at) return { text: '永久', expired: false, dateText: '' };
+  if (!at) return { text: t('utils.shareForever'), expired: false, dateText: '' };
 
   const dateText = formatShareTime(at);
   if (at <= (now || Date.now())) {
-    return { text: '已过期', expired: true, dateText: dateText };
+    return { text: t('utils.shareExpired'), expired: true, dateText: dateText };
   }
   return { text: dateText, expired: false, dateText: dateText };
 }

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 简单压测的纯逻辑（第八轮第 2 节）。
  *
@@ -32,7 +33,11 @@ export const DEFAULT_SETTINGS = {
 /** 设置按接口记住，下次打开接着用 */
 const STORE_PREFIX = 'apiloop.load.';
 
-/** 环境名里出现这些字就当成生产环境，开始前要弹红色确认框 */
+/**
+ * 环境名里出现这些字就当成生产环境，开始前要弹红色确认框。
+ * **这是匹配用的关键词，不是界面文字**，所以不跟着语言变 —— 中文环境名里的「生产 / 线上」
+ * 任何语言下都要认出来。（英文环境名请用 prod。）
+ */
 const PRODUCTION_WORDS = ['生产', '线上', 'prod'];
 
 /** 数字输入的上下限（界面上直接绑给 n-input-number） */
@@ -91,7 +96,7 @@ export function parseOkStatus(text) {
   for (let i = 0; i < parts.length; i++) {
     const value = Number(parts[i]);
     if (!Number.isInteger(value) || value < 100 || value > 599) {
-      return { error: '「算成功的状态码」只能填 100 ~ 599 之间的整数，用逗号分开（比如 200,201）' };
+      return { error: t('utils.loadStatusRange') };
     }
     if (out.indexOf(value) === -1) out.push(value);
   }
@@ -196,10 +201,10 @@ export function formatPercent(rate) {
 /** 用时：不到一分钟写秒，超过写「x 分 y 秒」 */
 export function formatDuration(ms) {
   const total = Math.max(0, Math.round(Number(ms) || 0));
-  if (total < 60000) return (total / 1000).toFixed(1) + ' 秒';
+  if (total < 60000) return t('utils.loadSeconds', { n: (total / 1000).toFixed(1) });
   const minutes = Math.floor(total / 60000);
   const seconds = Math.round((total % 60000) / 1000);
-  return minutes + ' 分 ' + seconds + ' 秒';
+  return t('utils.loadMinutesSeconds', { m: minutes, s: seconds });
 }
 
 /** 「复制结果」用的纯文本 */
@@ -208,26 +213,28 @@ export function summaryText(summary, meta) {
   const info = meta || {};
   const lines = [];
 
-  lines.push('压测结果' + (info.method ? '（' + info.method + ' ' + (info.url || '') + '）' : ''));
-  if (info.envName) lines.push('环境：' + info.envName);
-  lines.push('并发 ' + summary.concurrency + ' · ' +
-    (summary.mode === 'duration' ? '按时长 ' + summary.durationSec + ' 秒' : '按次数 ' + formatCount(summary.count)) +
-    (summary.rampUpSec ? ' · 预热 ' + summary.rampUpSec + ' 秒' : ''));
-  lines.push('总请求 ' + formatCount(summary.sent) + '　成功 ' + formatCount(summary.ok) +
-    '　失败 ' + formatCount(summary.failed) + '　错误率 ' + formatPercent(summary.errorRate));
-  lines.push('用时 ' + formatDuration(summary.durationMs) + '　QPS ' + summary.qps);
-  lines.push('响应时间：最小 ' + formatMs(summary.minMs) + '　平均 ' + formatMs(summary.avgMs) +
-    '　最大 ' + formatMs(summary.maxMs));
+  lines.push(t('utils.loadResultTitle') + (info.method ? t('utils.loadMethodUrl', { method: info.method, url: info.url || '' }) : ''));
+  if (info.envName) lines.push(t('utils.loadEnv', { name: info.envName }));
+  lines.push(t('utils.loadConcurrency', { n: summary.concurrency }) + ' · ' +
+    (summary.mode === 'duration'
+      ? t('utils.loadByDuration', { n: summary.durationSec })
+      : t('utils.loadByCount', { n: formatCount(summary.count) })) +
+    (summary.rampUpSec ? t('utils.loadRampUp', { n: summary.rampUpSec }) : ''));
+  lines.push(t('utils.loadSentOk', { sent: formatCount(summary.sent), ok: formatCount(summary.ok) }) +
+    t('utils.loadFailedRate', { failed: formatCount(summary.failed), rate: formatPercent(summary.errorRate) }));
+  lines.push(t('utils.loadElapsed', { value: formatDuration(summary.durationMs) }) + '　QPS ' + summary.qps);
+  lines.push(t('utils.loadResponseMin', { value: formatMs(summary.minMs) }) + t('utils.loadResponseAvg', { value: formatMs(summary.avgMs) }) +
+    t('utils.loadResponseMax', { value: formatMs(summary.maxMs) }));
   lines.push('P50 ' + formatMs(summary.p50Ms) + '　P90 ' + formatMs(summary.p90Ms) +
     '　P95 ' + formatMs(summary.p95Ms) + '　P99 ' + formatMs(summary.p99Ms));
 
   if ((summary.statusCodes || []).length) {
-    lines.push('状态码：' + summary.statusCodes.map(function (item) {
+    lines.push(t('utils.loadStatusCodes') + summary.statusCodes.map(function (item) {
       return item.status + ' × ' + formatCount(item.count);
     }).join('，'));
   }
   (summary.errors || []).forEach(function (item) {
-    lines.push('错误：' + item.group + ' × ' + formatCount(item.count) +
+    lines.push(t('utils.loadErrors') + item.group + ' × ' + formatCount(item.count) +
       (item.sample ? '（' + item.sample + '）' : ''));
   });
 

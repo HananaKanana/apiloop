@@ -1,3 +1,4 @@
+import { currentLocale, t } from '@/i18n';
 /**
  * 测试集报告的 HTML 导出（第八轮第 1 节）。
  *
@@ -7,10 +8,10 @@
  */
 
 const STATUS_LABEL = {
-  passed: '通过',
-  failed: '失败',
-  stopped: '停止',
-  error: '出错'
+  get passed() { return t('utils.repPassed'); },
+  get failed() { return t('utils.repFailed'); },
+  get stopped() { return t('utils.repStopped'); },
+  get error() { return t('utils.repError'); }
 };
 
 const STATUS_COLOR = {
@@ -75,17 +76,17 @@ function stepHtml(step, index) {
   const tests = (step.tests || []).map(function (test) {
     return '<li class="' + (test.passed ? 'ok' : 'bad') + '">' +
       (test.passed ? '✓' : '✗') + ' ' + escapeHtml(test.name) +
-      (test.message ? '：' + escapeHtml(test.message) : '') + '</li>';
+      (test.message ? t('utils.repColon') + escapeHtml(test.message) : '') + '</li>';
   }).join('');
 
   const detail = failed && (step.request || step.response)
-    ? '<details open><summary>实际发出的请求 / 响应</summary>' +
+    ? '<details open><summary>' + escapeHtml(t('utils.repReqResp')) + '</summary>' +
         (step.request
-          ? '<p class="k">请求</p><pre>' + escapeHtml(step.request.method + ' ' + step.request.url + '\n' +
+          ? '<p class="k">' + escapeHtml(t('utils.repRequest')) + '</p><pre>' + escapeHtml(step.request.method + ' ' + step.request.url + '\n' +
               headerPairs(step.request.headers) + (step.request.bodyPreview ? '\n\n' + step.request.bodyPreview : '')) + '</pre>'
           : '') +
         (step.response
-          ? '<p class="k">响应（HTTP ' + escapeHtml(step.response.status) + '）</p><pre>' +
+          ? '<p class="k">' + escapeHtml(t('utils.repResponse', { status: step.response.status })) + '</p><pre>' +
               escapeHtml(headerPairs(step.response.headers) + '\n\n' + (step.response.body || '')) + '</pre>'
           : '') +
       '</details>'
@@ -97,7 +98,7 @@ function stepHtml(step, index) {
       '<span class="idx">' + (index + 1) + '</span>' +
       '<span class="method">' + escapeHtml(step.method || '') + '</span>' +
       '<span class="name">' + escapeHtml(step.name || '') + '</span>' +
-      (step.skipped ? '<span class="tag">跳过</span>' : '') +
+      (step.skipped ? '<span class="tag">' + escapeHtml(t('utils.repSkipped')) + '</span>' : '') +
       '<span class="right">' +
         (step.status ? 'HTTP ' + escapeHtml(step.status) : '') +
         ' · ' + escapeHtml(formatMs(step.timeMs)) +
@@ -122,18 +123,18 @@ export function reportHtml(run) {
   const status = run.status || 'error';
 
   const rows = [
-    ['结果', STATUS_LABEL[status] || status],
-    ['轮数', summary.iterations === undefined ? iterations.length : summary.iterations],
-    ['请求数', summary.requests],
-    ['通过 / 失败', (summary.passed || 0) + ' / ' + (summary.failed || 0)],
-    ['出错', summary.errors || 0],
-    ['断言通过 / 失败', (summary.assertions ? summary.assertions.passed : 0) + ' / ' + (summary.assertions ? summary.assertions.failed : 0)],
-    ['总用时', formatMs(summary.durationMs)],
-    ['平均响应时间', formatMs(summary.avgMs)],
-    ['环境', run.environmentName || '（没选环境）'],
-    ['来源', run.source === 'cli' ? '命令行' : '客户端'],
-    ['开始时间', formatTime(run.startedAt)],
-    ['结束时间', formatTime(run.finishedAt)]
+    [t('utils.repResult'), STATUS_LABEL[status] || status],
+    [t('utils.repIterations'), summary.iterations === undefined ? iterations.length : summary.iterations],
+    [t('utils.repRequests'), summary.requests],
+    [t('utils.repPassFail'), (summary.passed || 0) + ' / ' + (summary.failed || 0)],
+    [t('utils.repErrors'), summary.errors || 0],
+    [t('utils.repAsserts'), (summary.assertions ? summary.assertions.passed : 0) + ' / ' + (summary.assertions ? summary.assertions.failed : 0)],
+    [t('utils.repTotalTime'), formatMs(summary.durationMs)],
+    [t('utils.repAvgTime'), formatMs(summary.avgMs)],
+    [t('utils.repEnv'), run.environmentName || t('utils.repNoEnv')],
+    [t('utils.repSource'), run.source === 'cli' ? t('utils.repCli') : t('utils.repClient')],
+    [t('utils.repStartedAt'), formatTime(run.startedAt)],
+    [t('utils.repFinishedAt'), formatTime(run.finishedAt)]
   ].map(function (pair) {
     return '<tr><th>' + escapeHtml(pair[0]) + '</th><td>' + escapeHtml(pair[1] === undefined ? '' : pair[1]) + '</td></tr>';
   }).join('');
@@ -144,14 +145,14 @@ export function reportHtml(run) {
     const label = item.data ? dataSummary(item.data) : '';
 
     return '<section class="iter">' +
-      '<h3>' + (item.data ? '第 ' + (index + 1) + ' 轮 · ' + escapeHtml(label) : '第 ' + (index + 1) + ' 轮') +
-      (failed ? ' <span class="badge bad">有失败</span>' : '') + '</h3>' +
+      '<h3>' + (item.data ? t('utils.repRound', { n: index + 1 }) + ' · ' + escapeHtml(label) : t('utils.repRound', { n: index + 1 })) +
+      (failed ? ' <span class="badge bad">' + escapeHtml(t('utils.repHasFail')) + '</span>' : '') + '</h3>' +
       steps +
     '</section>';
   }).join('');
 
-  return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
-    '<title>测试集报告 · ' + escapeHtml(run.suiteName || '') + '</title>\n' +
+  return '<!DOCTYPE html>\n<html lang="' + escapeHtml(currentLocale()) + '">\n<head>\n<meta charset="utf-8">\n' +
+    '<title>' + escapeHtml(t('utils.repTitle', { name: run.suiteName || '' })) + '</title>\n' +
     '<style>' +
     'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;' +
     'margin:0;padding:24px;background:#f7f8fa;color:#1f2937;font-size:13px;line-height:1.6}' +
@@ -174,11 +175,12 @@ export function reportHtml(run) {
     '.k{margin:6px 0 2px;color:#6b7280}' +
     'details{margin-top:6px}summary{cursor:pointer;color:#6b7280}' +
     '</style>\n</head>\n<body>\n<div class="wrap">\n' +
-    '<h1>' + escapeHtml(run.suiteName || '测试集') + ' · 运行报告</h1>\n' +
+    '<h1>' + escapeHtml(run.suiteName || t('utils.repSuite')) + ' · ' + escapeHtml(t('utils.repRunReport')) + '</h1>\n' +
     '<p style="color:#6b7280;margin:0">' + escapeHtml(formatTime(run.finishedAt || run.startedAt)) +
-      (run.label ? ' · 构建号 ' + escapeHtml(run.label) : '') + '</p>\n' +
-    '<h2>汇总</h2>\n<table>' + rows + '</table>\n' +
-    '<h2>明细</h2>\n' + (body || '<p style="color:#6b7280">这次运行没有步骤。</p>') + '\n' +
+      (run.label ? ' · ' + escapeHtml(t('utils.repBuild', { label: run.label })) : '') + '</p>\n' +
+    '<h2>' + escapeHtml(t('utils.repSummary')) + '</h2>\n<table>' + rows + '</table>\n' +
+    '<h2>' + escapeHtml(t('utils.repDetail')) + '</h2>\n' +
+    (body || '<p style="color:#6b7280">' + escapeHtml(t('utils.repNoSteps')) + '</p>') + '\n' +
     '</div>\n</body>\n</html>\n';
 }
 
@@ -190,7 +192,7 @@ export function downloadReport(run) {
 
   const link = document.createElement('a');
   link.href = url;
-  link.download = '测试集报告-' + (run.suiteName || 'suite') + '-' + formatTime(run.finishedAt || Date.now()).replace(/[: ]/g, '-') + '.html';
+  link.download = t('utils.repFileName', { name: run.suiteName || 'suite', stamp: formatTime(run.finishedAt || Date.now()).replace(/[: ]/g, '-') });
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

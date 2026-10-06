@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 断言 / 提取变量这两张表的纯逻辑（第六轮第 1 节）。
  *
@@ -11,34 +12,34 @@
 
 /** 检查什么 */
 export const SOURCE_OPTIONS = [
-  { label: '状态码', value: 'status' },
-  { label: '响应时间（毫秒）', value: 'time' },
-  { label: '响应头', value: 'header' },
-  { label: 'JSON 字段', value: 'json' },
-  { label: '响应文本', value: 'text' }
+  { value: 'status', get label() { return t('utils.srcStatus'); } },
+  { value: 'time', get label() { return t('utils.srcTime'); } },
+  { value: 'header', get label() { return t('utils.srcHeader'); } },
+  { value: 'json', get label() { return t('utils.srcJson'); } },
+  { value: 'text', get label() { return t('utils.srcText'); } }
 ];
 
 export const SOURCE_LABELS = {
-  status: '状态码',
-  time: '响应时间',
-  header: '响应头',
-  json: 'JSON 字段',
-  text: '响应文本'
+  get status() { return t('utils.srcStatus'); },
+  get time() { return t('utils.srcTimeShort'); },
+  get header() { return t('utils.srcHeader'); },
+  get json() { return t('utils.srcJson'); },
+  get text() { return t('utils.srcText'); }
 };
 
 export const OP_LABELS = {
-  eq: '等于',
-  ne: '不等于',
-  gt: '大于',
-  lt: '小于',
-  contains: '包含',
-  notContains: '不包含',
-  exists: '存在',
-  notExists: '不存在',
-  empty: '为空',
-  notEmpty: '不为空',
-  regex: '匹配正则',
-  type: '类型是'
+  get eq() { return t('utils.opEq'); },
+  get ne() { return t('utils.opNe'); },
+  get gt() { return t('utils.opGt'); },
+  get lt() { return t('utils.opLt'); },
+  get contains() { return t('utils.opContains'); },
+  get notContains() { return t('utils.opNotContains'); },
+  get exists() { return t('utils.opExists'); },
+  get notExists() { return t('utils.opNotExists'); },
+  get empty() { return t('utils.opEmpty'); },
+  get notEmpty() { return t('utils.opNotEmpty'); },
+  get regex() { return t('utils.opRegex'); },
+  get type() { return t('utils.opType'); }
 };
 
 /**
@@ -63,36 +64,36 @@ export const TYPES = ['string', 'number', 'boolean', 'object', 'array', 'null'];
 export const TYPE_OPTIONS = TYPES.map(function (value) { return { label: value, value: value }; });
 
 export const EXTRACT_SOURCE_OPTIONS = [
-  { label: 'JSON 字段', value: 'json' },
-  { label: '响应头', value: 'header' },
-  { label: '响应文本里的正则第 1 组', value: 'regex' }
+  { value: 'json', get label() { return t('utils.srcJson'); } },
+  { value: 'header', get label() { return t('utils.srcHeader'); } },
+  { value: 'regex', get label() { return t('utils.srcExtractRegex'); } }
 ];
 
 export const SCOPE_OPTIONS = [
-  { label: '环境', value: 'environment' },
-  { label: '项目', value: 'project' }
+  { value: 'environment', get label() { return t('utils.scopeEnv'); } },
+  { value: 'project', get label() { return t('utils.scopeProject'); } }
 ];
 
 /** 那一列在不同来源下的标题不一样（同一个 `path` 字段三种用法） */
 export const PATH_PLACEHOLDER = {
   status: '',
   time: '',
-  header: '响应头名称，比如 X-Trace-Id',
-  json: '字段路径，比如 data.list[0].id',
+  get header() { return t('utils.pathHeader'); },
+  get json() { return t('utils.pathJson'); },
   text: ''
 };
 
 export const EXTRACT_PATH_PLACEHOLDER = {
-  json: '字段路径，比如 data.token',
-  header: '响应头名称，比如 Authorization',
-  regex: '正则，取第 1 个括号里的内容'
+  get json() { return t('utils.extractPathJson'); },
+  get header() { return t('utils.extractPathHeader'); },
+  get regex() { return t('utils.extractPathRegex'); }
 };
 
 /** 表格下面的一键添加 */
 export const PRESETS = [
-  { label: '状态码是 200', row: { source: 'status', op: 'eq', value: '200' } },
-  { label: '响应时间 < 1000ms', row: { source: 'time', op: 'lt', value: '1000' } },
-  { label: 'code 等于 0', row: { source: 'json', path: 'code', op: 'eq', value: '0' } }
+  { get label() { return t('utils.presetStatus'); }, row: { source: 'status', op: 'eq', value: '200' } },
+  { get label() { return t('utils.presetTime'); }, row: { source: 'time', op: 'lt', value: '1000' } },
+  { get label() { return t('utils.presetCode'); }, row: { source: 'json', path: 'code', op: 'eq', value: '0' } }
 ];
 
 /** 行的 id：只给界面用（高亮刚加的那一行、v-for 的 key），不进契约 */
@@ -125,7 +126,7 @@ export function newExtract(partial) {
 /** 这个来源下可选的比较方式，转成下拉要的形状 */
 export function opOptions(source) {
   return (OPS_BY_SOURCE[source] || []).map(function (value) {
-    return { label: OP_LABELS[value] || value, value: value };
+    return { value: value, get label() { return OP_LABELS[value] || value; } };
   });
 }
 

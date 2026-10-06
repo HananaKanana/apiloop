@@ -6,6 +6,7 @@ import { useProjectStore } from '@/stores/project';
 import { useEnvStore } from '@/stores/env';
 import { mockBaseFor } from '@/utils/mock';
 import { emptyLive, loadPayload, tickPoint } from '@/utils/load';
+import { t } from '@/i18n';
 
 /**
  * 简单压测（第八轮第 2 节）。
@@ -74,7 +75,7 @@ export const useLoadStore = defineStore('load', function () {
 
     const pid = projects.currentId;
     if (!pid) {
-      state.error = '还没有选中项目';
+      state.error = t('stores.loadNoProject');
       return;
     }
 
@@ -122,7 +123,7 @@ export const useLoadStore = defineStore('load', function () {
       if (err && err.aborted) {
         state.status = 'stopped';
       } else {
-        state.error = (err && err.message) || '压测失败';
+        state.error = (err && err.message) || t('stores.loadFailed');
       }
     } finally {
       state.running = false;

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * 前置接口（第十轮第 3 节）的纯逻辑。
  *
@@ -41,8 +42,10 @@ export function optionsFor(apis, options) {
   const opts = options || {};
   const list = [];
 
-  if (opts.allowInherit !== false) list.push({ label: '跟随上层设置', value: INHERIT });
-  list.push({ label: '不使用前置接口', value: OFF });
+  if (opts.allowInherit !== false) {
+    list.push({ value: INHERIT, get label() { return t('utils.pfInherit'); } });
+  }
+  list.push({ value: OFF, get label() { return t('utils.pfNone'); } });
 
   (apis || []).forEach(function (api) {
     if (!api || !api.id) return;
@@ -50,7 +53,7 @@ export function optionsFor(apis, options) {
     // 前置接口是用 /send 发的 HTTP 请求，非 HTTP 的接口（WS / SIO / GRPC / MQTT）不能当它
     if (method === 'WS' || method === 'SIO' || method === 'GRPC' || method === 'MQTT') return;
 
-    list.push({ label: api.name || '(未命名接口)', value: String(api.id) });
+    list.push({ value: String(api.id), get label() { return api.name || t('utils.untitledApi'); } });
   });
 
   return list;
@@ -83,22 +86,22 @@ export function describe(preflight, apis, options) {
   const opts = options || {};
 
   if (!preflight) {
-    return opts.allowInherit === false ? '不使用前置接口' : '跟随上层设置';
+    return opts.allowInherit === false ? t('utils.pfNone') : t('utils.pfInherit');
   }
-  if (!preflight.apiId) return '这一层不使用前置接口';
+  if (!preflight.apiId) return t('utils.pfOffHere');
 
   const found = (apis || []).filter(function (api) { return api && String(api.id) === String(preflight.apiId); })[0];
   // 指向的接口被删了（或者挪到别的项目去了）：说清楚，别让用户以为设置还在生效
-  if (!found) return '前置接口已经删了，请重新选一个';
+  if (!found) return t('utils.pfDeleted');
 
-  const name = found.name || '(未命名接口)';
+  const name = found.name || t('utils.untitledApi');
 
   const when = [];
-  if (preflight.whenMissing) when.push('变量 ' + preflight.whenMissing + ' 没有值时');
-  if (preflight.retryOn401) when.push('响应 401 时');
+  if (preflight.whenMissing) when.push(t('utils.pfWhenMissing', { name: preflight.whenMissing }));
+  if (preflight.retryOn401) when.push(t('utils.pfWhen401'));
 
-  if (!when.length) return name + '（两个触发条件都没勾，实际上不会自动调用）';
-  return name + '（' + when.join('、') + '自动调用）';
+  if (!when.length) return name + t('utils.pfNeverCalls');
+  return name + t('utils.pfCalls', { list: when.join(t('utils.pfListSep')) });
 }
 
 /**

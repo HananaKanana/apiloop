@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 /**
  * cURL 命令解析器（前端自己实现，产出的是**请求**而不是 mock 路由）。
  *
@@ -391,16 +392,16 @@ function setHeaderIfAbsent(headers, key, value) {
  */
 export function parseCurl(text) {
   const source = String(text === undefined || text === null ? '' : text).trim();
-  if (!source) throw new Error('请粘贴 cURL 命令');
+  if (!source) throw new Error(t('utils.curlPaste'));
 
   if (!/^curl\b/.test(source)) {
-    throw new Error('这段内容不是 cURL 命令（应该以 curl 开头）');
+    throw new Error(t('utils.curlNotCurl'));
   }
 
   const words = isCmdStyle(source)
     ? scanWindows(unescapeCmd(source))
     : scanPosix(source);
-  if (words.length < 2) throw new Error('这段 cURL 里没有地址');
+  if (words.length < 2) throw new Error(t('utils.curlNoUrl'));
 
   const warnings = [];
   const headers = [];
@@ -480,7 +481,7 @@ export function parseCurl(text) {
       // 所以第一个冒号不能当分隔符，得从第二个开始找。
       const colon = raw.indexOf(':', raw.charAt(0) === ':' ? 1 : 0);
       if (colon === -1) {
-        warnings.push('请求头「' + raw + '」没有冒号，已跳过');
+        warnings.push(t('utils.curlHeaderNoColon', { name: raw }));
         continue;
       }
       headers.push(makeRow(raw.slice(0, colon).trim(), raw.slice(colon + 1).replace(/^ /, '')));
@@ -526,7 +527,7 @@ export function parseCurl(text) {
       i += 1;
       const eq2 = raw.indexOf('=');
       if (eq2 === -1) {
-        warnings.push('表单字段「' + raw + '」没有等号，已跳过');
+        warnings.push(t('utils.curlFieldNoEq', { name: raw }));
         continue;
       }
       const key = raw.slice(0, eq2);
@@ -535,7 +536,7 @@ export function parseCurl(text) {
         // 文件行：路径交给用户自己选（src 留空）
         const path = value.slice(1).split(';')[0];
         formRows.push(makeFormRow(key, '', 'file', null));
-        warnings.push('表单字段「' + key + '」来自本地文件 ' + path + '，请在请求体里选一次文件');
+        warnings.push(t('utils.curlFieldFromFile', { name: key, path: path }));
       } else {
         formRows.push(makeFormRow(key, value, 'text', null));
       }
@@ -561,7 +562,7 @@ export function parseCurl(text) {
       const raw = String(takeValue());
       i += 1;
       if (raw.charAt(0) === '@') {
-        throw new Error('请求体来自本地文件 ' + raw.slice(1) + '，请导入后手动粘贴内容');
+        throw new Error(t('utils.curlBodyFromFile', { path: raw.slice(1) }));
       }
       dataParts.push(raw);
       continue;
@@ -571,16 +572,16 @@ export function parseCurl(text) {
     const nextWord = inlineValue === null ? words[i + 1] : undefined;
     if (inlineValue === null && nextWord !== undefined &&
         nextWord.charAt(0) !== '-' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(nextWord)) {
-      warnings.push('跳过了不认识的参数 ' + arg + ' ' + nextWord);
+      warnings.push(t('utils.curlUnknownFlag', { flag: arg, value: nextWord }));
       i += 2;
       continue;
     }
 
-    warnings.push('跳过了不认识的参数 ' + arg);
+    warnings.push(t('utils.curlUnknownFlagOnly', { flag: arg }));
     i += 1;
   }
 
-  if (!urlCandidates.length) throw new Error('这段 cURL 里没有地址');
+  if (!urlCandidates.length) throw new Error(t('utils.curlNoUrl'));
 
   /* ---------------- 地址 ---------------- */
 
@@ -591,7 +592,7 @@ export function parseCurl(text) {
   try {
     parsed = new URL(rawUrl);
   } catch (err) {
-    throw new Error('地址不合法：' + urlCandidates[0]);
+    throw new Error(t('utils.curlBadUrl', { url: urlCandidates[0] }));
   }
 
   // 协议、主机、端口都要留着；路径原样，**不把数字段改成 :id**。
