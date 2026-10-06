@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NDrawer, NDrawerContent, NSelect, NSpin, useMessage } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import { copyText } from '@/utils/clipboard';
@@ -22,6 +23,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:show']);
 const message = useMessage();
+const { t } = useI18n();
 
 /** 语言清单：id 和后台 `code` 的键一一对应，label 是下拉里显示的文字 */
 const LANGUAGES = [
@@ -116,16 +118,16 @@ function onLanguageChange(value) {
 async function copy() {
   try {
     await copyText(currentCode.value);
-    message.success('已复制 ' + currentLabel.value);
+    message.success(t('app.copied') + ' ' + currentLabel.value);
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 </script>
 
 <template>
   <n-drawer v-model:show="visible" :width="520" placement="right">
-    <n-drawer-content title="代码片段" closable :native-scrollbar="false">
+    <n-drawer-content :title="t('request.snippetTitle')" closable :native-scrollbar="false">
       <div class="snippet">
         <div class="bar">
           <n-select
@@ -136,16 +138,16 @@ async function copy() {
             :consistent-menu-width="false"
             @update:value="onLanguageChange"
           />
-          <n-button size="small" type="primary" :disabled="!currentCode" @click="copy">复制</n-button>
+          <n-button size="small" type="primary" :disabled="!currentCode" @click="copy">{{ t('request.copy') }}</n-button>
         </div>
 
         <div class="hint">
-          变量按{{ envName ? '环境「' + envName + '」' : '「无环境」' }}解析成了实际值；「请求前」脚本不运行。
+          {{ t('request.snippetHint', { env: envName ? t('request.snippetEnv', { name: envName }) : t('request.snippetNoEnv') }) }}
         </div>
 
         <n-alert v-if="error" type="error" :show-icon="false">{{ error }}</n-alert>
         <n-alert v-else-if="missing.length" type="warning" :show-icon="false">
-          这些变量没有定义，代码里原样保留：{{ missing.join('、') }}
+          {{ t('request.snippetMissing', { vars: missing.join(t('request.listSeparator')) }) }}
         </n-alert>
 
         <n-spin :show="loading">

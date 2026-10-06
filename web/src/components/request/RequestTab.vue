@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NBadge,
@@ -78,6 +79,7 @@ const tabs = useTabsStore();
 const tree = useTreeStore();
 const ui = useUiStore();
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 /** 这个接口和云端对不上：标签页顶部一条红提示 + 「处理」入口（设计稿第 7 节） */
 const conflicted = computed(function () {
@@ -131,12 +133,12 @@ function setOption(key, value) {
  */
 const authLevels = computed(function () {
   const levels = folderChain(tree.folders, props.tab.folderId).map(function (folder) {
-    return { auth: folder.auth, label: '目录「' + folder.name + '」' };
+    return { auth: folder.auth, label: t('request.authLevelFolder', { name: folder.name }) };
   });
 
   levels.push({
     auth: projects.current ? projects.current.auth : null,
-    label: '项目'
+    label: t('request.authLevelProject')
   });
   return levels;
 });
@@ -152,9 +154,24 @@ const inheritAuthHint = computed(function () {
  * 和改地址、改请求头一样按「保存」落库（viewer 只读）。所以这里只动 `spec`，
  * 提交交给 `changedFields`。
  */
-const statusMenu = [{ label: '未设置', key: '' }].concat(
-  API_STATUSES.map(function (item) { return { label: item.label, key: item.value }; })
-);
+/** 状态的显示名按 value 映射到 request 区域的键（API_STATUSES 里的 label 不跟着语言走） */
+const STATUS_LABEL_KEYS = {
+  designing: 'statusDesigning',
+  developing: 'statusDeveloping',
+  done: 'statusDone',
+  deprecated: 'statusDeprecated'
+};
+
+function statusLabel(value) {
+  const key = STATUS_LABEL_KEYS[String(value)];
+  return key ? t('request.' + key) : t('request.statusUnset');
+}
+
+const statusMenu = computed(function () {
+  return [{ label: t('request.statusUnset'), key: '' }].concat(
+    API_STATUSES.map(function (item) { return { label: statusLabel(item.value), key: item.value }; })
+  );
+});
 
 /** 认不出来的旧状态一律当「未设置」显示，但 spec 里那个原值不动 —— 用户不主动改就不会被覆盖 */
 const currentStatusMeta = computed(function () {
@@ -162,7 +179,7 @@ const currentStatusMeta = computed(function () {
 });
 
 const statusTagText = computed(function () {
-  return currentStatusMeta.value ? currentStatusMeta.value.label : '未设置';
+  return currentStatusMeta.value ? statusLabel(currentStatusMeta.value.value) : t('request.statusUnset');
 });
 
 const statusColor = computed(function () {
@@ -302,7 +319,7 @@ function overrideHeader(row) {
     enabled: true
   });
   spec.value.params.headers = list;
-  message.success('已复制到接口自己的请求头，改完记得保存');
+  message.success(t('request.headerOverridden'));
 }
 
 /* ---------------- 断言与提取变量（第六轮第 1 节） ---------------- */
@@ -336,7 +353,7 @@ function onAddAssertion(payload) {
   spec.value.assertions = (spec.value.assertions || []).concat([row]);
   activePane.value = 'assertions';
   flashRow(row.id);
-  message.success('已加一条断言，记得保存');
+  message.success(t('request.assertionAdded'));
 }
 
 /** 同上，加的是提取变量那一张表 */
@@ -347,7 +364,7 @@ function onAddExtract(payload) {
   spec.value.extracts = (spec.value.extracts || []).concat([row]);
   activePane.value = 'assertions';
   flashRow(row.id);
-  message.success('已加一条提取变量，记得保存');
+  message.success(t('request.extractAdded'));
 }
 
 /* ---------------- 请求区 / 响应区之间的分隔线 ---------------- */
@@ -555,7 +572,7 @@ function onSend() {
   // 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）：按钮已经灰了，
   // 但地址栏回车、响应区的「重新发送」、历史标签页这些路都会走到这里，所以在这里兜一次。
   if (gateway.cloudSendBlocked) {
-    message.warning('网页版不能发送请求，请在客户端里使用');
+    message.warning(t('request.sendBlockedToast'));
     return;
   }
   tabs.sendRequest(projects.currentId, envs.selectedId);
@@ -571,7 +588,7 @@ function onCancel() {
 const moreMenu = computed(function () {
   return [
     // 还没保存的临时标签页没有接口可挂 —— 压测页是按接口开的，先让用户保存
-    { label: '压测…', key: 'load', disabled: !props.tab.apiId }
+    { label: t('request.loadTest'), key: 'load', disabled: !props.tab.apiId }
   ];
 });
 
@@ -596,7 +613,7 @@ const dbLocalAllowed = computed(function () {
 function onMoreMenu(key) {
   if (key !== 'load') return;
   if (!props.tab.apiId) {
-    message.warning('先保存这个接口，再压测');
+    message.warning(t('request.saveBeforeLoadTest'));
     return;
   }
   tabs.openLoad(props.tab.apiId);
@@ -630,13 +647,13 @@ function onPasteCurl(text) {
   current.auth = parsed.auth;
   // scripts 不在替换范围内，原样留着
 
-  message.success('已从 cURL 填充');
+  message.success(t('request.curlFilled'));
 }
 
 /* ---------------- 保存 ---------------- */
 
 function folderOptions() {
-  const options = [{ label: '（根目录）', value: null }];
+  const options = [{ label: t('request.rootFolder'), value: null }];
   (function walk(nodes, depth) {
     (nodes || []).forEach(function (node) {
       if (node.kind !== 'folder') return;
@@ -688,7 +705,7 @@ function changedFields(api, current) {
 
 async function save() {
   if (!projects.currentId) {
-    message.warning('还没有选中项目');
+    message.warning(t('request.noProjectSelected'));
     return;
   }
 
@@ -696,7 +713,7 @@ async function save() {
   if (!props.tab.apiId) {
     saveForm.value = {
       // 双击改过名就用改的名字，否则用地址
-      name: props.tab.customTitle ? props.tab.title : (props.tab.spec.url || '新建接口'),
+      name: props.tab.customTitle ? props.tab.title : (props.tab.spec.url || t('request.newApi')),
       folderId: props.tab.folderId || null
     };
     showSaveDialog.value = true;
@@ -705,7 +722,7 @@ async function save() {
 
   const patch = changedFields(props.tab.api, props.tab.spec);
   if (!Object.keys(patch).length) {
-    message.info('没有改动');
+    message.info(t('request.noChanges'));
     return;
   }
 
@@ -714,7 +731,7 @@ async function save() {
     const data = await apisApi.updateApi(props.tab.apiId, patch);
     tabs.markSaved(props.tab, data.api);
     await tree.refresh();
-    message.success('已保存');
+    message.success(t('request.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -724,7 +741,7 @@ async function save() {
 
 async function confirmSaveDraft() {
   if (!saveForm.value.name.trim()) {
-    message.warning('请填写接口名称');
+    message.warning(t('request.apiNameRequired'));
     return;
   }
 
@@ -738,7 +755,7 @@ async function confirmSaveDraft() {
     tabs.markSaved(props.tab, data.api);
     showSaveDialog.value = false;
     await tree.refresh();
-    message.success('已保存');
+    message.success(t('request.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -755,7 +772,7 @@ const crumbs = computed(function () {
   folderChain(tree.folders, props.tab.folderId).forEach(function (folder) {
     list.push(folder.name);
   });
-  list.push(props.tab.title || '新建请求');
+  list.push(props.tab.title || t('request.newRequest'));
   return list;
 });
 
@@ -777,16 +794,18 @@ async function renameTitle(name) {
   try {
     await tree.renameApi(props.tab.apiId, name);
     tabs.applyRename('api', props.tab.apiId, name);
-    message.success('已重命名');
+    message.success(t('request.renamed'));
   } catch (err) {
     message.error(err.message);
   }
 }
 
-const saveMenu = [
-  { label: '另存为…', key: 'save-as' },
-  { label: '复制为 cURL', key: 'copy-curl' }
-];
+const saveMenu = computed(function () {
+  return [
+    { label: t('request.saveAs'), key: 'save-as' },
+    { label: t('request.copyAsCurl'), key: 'copy-curl' }
+  ];
+});
 
 function onSaveMenu(key) {
   if (key === 'save-as') saveAs();
@@ -813,10 +832,10 @@ async function copyCurl() {
     const data = await loadCurl();
     await copyText(data.curl || '');
     message.success(data.missing && data.missing.length
-      ? '已复制 cURL（有未定义的变量：' + data.missing.join('、') + '）'
-      : '已复制 cURL');
+      ? t('request.copiedCurlMissing', { vars: data.missing.join(t('request.listSeparator')) })
+      : t('request.copiedCurl'));
   } catch (err) {
-    message.error('复制失败：' + err.message);
+    message.error(t('request.copyFailedReason', { reason: err.message }));
   }
 }
 
@@ -826,11 +845,11 @@ async function copyCurl() {
  */
 function saveAs() {
   if (!projects.currentId) {
-    message.warning('还没有选中项目');
+    message.warning(t('request.noProjectSelected'));
     return;
   }
 
-  const fallback = props.tab.apiId ? props.tab.title + ' 副本' : (props.tab.spec.url || '新建接口');
+  const fallback = props.tab.apiId ? props.tab.title + t('request.copySuffix') : (props.tab.spec.url || t('request.newApi'));
   saveForm.value = {
     name: fallback,
     folderId: props.tab.folderId || null
@@ -848,13 +867,15 @@ function enabledCount(rows) {
 }
 
 /** 鉴权页签后面跟的那个词，和 AuthEditor 里的类型下拉一致 */
-const AUTH_LABELS = {
-  inherit: '继承',
-  none: '无',
-  bearer: 'Bearer',
-  basic: 'Basic',
-  apikey: 'API Key'
-};
+const AUTH_LABELS = computed(function () {
+  return {
+    inherit: t('request.authInheritShort'),
+    none: t('request.none'),
+    bearer: 'Bearer',
+    basic: 'Basic',
+    apikey: 'API Key'
+  };
+});
 
 /**
  * 这个接口的 Mock 开着没有（临时标签页没有接口，就是没开）。
@@ -886,7 +907,7 @@ const paneStatus = computed(function () {
     hasDbOps: hasEnabledDbOp(spec.dbOps),
     // Mock 开着：和目录树右边那个绿点读的是同一份（tree store 里的接口），开关一变两处一起变
     mockOn: mockEnabledNow(),
-    auth: AUTH_LABELS[String(auth.type || 'inherit')] || '继承'
+    auth: AUTH_LABELS.value[String(auth.type || 'inherit')] || t('request.authInheritShort')
   };
 });
 
@@ -924,7 +945,7 @@ function openSaveExample() {
   const response = props.tab.result && props.tab.result.response;
   if (!response || !props.tab.apiId) return;
 
-  saveExampleName.value = response.status + ' 录制于 ' + stamp();
+  saveExampleName.value = t('request.recordedAt', { status: response.status, time: stamp() });
   // 只有 JSON 默认勾选；其他类型连这个选项都不显示
   saveExampleTemplatize.value = canTemplatize.value;
   showSaveExample.value = true;
@@ -1021,7 +1042,7 @@ async function saveSseExample() {
   savingExample.value = true;
   try {
     const data = await apisApi.createExample(tab.apiId, {
-      name: status + ' SSE 录制于 ' + stamp(),
+      name: t('request.sseRecordedAt', { status: status, time: stamp() }),
       status: status,
       headers: sseExampleHeaders(),
       body: JSON.stringify({ events: list, repeat: false }, null, 2),
@@ -1036,11 +1057,11 @@ async function saveSseExample() {
     activePane.value = 'mock';
 
     const notes = [];
-    if (tab.sseDropped) notes.push('事件超过上限，只保存了最近 2000 条');
-    if (cappedDelays) notes.push('有 ' + cappedDelays + ' 处间隔超过 60 秒，按 60 秒保存');
+    if (tab.sseDropped) notes.push(t('request.sseEventsCapped'));
+    if (cappedDelays) notes.push(t('request.sseDelayCapped', { n: cappedDelays }));
 
-    if (notes.length) message.warning('已存为 SSE 示例；' + notes.join('；'));
-    else message.success('已存为 SSE 示例');
+    if (notes.length) message.warning(t('request.savedSseWithNotes', { notes: notes.join(t('request.semicolonSeparator')) }));
+    else message.success(t('request.savedSseExample'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -1055,7 +1076,7 @@ async function saveExample(body, isTemplate) {
   savingExample.value = true;
   try {
     const data = await apisApi.createExample(props.tab.apiId, {
-      name: saveExampleName.value || (response.status + ' 录制于 ' + stamp()),
+      name: saveExampleName.value || t('request.recordedAt', { status: response.status, time: stamp() }),
       status: response.status,
       headers: (response.headers || []).map(function (pair) {
         return {
@@ -1076,7 +1097,7 @@ async function saveExample(body, isTemplate) {
     props.tab.api = data.api;
     // Mock 页签打开着（或下次打开）时直接选中刚存的这条
     if (data.example) props.tab.focusExampleId = data.example.id;
-    message.success(isTemplate ? '已存为模板示例' : '已存为示例');
+    message.success(isTemplate ? t('request.savedTemplateExample') : t('request.savedExample'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -1093,7 +1114,7 @@ function onKeydown(event) {
 
   // 只读角色连快捷键也要挡住，并说清楚为什么
   if (!projects.canEdit) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('request.readonlyCannotSave'));
     return;
   }
 
@@ -1126,8 +1147,8 @@ onBeforeUnmount(function () {
       放在面包屑上面，不挤工具栏。
     -->
     <div v-if="conflicted" class="conflict-bar">
-      <span class="conflict-text">这个接口和云端有冲突</span>
-      <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+      <span class="conflict-text">{{ t('request.conflictWithCloud') }}</span>
+      <n-button size="tiny" type="error" ghost @click="openConflict">{{ t('request.resolve') }}</n-button>
     </div>
 
     <!-- 面包屑：项目 › 目录… › 接口名，右边是保存 -->
@@ -1161,12 +1182,12 @@ onBeforeUnmount(function () {
             :options="statusMenu"
             @select="onStatusChange"
           >
-            <button class="status-tag" :style="{ color: statusColor }" title="接口状态">
+            <button class="status-tag" :style="{ color: statusColor }" :title="t('request.apiStatus')">
               <span class="status-dot" :style="{ background: statusColor }" />
               {{ statusTagText }}
             </button>
           </n-dropdown>
-          <span v-else class="status-tag readonly" :style="{ color: statusColor }" title="接口状态">
+          <span v-else class="status-tag readonly" :style="{ color: statusColor }" :title="t('request.apiStatus')">
             <span class="status-dot" :style="{ background: statusColor }" />
             {{ statusTagText }}
           </span>
@@ -1177,7 +1198,7 @@ onBeforeUnmount(function () {
             class="owner-select"
             size="small"
             clearable
-            placeholder="负责人"
+            :placeholder="t('request.owner')"
             :value="spec.ownerId"
             :options="ownerOptions"
             :disabled="!projects.canEdit"
@@ -1186,11 +1207,11 @@ onBeforeUnmount(function () {
         </template>
 
         <!-- 代码片段：当前请求的 cURL，一键复制（参考 Postman 右侧的 Code snippet） -->
-        <n-button size="small" quaternary title="代码片段（cURL）" @click="showSnippet = true">
+        <n-button size="small" quaternary :title="t('request.snippetButtonTitle')" @click="showSnippet = true">
           <template #icon>
             <n-icon :component="Code" />
           </template>
-          代码
+          {{ t('request.code') }}
         </n-button>
 
         <!--
@@ -1204,11 +1225,11 @@ onBeforeUnmount(function () {
           :show="commentCount > 0"
           :offset="[-2, 2]"
         >
-          <n-button size="small" quaternary title="评论" @click="openComments">
+          <n-button size="small" quaternary :title="t('request.comments')" @click="openComments">
             <template #icon>
               <n-icon :component="Message" />
             </template>
-            评论
+            {{ t('request.comments') }}
           </n-button>
         </n-badge>
         <template v-if="projects.canEdit">
@@ -1221,11 +1242,11 @@ onBeforeUnmount(function () {
           <template #icon>
             <n-icon :component="DeviceFloppy" />
           </template>
-          保存
+          {{ t('request.save') }}
         </n-button>
 
         <n-dropdown trigger="click" :options="saveMenu" @select="onSaveMenu">
-          <n-button size="small" quaternary title="更多保存方式">
+          <n-button size="small" quaternary :title="t('request.moreSaveOptions')">
             <template #icon>
               <n-icon :component="ChevronDown" />
             </template>
@@ -1242,7 +1263,7 @@ onBeforeUnmount(function () {
         :sending="tab.sending"
         :scope="scope"
         :send-blocked="gateway.cloudSendBlocked"
-        send-blocked-hint="云端不发送请求，请从本机的 apiloop 打开"
+        :send-blocked-hint="t('request.sendBlockedHint')"
         @update:method="(v) => { spec.method = v; }"
         @update:url="onUrlChange"
         @send="onSend"
@@ -1254,17 +1275,17 @@ onBeforeUnmount(function () {
       <n-tooltip v-if="loadBlocked" trigger="hover">
         <template #trigger>
           <span>
-            <n-button size="small" quaternary disabled title="更多操作">
+            <n-button size="small" quaternary disabled :title="t('request.moreActions')">
               <template #icon>
                 <n-icon :component="ChevronDown" />
               </template>
             </n-button>
           </span>
         </template>
-        网页版不能压测，请在客户端里使用
+        {{ t('request.loadBlockedHint') }}
       </n-tooltip>
       <n-dropdown v-else trigger="click" :options="moreMenu" @select="onMoreMenu">
-        <n-button size="small" quaternary title="更多操作">
+        <n-button size="small" quaternary :title="t('request.moreActions')">
           <template #icon>
             <n-icon :component="ChevronDown" />
           </template>
@@ -1274,9 +1295,9 @@ onBeforeUnmount(function () {
 
     <!-- 未定义的变量：发送前就提示，别等请求发出去才发现 -->
     <div v-if="undefinedVariables.length" class="var-hint">
-      <span>以下变量未定义：{{ undefinedVariables.join('、') }}</span>
+      <span>{{ t('request.undefinedVars', { vars: undefinedVariables.join(t('request.listSeparator')) }) }}</span>
       <n-button size="tiny" quaternary type="primary" @click="ui.setSidebarTab('env')">
-        去环境管理
+        {{ t('request.goToEnvironments') }}
       </n-button>
     </div>
 
@@ -1305,24 +1326,24 @@ onBeforeUnmount(function () {
             </span>
           </template>
           <div class="pane">
-            <p class="label">查询参数</p>
+            <p class="label">{{ t('request.queryParams') }}</p>
             <key-value-table
               :model-value="spec.params.query"
               :scope="scope"
               kind="query"
-              key-placeholder="参数名"
+              :key-placeholder="t('request.paramName')"
               @update:model-value="onQueryChange"
             />
 
             <!-- 地址里没有 :name 这种路径变量时，整块都不显示（和 Postman 一样） -->
             <template v-if="hasPathParams">
-              <p class="label">路径参数</p>
+              <p class="label">{{ t('request.pathParams') }}</p>
               <key-value-table
                 v-model="spec.params.path"
                 :scope="scope"
                 kind="path"
-                key-placeholder="参数名"
-                value-placeholder="值"
+                :key-placeholder="t('request.paramName')"
+                :value-placeholder="t('request.value')"
               />
             </template>
           </div>
@@ -1340,8 +1361,8 @@ onBeforeUnmount(function () {
               :scope="scope"
               kind="headers"
               :key-suggestions="HEADER_NAMES"
-              key-placeholder="请求头"
-              value-placeholder="值"
+              :key-placeholder="t('request.headerName')"
+              :value-placeholder="t('request.value')"
             />
 
             <!--
@@ -1350,15 +1371,15 @@ onBeforeUnmount(function () {
             -->
             <div v-if="inheritedHeaders.length" class="inherited">
               <p class="label">
-                继承的请求头
-                <span class="inherited-note">（来自项目 / 目录，发送时自动带上）</span>
+                {{ t('request.inheritedHeaders') }}
+                <span class="inherited-note">{{ t('request.inheritedHeadersNote') }}</span>
               </p>
 
               <div class="inherited-table">
                 <div class="row head">
-                  <div class="cell name">请求头</div>
-                  <div class="cell value">值</div>
-                  <div class="cell from">来自</div>
+                  <div class="cell name">{{ t('request.headerName') }}</div>
+                  <div class="cell value">{{ t('request.value') }}</div>
+                  <div class="cell from">{{ t('request.from') }}</div>
                   <div class="cell action" />
                 </div>
 
@@ -1368,8 +1389,8 @@ onBeforeUnmount(function () {
                   class="row"
                   :class="{ shadowed: row.shadowed, off: row.enabled === false }"
                   :title="row.shadowed
-                    ? '已被接口里的同名请求头覆盖'
-                    : (row.enabled === false ? '这一行在来源处被停用了，不会发出去' : '')"
+                    ? t('request.shadowedHint')
+                    : (row.enabled === false ? t('request.disabledAtSourceHint') : '')"
                 >
                   <div class="cell name">{{ row.key }}</div>
                   <div class="cell value">{{ row.value }}</div>
@@ -1378,10 +1399,10 @@ onBeforeUnmount(function () {
                     <button
                       v-if="!row.shadowed"
                       class="override-button"
-                      title="复制到接口自己的请求头里，方便改值"
+                      :title="t('request.overrideHint')"
                       @click="overrideHeader(row)"
                     >
-                      在这里覆盖
+                      {{ t('request.overrideHere') }}
                     </button>
                   </div>
                 </div>
@@ -1429,7 +1450,7 @@ onBeforeUnmount(function () {
         <n-tab-pane name="assertions">
           <template #tab>
             <span class="pane-tab">
-              断言<span v-if="paneStatus.hasChecks" class="pane-dot" />
+              {{ t('request.assertions') }}<span v-if="paneStatus.hasChecks" class="pane-dot" />
             </span>
           </template>
           <assertions-pane
@@ -1450,7 +1471,7 @@ onBeforeUnmount(function () {
         <n-tab-pane name="db">
           <template #tab>
             <span class="pane-tab">
-              数据库<span v-if="paneStatus.hasDbOps" class="pane-dot" />
+              {{ t('request.database') }}<span v-if="paneStatus.hasDbOps" class="pane-dot" />
             </span>
           </template>
           <db-ops-pane
@@ -1474,13 +1495,13 @@ onBeforeUnmount(function () {
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="response-fields" tab="响应说明">
+        <n-tab-pane name="response-fields" :tab="t('request.responseDocs')">
           <response-fields-tab :tab="tab" />
         </n-tab-pane>
 
-        <n-tab-pane name="settings" tab="设置">
+        <n-tab-pane name="settings" :tab="t('request.settings')">
           <div class="pane narrow">
-            <p class="label">这次请求的发送选项</p>
+            <p class="label">{{ t('request.sendOptions') }}</p>
             <div class="option-row">
               <n-switch
                 size="small"
@@ -1488,10 +1509,9 @@ onBeforeUnmount(function () {
                 @update:value="(v) => setOption('cookies', v)"
               />
               <div class="option-text">
-                <span class="option-title">自动管理 Cookie</span>
+                <span class="option-title">{{ t('request.autoCookies') }}</span>
                 <span class="option-desc">
-                  开启时每一跳都会自动带上 Cookie 库里匹配的 cookie，响应里的 Set-Cookie 也会写回；
-                  请求头里手写了 Cookie 的话，以手写的为准（但响应仍然写回）。
+                  {{ t('request.autoCookiesDesc') }}
                 </span>
               </div>
             </div>
@@ -1503,10 +1523,9 @@ onBeforeUnmount(function () {
                 @update:value="(v) => setOption('proxy', v)"
               />
               <div class="option-text">
-                <span class="option-title">使用系统代理</span>
+                <span class="option-title">{{ t('request.systemProxy') }}</span>
                 <span class="option-desc">
-                  按系统设置里的代理配置决定是否走代理（连不上的域名由「不走代理的地址列表」排除）。
-                  关掉就是这次直连。
+                  {{ t('request.systemProxyDesc') }}
                 </span>
               </div>
             </div>
@@ -1518,10 +1537,9 @@ onBeforeUnmount(function () {
                 @update:value="(v) => setOption('scripts', v)"
               />
               <div class="option-text">
-                <span class="option-title">执行脚本</span>
+                <span class="option-title">{{ t('request.runScripts') }}</span>
                 <span class="option-desc">
-                  这次请求执行项目和目录上的脚本，以及接口自己的「请求前」「响应后」脚本。
-                  关掉就一段都不执行，适合脚本写坏了一时改不回来的情况。
+                  {{ t('request.runScriptsDesc') }}
                 </span>
               </div>
             </div>
@@ -1530,7 +1548,7 @@ onBeforeUnmount(function () {
               前置接口（第十轮第 3 节）：上面三条是「这次请求」的开关，这一条不一样 ——
               它是**接口自己的设置**，会跟着「保存」存进 `apis.extra`，每次打开都生效。
             -->
-            <p class="label section">保存到接口的设置</p>
+            <p class="label section">{{ t('request.savedToApiSettings') }}</p>
             <div class="option-row">
               <n-switch
                 size="small"
@@ -1539,10 +1557,9 @@ onBeforeUnmount(function () {
                 @update:value="(v) => { spec.noPreflight = v; }"
               />
               <div class="option-text">
-                <span class="option-title">不使用前置接口</span>
+                <span class="option-title">{{ t('request.noPreflight') }}</span>
                 <span class="option-desc">
-                  发送这个接口时不自动调用项目 / 目录上配的「前置接口」（比如登录接口）。
-                  适合那个接口自己不需要登录态的情况。改完记得点「保存」。
+                  {{ t('request.noPreflightDesc') }}
                 </span>
               </div>
             </div>
@@ -1552,7 +1569,7 @@ onBeforeUnmount(function () {
         <n-tab-pane name="mock">
           <!-- Mock 开着时和 Body / 断言一样点一个绿点：一眼看出这个接口在对外提供假数据 -->
           <template #tab>
-            <span class="pane-tab" :title="paneStatus.mockOn ? 'Mock 已开启' : ''">
+            <span class="pane-tab" :title="paneStatus.mockOn ? t('request.mockEnabled') : ''">
               Mock<span v-if="paneStatus.mockOn" class="pane-dot" />
             </span>
           </template>
@@ -1600,25 +1617,25 @@ onBeforeUnmount(function () {
     <n-modal
       v-model:show="showSaveExample"
       preset="card"
-      title="保存为示例"
+      :title="t('request.saveAsExample')"
       style="width: 520px; max-width: 94vw"
     >
       <n-form>
-        <n-form-item label="名称">
-          <n-input v-model:value="saveExampleName" placeholder="示例名称" />
+        <n-form-item :label="t('request.name')">
+          <n-input v-model:value="saveExampleName" :placeholder="t('request.exampleName')" />
         </n-form-item>
         <n-form-item v-if="canTemplatize" :show-feedback="false">
           <n-checkbox v-model:checked="saveExampleTemplatize">
-            智能模板化（把手机号、姓名、时间等换成每次随机的数据）
+            {{ t('request.smartTemplatize') }}
           </n-checkbox>
         </n-form-item>
       </n-form>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showSaveExample = false">取消</n-button>
+          <n-button @click="showSaveExample = false">{{ t('app.cancel') }}</n-button>
           <n-button type="primary" @click="confirmSaveExample">
-            {{ saveExampleTemplatize && canTemplatize ? '下一步' : '保存' }}
+            {{ saveExampleTemplatize && canTemplatize ? t('request.next') : t('request.save') }}
           </n-button>
         </n-space>
       </template>
@@ -1631,22 +1648,22 @@ onBeforeUnmount(function () {
     <n-modal
       v-model:show="showSaveDialog"
       preset="card"
-      title="保存接口"
+      :title="t('request.saveApi')"
       style="width: 460px; max-width: 92vw"
     >
       <n-form>
-        <n-form-item label="名称">
-          <n-input v-model:value="saveForm.name" placeholder="接口名称" />
+        <n-form-item :label="t('request.name')">
+          <n-input v-model:value="saveForm.name" :placeholder="t('request.apiNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="目录">
+        <n-form-item :label="t('request.folder')">
           <n-select v-model:value="saveForm.folderId" :options="folderOptions()" />
         </n-form-item>
       </n-form>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showSaveDialog = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="confirmSaveDraft">保存</n-button>
+          <n-button @click="showSaveDialog = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" :loading="saving" @click="confirmSaveDraft">{{ t('request.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

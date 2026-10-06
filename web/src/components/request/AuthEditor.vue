@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NFormItem, NInput, NSelect, NSpace } from 'naive-ui';
 import VarInput from '@/components/common/VarInput.vue';
 
@@ -29,18 +30,24 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
-const TYPE_OPTIONS = [
-  { label: '继承父级', value: 'inherit' },
-  { label: '无鉴权', value: 'noauth' },
-  { label: 'Bearer Token', value: 'bearer' },
-  { label: 'Basic Auth', value: 'basic' },
-  { label: 'API Key', value: 'apikey' }
-];
+const { t } = useI18n();
 
-const API_KEY_IN_OPTIONS = [
-  { label: '加到请求头', value: 'header' },
-  { label: '加到查询参数', value: 'query' }
-];
+const TYPE_OPTIONS = computed(function () {
+  return [
+    { label: t('request.authTypeInherit'), value: 'inherit' },
+    { label: t('request.authTypeNoAuth'), value: 'noauth' },
+    { label: 'Bearer Token', value: 'bearer' },
+    { label: 'Basic Auth', value: 'basic' },
+    { label: 'API Key', value: 'apikey' }
+  ];
+});
+
+const API_KEY_IN_OPTIONS = computed(function () {
+  return [
+    { label: t('request.authKeyInHeader'), value: 'header' },
+    { label: t('request.authKeyInQuery'), value: 'query' }
+  ];
+});
 
 const unsupported = computed(function () {
   return Boolean(props.modelValue && props.modelValue.unsupported);
@@ -76,11 +83,11 @@ function patch(fields) {
 <template>
   <div class="auth-editor">
     <n-alert v-if="unsupported" type="warning" :show-icon="false">
-      导入的 {{ auth.type }} 鉴权暂不支持，发送时不生效。
+      {{ t('request.authUnsupported', { type: auth.type }) }}
     </n-alert>
 
     <template v-else>
-      <n-form-item label="鉴权方式" :show-feedback="false">
+      <n-form-item :label="t('request.authType')" :show-feedback="false">
         <n-select
           :value="currentType"
           :options="TYPE_OPTIONS"
@@ -96,7 +103,7 @@ function patch(fields) {
             :model-value="auth.token || ''"
             :readonly="disabled"
             :scope="scope"
-            placeholder="支持 {{变量}}"
+            :placeholder="t('request.authVarHint')"
             @update:model-value="(v) => { patch({ token: v }); }"
           />
         </n-form-item>
@@ -104,7 +111,7 @@ function patch(fields) {
 
       <template v-else-if="currentType === 'basic'">
         <n-space vertical size="small" class="full">
-          <n-form-item label="用户名" :show-feedback="false">
+          <n-form-item :label="t('request.authUsername')" :show-feedback="false">
             <var-input
               :model-value="auth.username || ''"
               :readonly="disabled"
@@ -112,7 +119,7 @@ function patch(fields) {
               @update:model-value="(v) => { patch({ username: v }); }"
             />
           </n-form-item>
-          <n-form-item label="密码" :show-feedback="false">
+          <n-form-item :label="t('request.authPassword')" :show-feedback="false">
             <n-input
               size="small"
               type="password"
@@ -143,7 +150,7 @@ function patch(fields) {
               @update:model-value="(v) => { patch({ value: v }); }"
             />
           </n-form-item>
-          <n-form-item label="位置" :show-feedback="false">
+          <n-form-item :label="t('request.authInPosition')" :show-feedback="false">
             <n-select
               size="small"
               :value="auth.in === 'query' ? 'query' : 'header'"
@@ -156,9 +163,9 @@ function patch(fields) {
       </template>
 
       <p v-else-if="currentType === 'inherit'" class="hint">
-        {{ inheritHint || '沿用上一级的鉴权设置。' }}
+        {{ inheritHint || t('request.authInheritHint') }}
       </p>
-      <p v-else class="hint">这个请求不携带鉴权信息。</p>
+      <p v-else class="hint">{{ t('request.authNoAuthHint') }}</p>
     </template>
   </div>
 </template>

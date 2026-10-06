@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NModal, NSpace, NSpin } from 'naive-ui';
 import * as templatizeApi from '@/api/templatize';
 
@@ -20,6 +21,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:show', 'confirm']);
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const errorText = ref('');
@@ -82,7 +85,7 @@ function confirm() {
   <n-modal
     :show="show"
     preset="card"
-    title="智能模板化"
+    :title="t('common.templatizeTitle')"
     style="width: 640px; max-width: 94vw"
     @update:show="emit('update:show', $event)"
   >
@@ -99,19 +102,19 @@ function confirm() {
 
           <template v-else-if="!replacements.length">
             <n-alert type="info" :show-icon="false" class="notice">
-              没有找到可以随机化的值，内容保持不变。
+              {{ t('common.templatizeNone') }}
             </n-alert>
           </template>
 
           <template v-else>
             <p class="tip">
-              下面这些值会被换成每次随机的占位符，结构和字段类型不变。确认后才会生效。
+              {{ t('common.templatizeTip') }}
             </p>
             <div class="table">
               <div class="row head">
-                <span class="cell path">路径</span>
-                <span class="cell from">原值</span>
-                <span class="cell ph">占位符</span>
+                <span class="cell path">{{ t('common.templatizePath') }}</span>
+                <span class="cell from">{{ t('common.templatizeFrom') }}</span>
+                <span class="cell ph">{{ t('common.templatizePlaceholder') }}</span>
               </div>
               <div v-for="(item, index) in replacements" :key="index" class="row">
                 <span class="cell path" :title="item.path">{{ item.path }}</span>
@@ -119,7 +122,7 @@ function confirm() {
                 <span class="cell ph">{{ item.placeholder }}</span>
               </div>
             </div>
-            <p class="tip">共 {{ replacements.length }} 处替换。</p>
+            <p class="tip">{{ t('common.templatizeCount', { n: replacements.length }) }}</p>
           </template>
         </template>
       </n-spin>
@@ -127,9 +130,9 @@ function confirm() {
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="close">取消</n-button>
+        <n-button @click="close">{{ t('app.cancel') }}</n-button>
         <n-button type="primary" :disabled="!canConfirm" :loading="loading" @click="confirm">
-          确认替换
+          {{ t('common.templatizeConfirm') }}
         </n-button>
       </n-space>
     </template>

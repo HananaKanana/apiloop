@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NCheckbox, NEmpty, NIcon, NInput, NSelect, NTag, useMessage } from 'naive-ui';
 import { Trash } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -20,6 +21,7 @@ const props = defineProps({
   tab: { type: Object, required: true }
 });
 
+const { t } = useI18n();
 const message = useMessage();
 const projects = useProjectStore();
 
@@ -50,7 +52,10 @@ const examples = computed(function () {
 const exampleOptions = computed(function () {
   return examples.value.map(function (example, index) {
     return {
-      label: (example.name || '示例 ' + (index + 1)) + '（' + example.status + '）',
+      label: t('fields.exampleOption', {
+        name: example.name || t('fields.unnamedExample', { n: index + 1 }),
+        status: example.status
+      }),
       value: example.id
     };
   });
@@ -74,7 +79,7 @@ const canGenerate = computed(function () {
 function generate() {
   const example = examples.value.find(function (item) { return item.id === currentExampleId.value; });
   if (!example) {
-    message.warning('先选一个示例');
+    message.warning(t('fields.selectExampleFirst'));
     return;
   }
 
@@ -88,8 +93,8 @@ function generate() {
   spec.value.responseFields = merged.fields;
   missingPaths.value = merged.missing;
 
-  if (!result.fields.length) message.warning('这个示例里没有可列的字段');
-  else message.success('列出了 ' + result.fields.length + ' 个字段');
+  if (!result.fields.length) message.warning(t('fields.noFieldsInExample'));
+  else message.success(t('fields.generatedCount', { n: result.fields.length }));
 }
 
 /* ---------------- 增删改 ---------------- */
@@ -120,11 +125,11 @@ const newPath = ref('');
 function addField() {
   const path = newPath.value.trim();
   if (!path) {
-    message.warning('填一个字段路径，比如 data.list[].id');
+    message.warning(t('fields.pathRequired'));
     return;
   }
   if (fields.value.some(function (field) { return field.path === path; })) {
-    message.warning('这个路径已经有了');
+    message.warning(t('fields.pathExists'));
     return;
   }
 
@@ -145,7 +150,7 @@ function isMissing(path) {
 <template>
   <div class="pane">
     <div class="toolbar">
-      <span class="label">响应字段说明</span>
+      <span class="label">{{ t('fields.title') }}</span>
       <n-select
         v-if="canGenerate"
         class="example-select"
@@ -155,26 +160,25 @@ function isMissing(path) {
         @update:value="(value) => { exampleId = value; }"
       />
       <n-button size="small" secondary :disabled="!canGenerate || !canEdit" @click="generate">
-        从示例生成
+        {{ t('fields.generateFromExample') }}
       </n-button>
       <n-button v-if="missingPaths.length && canEdit" size="small" quaternary @click="removeMissing">
-        清掉示例里没有的（{{ missingPaths.length }}）
+        {{ t('fields.clearMissing', { n: missingPaths.length }) }}
       </n-button>
-      <span v-if="!tab.apiId" class="hint">先保存成接口，才能从示例生成</span>
-      <span v-else-if="!examples.length" class="hint">这个接口还没有示例</span>
+      <span v-if="!tab.apiId" class="hint">{{ t('fields.saveFirstHint') }}</span>
+      <span v-else-if="!examples.length" class="hint">{{ t('fields.noExamplesHint') }}</span>
     </div>
 
     <p class="tip">
-      给前端和对接方看的：这个字段是什么意思。说明会出现在分享出去的接口文档里，
-      也会带进导出的 OpenAPI。
+      {{ t('fields.tip') }}
     </p>
 
     <div v-if="fields.length" class="grid">
       <div class="grid-head">
-        <span class="col-path">字段</span>
-        <span class="col-type">类型</span>
-        <span class="col-desc">说明</span>
-        <span class="col-required">必有</span>
+        <span class="col-path">{{ t('fields.colField') }}</span>
+        <span class="col-type">{{ t('fields.colType') }}</span>
+        <span class="col-desc">{{ t('fields.colDesc') }}</span>
+        <span class="col-required">{{ t('fields.colRequired') }}</span>
         <span class="col-actions" />
       </div>
 
@@ -187,7 +191,7 @@ function isMissing(path) {
         <span class="col-path" :style="{ paddingLeft: (10 + depthOf(field.path) * 14) + 'px' }">
           <span class="leaf">{{ leafOf(field.path) }}</span>
           <span class="full-path" :title="field.path">{{ field.path }}</span>
-          <n-tag v-if="isMissing(field.path)" size="tiny" :bordered="false">示例里已经没有</n-tag>
+          <n-tag v-if="isMissing(field.path)" size="tiny" :bordered="false">{{ t('fields.missingTag') }}</n-tag>
         </span>
 
         <span class="col-type">
@@ -205,7 +209,7 @@ function isMissing(path) {
             size="tiny"
             :value="field.desc"
             :disabled="!canEdit"
-            placeholder="这个字段是什么意思"
+            :placeholder="t('fields.descPlaceholder')"
             @update:value="(value) => updateField(index, { desc: value })"
           />
         </span>
@@ -219,7 +223,7 @@ function isMissing(path) {
         </span>
 
         <span class="col-actions">
-          <n-button size="tiny" quaternary title="删除这一行" :disabled="!canEdit" @click="removeField(index)">
+          <n-button size="tiny" quaternary :title="t('fields.deleteRow')" :disabled="!canEdit" @click="removeField(index)">
             <template #icon>
               <n-icon :component="Trash" />
             </template>
@@ -228,17 +232,17 @@ function isMissing(path) {
       </div>
     </div>
 
-    <n-empty v-else class="empty" size="small" description="还没有字段。可以从示例生成，或者手动加一行。" />
+    <n-empty v-else class="empty" size="small" :description="t('fields.empty')" />
 
     <div class="add-row">
       <n-input
         v-model:value="newPath"
         size="small"
-        placeholder="手动加一行：字段路径，比如 data.list[].id"
+        :placeholder="t('fields.addPathPlaceholder')"
         :disabled="!canEdit"
         @keyup.enter="addField"
       />
-      <n-button size="small" :disabled="!canEdit" @click="addField">添加</n-button>
+      <n-button size="small" :disabled="!canEdit" @click="addField">{{ t('fields.add') }}</n-button>
     </div>
   </div>
 </template>

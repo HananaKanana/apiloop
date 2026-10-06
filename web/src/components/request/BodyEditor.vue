@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -44,6 +45,7 @@ const message = useMessage();
 const envs = useEnvStore();
 const projects = useProjectStore();
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 /**
  * 直接打开云端、云端又不替网页发请求（SERVER_SEND=0）：拉 GraphQL schema 也要发一个请求，
@@ -54,14 +56,23 @@ const schemaBlocked = computed(function () {
   return gateway.cloudSendBlocked;
 });
 
-const MODE_OPTIONS = [
-  { label: '无', value: 'none' },
-  { label: 'JSON / 文本', value: 'raw' },
-  { label: '表单 (urlencoded)', value: 'urlencoded' },
-  { label: '表单 (form-data)', value: 'formdata' },
-  { label: '二进制', value: 'binary' },
-  { label: 'GraphQL', value: 'graphql' }
-];
+const MODE_OPTIONS = computed(function () {
+  return [
+    { label: t('request.none'), value: 'none' },
+    { label: t('request.bodyModeRaw'), value: 'raw' },
+    { label: t('request.bodyModeUrlencoded'), value: 'urlencoded' },
+    { label: t('request.bodyModeFormdata'), value: 'formdata' },
+    { label: t('request.bodyModeBinary'), value: 'binary' },
+    { label: 'GraphQL', value: 'graphql' }
+  ];
+});
+
+const KIND_OPTIONS = computed(function () {
+  return [
+    { label: t('request.formKindText'), value: 'text' },
+    { label: t('request.formKindFile'), value: 'file' }
+  ];
+});
 
 const LANGUAGE_OPTIONS = [
   { label: 'JSON', value: 'json' },
@@ -78,7 +89,9 @@ const uploading = ref(false);
 const editorRef = ref(null);
 
 /** 美化按钮的悬停说明。放在脚本里写，模板里直接写 {{变量}} 会被当成插值 */
-const FORMAT_HINT = '⇧⌥F。带 {{变量}} 也能美化；只调整空白，数字和字符串都一字不改';
+const FORMAT_HINT = computed(function () {
+  return t('request.formatHint');
+});
 
 function formatBody() {
   if (editorRef.value) editorRef.value.format();
@@ -117,11 +130,13 @@ const gqlUrl = computed(function () {
 const gqlTypeCount = computed(function () { return typeCount(gqlSchema.value); });
 
 const gqlStatus = computed(function () {
-  if (gqlLoading.value) return 'Schema：加载中…';
-  if (gqlError.value) return 'Schema：加载失败';
-  if (!gqlSchema.value) return 'Schema：未加载';
-  return 'Schema：已加载（' + gqlTypeCount.value + ' 个类型）· ' +
-    formatLoadedAt(gqlLoadedAt.value);
+  if (gqlLoading.value) return t('request.gqlSchemaLoading');
+  if (gqlError.value) return t('request.gqlSchemaError');
+  if (!gqlSchema.value) return t('request.gqlSchemaNotLoaded');
+  return t('request.gqlSchemaLoaded', {
+    n: gqlTypeCount.value,
+    time: formatLoadedAt(gqlLoadedAt.value)
+  });
 });
 
 /** 切到别的接口 / 改了地址：从缓存里取那一份（没有就是未加载） */
@@ -137,15 +152,15 @@ watch(gqlUrl, syncGqlFromCache, { immediate: true });
 async function loadGqlSchema() {
   // 网页版、云端不替网页发请求：按钮已经灰了，这里兜一次
   if (schemaBlocked.value) {
-    message.warning('网页版不能获取 Schema，请在客户端里使用');
+    message.warning(t('request.gqlSchemaBlockedToast'));
     return;
   }
   if (!props.projectId) {
-    message.warning('还没有选中项目');
+    message.warning(t('request.noProjectSelected'));
     return;
   }
   if (!gqlUrl.value) {
-    message.warning('先填接口地址');
+    message.warning(t('request.fillUrlFirst'));
     return;
   }
 
@@ -163,7 +178,7 @@ async function loadGqlSchema() {
     putSchema(gqlUrl.value, data.schema);
     gqlSchema.value = data.schema;
     gqlLoadedAt.value = Date.now();
-    message.success('Schema 已加载');
+    message.success(t('request.schemaLoaded'));
   } catch (err) {
     gqlSchema.value = null;
     gqlLoadedAt.value = 0;
@@ -290,7 +305,7 @@ async function onFilePicked(event) {
     } else {
       body.value.file = { src: data.src };
     }
-    message.success('已上传 ' + data.name);
+    message.success(t('request.uploaded', { name: data.name }));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -321,7 +336,7 @@ async function onFilePicked(event) {
       <!-- 语言没设置时下拉框按 JSON 显示，这里也得按 JSON 算，否则下拉框写着 JSON 却没有按钮 -->
       <n-tooltip v-if="mode === 'raw' && (body.language || 'json') === 'json'" trigger="hover">
         <template #trigger>
-          <n-button size="small" quaternary @click="formatBody">美化</n-button>
+          <n-button size="small" quaternary @click="formatBody">{{ t('request.format') }}</n-button>
         </template>
         {{ FORMAT_HINT }}
       </n-tooltip>
@@ -343,9 +358,9 @@ async function onFilePicked(event) {
         <div class="form-table" :class="{ 'with-kind': mode === 'formdata' }">
           <div class="row head">
             <div class="cell check" />
-            <div class="cell key">名称</div>
+            <div class="cell key">{{ t('request.name') }}</div>
             <div class="cell kind" />
-            <div class="cell value">值</div>
+            <div class="cell value">{{ t('request.value') }}</div>
             <div class="cell action" />
           </div>
 
@@ -363,7 +378,7 @@ async function onFilePicked(event) {
                 size="small"
                 :value="row.key"
                 :theme-overrides="BARE_INPUT_THEME"
-                placeholder="名称"
+                :placeholder="t('request.name')"
                 @update:value="(v) => updateFormRow(index, { key: v })"
               />
             </div>
@@ -373,7 +388,7 @@ async function onFilePicked(event) {
                 size="small"
                 style="width: 78px"
                 :value="row.kind === 'file' ? 'file' : 'text'"
-                :options="[{ label: '文本', value: 'text' }, { label: '文件', value: 'file' }]"
+                :options="KIND_OPTIONS"
                 @update:value="(v) => updateFormRow(index, { kind: v })"
               />
             </div>
@@ -395,14 +410,14 @@ async function onFilePicked(event) {
                   :disabled="uploading"
                   @click="pickFile({ kind: 'form', index: index })"
                 >
-                  {{ uploading ? '上传中…' : '选择文件' }}
+                  {{ uploading ? t('request.uploading') : t('request.chooseFile') }}
                 </button>
               </template>
               <var-input
                 v-else
                 :model-value="row.value"
                 :scope="scope"
-                placeholder="值"
+                :placeholder="t('request.value')"
                 @update:model-value="(v) => updateFormRow(index, { value: v })"
               />
             </div>
@@ -410,7 +425,7 @@ async function onFilePicked(event) {
               <button
                 v-if="row.key || row.value"
                 class="delete-button"
-                title="删除这一行"
+                :title="t('request.deleteRow')"
                 @click="removeFormRow(index)"
               >
                 <n-icon size="15" :component="Trash" />
@@ -423,9 +438,9 @@ async function onFilePicked(event) {
       <template v-else-if="mode === 'binary'">
         <n-space align="center" :size="8">
           <n-button size="small" :loading="uploading" @click="pickFile({ kind: 'binary' })">
-            选择文件
+            {{ t('request.chooseFile') }}
           </n-button>
-          <span class="file-path">{{ (body.file && body.file.src) || '尚未选择' }}</span>
+          <span class="file-path">{{ (body.file && body.file.src) || t('request.notChosen') }}</span>
         </n-space>
       </template>
 
@@ -448,11 +463,11 @@ async function onFilePicked(event) {
                     <template #icon>
                       <n-icon :component="Refresh" />
                     </template>
-                    {{ gqlSchema ? '刷新' : '获取 Schema' }}
+                    {{ gqlSchema ? t('request.refresh') : t('request.gqlFetchSchema') }}
                   </n-button>
                 </span>
               </template>
-              网页版不能获取 Schema，请在客户端里使用（或让管理员在云端开启发送）
+              {{ t('request.gqlSchemaBlockedHint') }}
             </n-tooltip>
             <n-button
               v-else
@@ -464,7 +479,7 @@ async function onFilePicked(event) {
               <template #icon>
                 <n-icon :component="Refresh" />
               </template>
-              {{ gqlSchema ? '刷新' : '获取 Schema' }}
+              {{ gqlSchema ? t('request.refresh') : t('request.gqlFetchSchema') }}
             </n-button>
             <n-button
               v-if="gqlSchema"
@@ -476,7 +491,7 @@ async function onFilePicked(event) {
               <template #icon>
                 <n-icon :component="Book" />
               </template>
-              文档
+              {{ t('request.docs') }}
             </n-button>
           </div>
 
@@ -498,7 +513,7 @@ async function onFilePicked(event) {
           </div>
 
           <div class="gql-block">
-            <p class="label">Variables（JSON）</p>
+            <p class="label">{{ t('request.gqlVariables') }}</p>
             <code-editor
               :model-value="(body.graphql && body.graphql.variables) || ''"
               language="json"
@@ -509,7 +524,7 @@ async function onFilePicked(event) {
         </div>
       </template>
 
-      <p v-else class="empty">这个请求不带请求体。</p>
+      <p v-else class="empty">{{ t('request.bodyEmpty') }}</p>
     </div>
 
     <input ref="fileInput" type="file" class="hidden-input" @change="onFilePicked" />

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NCheckbox, NIcon, NInput } from 'naive-ui';
 import { Eye, EyeOff, Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
@@ -29,6 +30,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+
+const { t } = useI18n();
 
 /* ---------------- 变量名那一列的宽度，可以拖 ---------------- */
 
@@ -159,7 +162,8 @@ function removeRow(index) {
 
 const dialog = useDialog();
 
-const SECRET_HINT = '只有你自己能看到，会在你登录的设备之间同步，不会同步给其他成员';
+/** 保密变量的说明：悬停提示和「设为保密」对话框共用一份，要跟着语言变 */
+const secretHint = computed(function () { return t('common.secretHint'); });
 
 /**
  * 点眼睛：
@@ -181,10 +185,10 @@ function toggleSecret(item) {
   }
 
   dialog.create({
-    title: '设为保密变量',
-    content: '设为保密后，这个值只有你自己能看到，会在你登录的设备之间同步，不会同步给其他成员。',
-    positiveText: '设为保密',
-    negativeText: '取消',
+    title: t('common.secretDialogTitle'),
+    content: t('common.secretDialogBody'),
+    positiveText: t('common.secretDialogConfirm'),
+    negativeText: t('app.cancel'),
     onPositiveClick: function () { updateRow(item.index, { secret: true }); }
   });
 }
@@ -195,13 +199,13 @@ function toggleSecret(item) {
     <div class="row head">
       <div class="cell check" />
       <div class="cell key">
-        变量名
+        {{ t('common.varName') }}
         <!-- 拖这条竖线调「变量名」这一列的宽度 -->
-        <span class="col-resizer" title="拖动调整列宽" @mousedown.prevent="startResize" />
+        <span class="col-resizer" :title="t('common.resizeColumn')" @mousedown.prevent="startResize" />
       </div>
-      <div class="cell value">值</div>
+      <div class="cell value">{{ t('common.value') }}</div>
       <div class="cell secret" />
-      <div class="cell desc">描述</div>
+      <div class="cell desc">{{ t('common.description') }}</div>
       <div class="cell action" />
     </div>
 
@@ -227,7 +231,7 @@ function toggleSecret(item) {
           :value="item.row.key"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
-          placeholder="变量名"
+          :placeholder="t('common.varName')"
           @update:value="(v) => { updateRow(item.index, { key: v }); }"
         />
       </div>
@@ -239,8 +243,8 @@ function toggleSecret(item) {
           :type="item.row.secret ? 'password' : 'text'"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
-          :placeholder="item.row.secret ? '只有你自己能看到' : '值'"
-          :title="item.row.secret ? SECRET_HINT : ''"
+          :placeholder="item.row.secret ? t('common.secretValuePlaceholder') : t('common.value')"
+          :title="item.row.secret ? secretHint : ''"
           @update:value="(v) => { updateRow(item.index, { value: v }); }"
         />
       </div>
@@ -255,7 +259,7 @@ function toggleSecret(item) {
           class="icon-button"
           :class="{ on: item.row.secret }"
           :disabled="disabled"
-          :title="item.row.secret ? SECRET_HINT + '，点一下改回明文' : '点一下设为保密（只有你自己能看到，会在你的设备之间同步）'"
+          :title="item.row.secret ? t('common.secretToggleOffTitle', { hint: secretHint }) : t('common.secretToggleOnTitle')"
           @click="toggleSecret(item)"
         >
           <n-icon size="15" :component="item.row.secret ? EyeOff : Eye" />
@@ -268,7 +272,7 @@ function toggleSecret(item) {
           :value="item.row.desc || ''"
           :disabled="disabled"
           :theme-overrides="BARE_INPUT_THEME"
-          placeholder="描述"
+          :placeholder="t('common.description')"
           @update:value="(v) => { updateRow(item.index, { desc: v }); }"
         />
       </div>
@@ -277,7 +281,7 @@ function toggleSecret(item) {
         <button
           v-if="!disabled && (item.row.key || item.row.value || item.row.desc)"
           class="delete-button"
-          title="删除这一行"
+          :title="t('common.deleteRow')"
           @click="removeRow(item.index)"
         >
           <n-icon size="15" :component="Trash" />

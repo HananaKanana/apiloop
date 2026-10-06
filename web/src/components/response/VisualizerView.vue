@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Handlebars from 'handlebars';
 
 /**
@@ -14,6 +15,8 @@ const props = defineProps({
   visualizer: { type: Object, required: true }
 });
 
+const { t } = useI18n();
+
 /** 放进 <script> 里的 JSON：把 `</` 拆开，免得数据里的「结束 script 标签」提前结束脚本 */
 function inlineJson(value) {
   return JSON.stringify(value === undefined ? null : value).replace(/<\//g, '<\\/');
@@ -25,7 +28,7 @@ const rendered = computed(function () {
   try {
     html = Handlebars.compile(String(props.visualizer.template || ''))(data);
   } catch (err) {
-    return { error: '模板渲染失败：' + err.message };
+    return { error: t('response.templateRenderError', { message: err.message }) };
   }
 
   const bootstrap = '<script>window.pm = { getData: function (callback) { callback(null, ' +

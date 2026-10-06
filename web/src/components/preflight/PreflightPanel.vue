@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NCheckbox, NForm, NFormItem, NInput, NSelect, NTag } from 'naive-ui';
 import {
   DEFAULT_MISSING_NAME,
@@ -28,6 +29,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+const { t } = useI18n();
 
 const value = computed(function () { return props.modelValue || null; });
 const options = computed(function () {
@@ -70,12 +72,12 @@ function onMissingName(text) {
 <template>
   <div class="preflight">
     <n-form label-placement="top">
-      <n-form-item label="前置接口">
+      <n-form-item :label="t('preflight.label')">
         <n-select
           :value="selected"
           :options="options"
           :disabled="disabled"
-          placeholder="选一个接口（通常是登录接口）"
+          :placeholder="t('preflight.selectPlaceholder')"
           @update:value="onSelect"
         />
       </n-form-item>
@@ -88,7 +90,7 @@ function onMissingName(text) {
           :disabled="disabled"
           @update:checked="onMissingToggle"
         >
-          变量
+          {{ t('preflight.variableLabel') }}
         </n-checkbox>
         <n-input
           size="small"
@@ -98,7 +100,7 @@ function onMissingName(text) {
           placeholder="token"
           @update:value="onMissingName"
         />
-        <span class="cond-text">没有值时，先调用它</span>
+        <span class="cond-text">{{ t('preflight.whenMissingSuffix') }}</span>
       </div>
 
       <div class="cond">
@@ -107,7 +109,7 @@ function onMissingName(text) {
           :disabled="disabled"
           @update:checked="(v) => patch({ retryOn401: v })"
         >
-          响应是 401 时，自动调用后重发一次
+          {{ t('preflight.retryOn401Label') }}
         </n-checkbox>
       </div>
 
@@ -121,8 +123,7 @@ function onMissingName(text) {
     </p>
 
     <p class="tip">
-      前置接口要自己把 token 存起来（在它的「断言」页签里提取变量，或者写响应后脚本）——
-      这里只是「什么时候调它」。它自己不会再触发前置接口。
+      {{ t('preflight.tip') }}
     </p>
   </div>
 </template>

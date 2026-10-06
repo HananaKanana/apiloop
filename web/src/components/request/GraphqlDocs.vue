@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { typeDoc, typeIndex, rootTypes } from '@/utils/graphqlSchema';
 
 /**
@@ -15,6 +16,8 @@ const props = defineProps({
   /** introspection 的 `data`（含 `__schema`） */
   schema: { type: Object, default: null }
 });
+
+const { t } = useI18n();
 
 /** 正在看的类型栈（空 = 根那一层）；点字段的类型会压进去，返回就弹出来 */
 const stack = ref([]);
@@ -51,8 +54,8 @@ watch(function () { return props.schema; }, function () { stack.value = []; });
 <template>
   <div class="docs">
     <div class="head">
-      <button v-if="canBack" class="back" @click="back">← 返回</button>
-      <span class="title">{{ current ? current.name : '文档' }}</span>
+      <button v-if="canBack" class="back" @click="back">{{ t('request.docsBack') }}</button>
+      <span class="title">{{ current ? current.name : t('request.docs') }}</span>
       <span v-if="current" class="kind">{{ current.kind }}</span>
     </div>
 
@@ -92,17 +95,17 @@ watch(function () { return props.schema; }, function () { stack.value = []; });
         </div>
 
         <p v-if="!current.fields.length && !current.enumValues.length" class="empty">
-          这个类型没有可列的字段（可能是标量或枚举）。
+          {{ t('request.docsEmptyType') }}
         </p>
       </template>
 
       <template v-else>
-        <p class="hint">从 Query / Mutation 开始点进去看类型、字段和参数。</p>
+        <p class="hint">{{ t('request.docsHint') }}</p>
         <button v-for="root in roots" :key="root.key" class="root" @click="openRoot(root.type)">
           <span class="name">{{ root.label }}</span>
           <span class="root-type">{{ root.type.name }}</span>
         </button>
-        <p v-if="!roots.length" class="empty">这份 schema 里没有 Query。</p>
+        <p v-if="!roots.length" class="empty">{{ t('request.docsNoQuery') }}</p>
       </template>
     </div>
   </div>

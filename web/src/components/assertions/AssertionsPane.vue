@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NCheckbox, NInput, NSelect } from 'naive-ui';
 import {
   EXTRACT_PATH_PLACEHOLDER,
@@ -38,9 +39,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:assertions', 'update:extracts']);
 
-/** 期望值里可以写变量 —— 这条说明放在 script 里，模板的 {{ }} 插值里不能出现 `}}` */
-const VALUE_PLACEHOLDER = '期望值（可以写 {{变量}}）';
-const VAR_EXAMPLE = '{{名字}}';
+const { t } = useI18n();
 
 const rootRef = ref(null);
 
@@ -107,17 +106,17 @@ watch(function () { return props.highlightId; }, function (id) {
 <template>
   <div ref="rootRef" class="pane">
     <p class="label">
-      断言
-      <span class="note">收到响应后执行（在「响应后」脚本之前，脚本里能用刚提取的变量）</span>
+      {{ t('assertions.title') }}
+      <span class="note">{{ t('assertions.note') }}</span>
     </p>
 
     <div class="table">
       <div class="row head in-assert">
         <div class="cell" />
-        <div class="cell">检查什么</div>
-        <div class="cell">字段 / 名称</div>
-        <div class="cell">比较方式</div>
-        <div class="cell">期望值</div>
+        <div class="cell">{{ t('assertions.checkWhat') }}</div>
+        <div class="cell">{{ t('assertions.fieldOrName') }}</div>
+        <div class="cell">{{ t('assertions.compareBy') }}</div>
+        <div class="cell">{{ t('assertions.expectedValue') }}</div>
         <div class="cell" />
       </div>
 
@@ -180,25 +179,25 @@ watch(function () { return props.highlightId; }, function (id) {
             size="small"
             :value="row.value"
             :disabled="disabled || NO_VALUE_OPS[row.op] === true"
-            :placeholder="NO_VALUE_OPS[row.op] ? '不用填' : VALUE_PLACEHOLDER"
+            :placeholder="NO_VALUE_OPS[row.op] ? t('assertions.noValueNeeded') : t('assertions.valuePlaceholder')"
             @update:value="(v) => patchAssertion(row.id, { value: v })"
           />
         </div>
 
         <div class="cell action">
           <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="removeAssertion(row.id)">
-            删除
+            {{ t('app.delete') }}
           </n-button>
         </div>
       </div>
 
-      <div v-if="!assertions.length" class="empty">还没有断言。点下面的按钮加一条。</div>
+      <div v-if="!assertions.length" class="empty">{{ t('assertions.emptyAssertions') }}</div>
     </div>
 
     <div class="tools">
-      <n-button v-if="!disabled" size="small" @click="addAssertion(null)">+ 添加断言</n-button>
+      <n-button v-if="!disabled" size="small" @click="addAssertion(null)">{{ t('assertions.addAssertion') }}</n-button>
       <template v-if="!disabled">
-        <span class="preset-label">常用：</span>
+        <span class="preset-label">{{ t('assertions.commonPresets') }}</span>
         <n-button
           v-for="preset in PRESETS"
           :key="preset.label"
@@ -212,21 +211,21 @@ watch(function () { return props.highlightId; }, function (id) {
     </div>
 
     <p class="label extracts-label">
-      提取变量
-      <span class="note">把响应里的值存成变量，下一个请求就能用 {{ VAR_EXAMPLE }} 引用</span>
+      {{ t('assertions.extracts') }}
+      <span class="note">{{ t('assertions.extractNote') }}</span>
     </p>
 
     <div v-if="!hasEnvironment" class="env-hint">
-      当前没有选环境（或者选的是内置的 Mock 环境），提取到「环境」的变量不会保存。
+      {{ t('assertions.envHint') }}
     </div>
 
     <div class="table">
       <div class="row head in-extract">
         <div class="cell" />
-        <div class="cell">从哪里取</div>
-        <div class="cell">路径 / 头名 / 正则</div>
-        <div class="cell">存到</div>
-        <div class="cell">变量名</div>
+        <div class="cell">{{ t('assertions.extractFrom') }}</div>
+        <div class="cell">{{ t('assertions.pathHeader') }}</div>
+        <div class="cell">{{ t('assertions.storeTo') }}</div>
+        <div class="cell">{{ t('assertions.varName') }}</div>
         <div class="cell" />
       </div>
 
@@ -280,23 +279,23 @@ watch(function () { return props.highlightId; }, function (id) {
             size="small"
             :value="row.name"
             :disabled="disabled"
-            placeholder="变量名"
+            :placeholder="t('assertions.varName')"
             @update:value="(v) => patchExtract(row.id, { name: v })"
           />
         </div>
 
         <div class="cell action">
           <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="removeExtract(row.id)">
-            删除
+            {{ t('app.delete') }}
           </n-button>
         </div>
       </div>
 
-      <div v-if="!extracts.length" class="empty">还没有提取。上一步的 token、id 都可以存下来给下一个接口用。</div>
+      <div v-if="!extracts.length" class="empty">{{ t('assertions.emptyExtracts') }}</div>
     </div>
 
     <div v-if="!disabled" class="tools">
-      <n-button size="small" @click="addExtract">+ 添加提取</n-button>
+      <n-button size="small" @click="addExtract">{{ t('assertions.addExtract') }}</n-button>
     </div>
   </div>
 </template>

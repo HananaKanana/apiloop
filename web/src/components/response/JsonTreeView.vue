@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from 'vue-i18n';
 import { NButton } from 'naive-ui';
 
 /**
@@ -15,12 +16,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['add-assertion', 'add-extract']);
+
+const { t } = useI18n();
 </script>
 
 <template>
   <div class="json-fields">
     <p v-if="!props.tree.ok" class="hint">{{ props.tree.reason }}</p>
-    <p v-else-if="!props.tree.rows.length" class="hint">这是一段顶层不是对象的 JSON，没有字段可以点。</p>
+    <p v-else-if="!props.tree.rows.length" class="hint">{{ t('response.fieldsNotObject') }}</p>
 
     <template v-else>
       <div
@@ -37,23 +40,23 @@ const emit = defineEmits(['add-assertion', 'add-extract']);
           <n-button
             size="tiny"
             quaternary
-            title="在「断言」里加一行：JSON 字段 · 这个路径"
+            :title="t('response.addAssertionTitle')"
             @click="emit('add-assertion', { path: row.path, value: row.value, container: row.container })"
           >
-            加断言
+            {{ t('response.addAssertion') }}
           </n-button>
           <n-button
             size="tiny"
             quaternary
-            title="在「断言」页签的提取表里加一行"
+            :title="t('response.addExtractTitle')"
             @click="emit('add-extract', { path: row.path })"
           >
-            提取为变量
+            {{ t('response.addExtract') }}
           </n-button>
         </span>
       </div>
 
-      <p v-if="props.tree.truncated" class="hint">字段太多，只列出前 500 个。</p>
+      <p v-if="props.tree.truncated" class="hint">{{ t('response.fieldsTruncated') }}</p>
     </template>
   </div>
 </template>

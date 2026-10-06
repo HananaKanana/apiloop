@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { Braces, ChevronDown, Copy, Download, Eye, ListDetails, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
@@ -37,6 +38,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['add-assertion', 'add-extract']);
+
+const { t } = useI18n();
 
 const FORMAT_LIMIT = 1024 * 1024;
 const WRAP_KEY = 'apiloop.responseWrap';
@@ -143,17 +146,19 @@ const language = computed(function () {
   return format.value === 'auto' ? detected.value : format.value;
 });
 
-const FORMAT_LABELS = { json: 'JSON', xml: 'XML', html: 'HTML', javascript: 'JavaScript', text: '原文' };
+const FORMAT_LABELS = computed(function () {
+  return { json: 'JSON', xml: 'XML', html: 'HTML', javascript: 'JavaScript', text: t('response.formatText') };
+});
 
 const formatOptions = computed(function () {
   return [
-    { label: '自动识别（' + FORMAT_LABELS[detected.value] + '）', key: 'auto' },
+    { label: t('response.formatAuto', { format: FORMAT_LABELS.value[detected.value] }), key: 'auto' },
     { type: 'divider', key: 'd1' },
     { label: 'JSON', key: 'json' },
     { label: 'XML', key: 'xml' },
     { label: 'HTML', key: 'html' },
     { label: 'JavaScript', key: 'javascript' },
-    { label: '原文（不格式化、不高亮）', key: 'text' }
+    { label: t('response.formatTextLabel'), key: 'text' }
   ];
 });
 
@@ -182,9 +187,9 @@ const editorLanguage = computed(function () {
 async function copyBody() {
   try {
     await copyText(isText.value ? prettyText.value : body.value);
-    message.success('已复制响应体');
+    message.success(t('response.copiedBody'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 
@@ -279,9 +284,9 @@ const previewHtml = computed(function () {
  *  - 解析不过：`detected` 只在 parse 成功时才认成 json，用户手动选 JSON 时可能不过。
  */
 const fieldTree = computed(function () {
-  if (!isText.value) return { ok: false, reason: '这段响应不是文本' };
-  if (language.value !== 'json') return { ok: false, reason: '这段响应不是 JSON，没有字段列表' };
-  if (tooBigToFormat.value) return { ok: false, reason: '响应超过 1 MB，为了不卡住界面不列字段' };
+  if (!isText.value) return { ok: false, reason: t('response.fieldReasonNotText') };
+  if (language.value !== 'json') return { ok: false, reason: t('response.fieldReasonNotJson') };
+  if (tooBigToFormat.value) return { ok: false, reason: t('response.fieldReasonTooBig') };
   return buildJsonRows(body.value);
 });
 
@@ -399,46 +404,46 @@ function formatSize(bytes) {
         </n-dropdown>
         <button class="tool" :class="{ active: view === 'preview' }" @click="view = view === 'preview' ? 'code' : 'preview'">
           <n-icon size="14" :component="Eye" />
-          <span>预览</span>
+          <span>{{ t('response.preview') }}</span>
         </button>
         <!-- 字段列表（第六轮第 1 节）：只有 JSON 才有，右边每个字段可以直接加断言 / 提取 -->
         <button
           v-if="fieldTree.ok"
           class="tool"
           :class="{ active: view === 'fields' }"
-          title="按字段列出响应，可以给某个字段加断言、提取成变量"
+          :title="t('response.fieldsTitle')"
           @click="view = view === 'fields' ? 'code' : 'fields'"
         >
           <n-icon size="14" :component="ListDetails" />
-          <span>字段</span>
+          <span>{{ t('response.fields') }}</span>
         </button>
       </template>
       <span v-else-if="isImage" class="tool active static">
         <n-icon size="14" :component="Eye" />
-        <span>图片</span>
+        <span>{{ t('response.image') }}</span>
       </span>
 
       <span class="spacer" />
       <span class="size">{{ formatSize(size) }}</span>
 
       <template v-if="isText">
-        <button class="icon-tool" :class="{ on: wrap }" title="自动换行" @click="toggleWrap">
+        <button class="icon-tool" :class="{ on: wrap }" :title="t('response.wrapTitle')" @click="toggleWrap">
           <n-icon size="16" :component="TextWrap" />
         </button>
-        <button class="icon-tool" title="在响应里查找（⌘F / Ctrl+F）" @click="openSearch">
+        <button class="icon-tool" :title="t('response.searchTitle')" @click="openSearch">
           <n-icon size="16" :component="Search" />
         </button>
-        <button class="icon-tool" title="复制响应体" @click="copyBody">
+        <button class="icon-tool" :title="t('response.copyBodyTitle')" @click="copyBody">
           <n-icon size="16" :component="Copy" />
         </button>
       </template>
-      <button class="icon-tool" title="下载响应体" @click="download">
+      <button class="icon-tool" :title="t('response.downloadBodyTitle')" @click="download">
         <n-icon size="16" :component="Download" />
       </button>
     </div>
 
     <n-alert v-if="truncated" type="warning" :show-icon="false" class="notice">
-      响应体超过上限，界面里只保留了前面一部分；大小显示的是完整长度。
+      {{ t('response.truncatedNotice') }}
     </n-alert>
 
     <n-alert
@@ -447,7 +452,7 @@ function formatSize(bytes) {
       :show-icon="false"
       class="notice"
     >
-      响应超过 1 MB，为了不卡住界面就不做美化了，直接显示原文。
+      {{ t('response.tooBigNotice') }}
     </n-alert>
 
     <!-- 骨架页在预览里是空白的，说清楚原因，并给一条能走的路 -->
@@ -458,9 +463,9 @@ function formatSize(bytes) {
       class="notice"
     >
       <div class="script-note">
-        <span>这个页面要运行脚本才能显示，预览里不执行脚本。</span>
+        <span>{{ t('response.needsScriptNotice') }}</span>
         <n-button v-if="canOpenInBrowser" size="tiny" quaternary type="primary" @click="openInBrowser">
-          在浏览器中打开
+          {{ t('response.openInBrowser') }}
         </n-button>
       </div>
     </n-alert>
@@ -498,15 +503,15 @@ function formatSize(bytes) {
 
       <template v-else-if="isImage">
         <div class="image-wrap">
-          <img class="image" :src="dataUrl" alt="响应图片" />
+          <img class="image" :src="dataUrl" :alt="t('response.imageAlt')" />
         </div>
       </template>
 
       <template v-else>
         <div class="binary">
-          <p>这是二进制响应，界面里不展示内容。</p>
-          <p class="binary-size">大小：{{ formatSize(size) }}</p>
-          <n-button size="small" @click="download">下载</n-button>
+          <p>{{ t('response.binaryNotice') }}</p>
+          <p class="binary-size">{{ t('response.binarySize', { size: formatSize(size) }) }}</p>
+          <n-button size="small" @click="download">{{ t('response.download') }}</n-button>
         </div>
       </template>
     </div>

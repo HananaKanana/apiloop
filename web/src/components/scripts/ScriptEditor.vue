@@ -1,8 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDropdown, NRadioButton, NRadioGroup } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
-import { SCRIPT_SNIPPETS } from './snippets';
+import { scriptSnippets } from './snippets';
 import { useUiStore } from '@/stores/ui';
 
 /**
@@ -24,17 +25,22 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 const ui = useUiStore();
+const { t } = useI18n();
 
 /** 叫法跟 Postman 的 Before request / After response 一致，比「前置脚本 / 测试」直白（用户 2026-10-02） */
-const PHASES = [
-  { key: 'prerequest', label: '请求前' },
-  { key: 'test', label: '响应后' }
-];
+const PHASES = computed(function () {
+  return [
+    { key: 'prerequest', label: t('scripts.phasePrerequest') },
+    { key: 'test', label: t('scripts.phaseTest') }
+  ];
+});
 
-const PHASE_HINT = {
-  prerequest: '请求发出之前执行。这里改过的变量会参与变量替换；抛出异常时请求不会发出去。',
-  test: '响应回来之后执行。用 pm.test 写断言，结果显示在响应面板的「测试结果」里。'
-};
+const PHASE_HINT = computed(function () {
+  return {
+    prerequest: t('scripts.hintPrerequest'),
+    test: t('scripts.hintTest')
+  };
+});
 
 /** 默认打开「响应后」（Postman 也这样，常用的取 token、写断言都在这儿）；只有请求前写了脚本、响应后是空的，才打开「请求前」 */
 const activePhase = ref(
@@ -52,7 +58,7 @@ const exec = computed(function () {
 });
 
 const hint = computed(function () {
-  return PHASE_HINT[activePhase.value];
+  return PHASE_HINT.value[activePhase.value];
 });
 
 function commit(phase, text) {
@@ -74,17 +80,17 @@ function commit(phase, text) {
 
 /** 只放当前阶段能用的片段：`pm.response` 在前置脚本里是不存在的 */
 const snippetOptions = computed(function () {
-  return SCRIPT_SNIPPETS.filter(function (item) {
+  return scriptSnippets().filter(function (item) {
     return item.phase === 'both' || item.phase === activePhase.value;
   }).map(function (item) {
-    return { label: item.label, key: item.label };
+    return { label: item.label, key: item.id };
   });
 });
 
-function insertSnippet(label) {
+function insertSnippet(id) {
   if (props.disabled) return;
 
-  const snippet = SCRIPT_SNIPPETS.find(function (item) { return item.label === label; });
+  const snippet = scriptSnippets().find(function (item) { return item.id === id; });
   if (!snippet || !editorRef.value) return;
 
   editorRef.value.insertAtCursor(snippet.code);
@@ -108,7 +114,7 @@ function insertSnippet(label) {
         :options="snippetOptions"
         @select="insertSnippet"
       >
-        <n-button size="small" quaternary>常用片段</n-button>
+        <n-button size="small" quaternary>{{ t('scripts.snippets') }}</n-button>
       </n-dropdown>
     </div>
 
@@ -124,8 +130,8 @@ function insertSnippet(label) {
 
     <p class="hint">
       {{ hint }}
-      <a class="help-link" @click="ui.openHelp('scripts')">怎么写？看帮助和用例</a>
-      <span v-if="disabled" class="readonly">当前角色是只读，不能修改脚本。</span>
+      <a class="help-link" @click="ui.openHelp('scripts')">{{ t('scripts.helpLink') }}</a>
+      <span v-if="disabled" class="readonly">{{ t('scripts.readonlyHint') }}</span>
     </p>
   </div>
 </template>

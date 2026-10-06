@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from 'vue-i18n';
 import { NEmpty } from 'naive-ui';
 
 /**
@@ -8,16 +9,18 @@ import { NEmpty } from 'naive-ui';
 defineProps({
   headers: { type: Array, default: function () { return []; } }
 });
+
+const { t } = useI18n();
 </script>
 
 <template>
   <div class="headers-table">
-    <n-empty v-if="!headers.length" size="small" description="没有响应头" />
+    <n-empty v-if="!headers.length" size="small" :description="t('response.noHeaders')" />
 
     <div v-else class="rows">
       <div class="row head">
-        <div class="key">名称</div>
-        <div class="value">值</div>
+        <div class="key">{{ t('response.headerName') }}</div>
+        <div class="value">{{ t('response.headerValue') }}</div>
       </div>
       <div v-for="(pair, index) in headers" :key="index" class="row">
         <div class="key">{{ pair[0] }}</div>

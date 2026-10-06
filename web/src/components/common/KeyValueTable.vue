@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NCheckbox, NDropdown, NIcon, NInput } from 'naive-ui';
 import { Dots, Trash } from '@vicons/tabler';
 import VarInput from './VarInput.vue';
@@ -18,8 +19,8 @@ import VarInput from './VarInput.vue';
  */
 const props = defineProps({
   modelValue: { type: Array, default: function () { return []; } },
-  keyPlaceholder: { type: String, default: '参数名' },
-  valuePlaceholder: { type: String, default: '值' },
+  keyPlaceholder: { type: String, default: '' },
+  valuePlaceholder: { type: String, default: '' },
   /** 允不允许有描述列（表格右上角可以切换显示） */
   allowDesc: { type: Boolean, default: true },
   /** 只读角色看的时候整表禁用：只展示已有的行，不再补那一行空行 */
@@ -33,6 +34,12 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+
+const { t } = useI18n();
+
+/** 表头和格子里的提示：调用方给了就用它的（用户数据不翻译），没给就用通用默认（要跟着语言变） */
+const keyPlaceholderText = computed(function () { return props.keyPlaceholder || t('common.paramName'); });
+const valuePlaceholderText = computed(function () { return props.valuePlaceholder || t('common.value'); });
 
 /* ---------------- 数据 ---------------- */
 
@@ -160,9 +167,9 @@ function applyBatch() {
 /* ---------------- 菜单 ---------------- */
 
 const menuOptions = computed(function () {
-  const list = [{ label: batchMode.value ? '退出批量编辑' : '批量编辑', key: 'batch' }];
+  const list = [{ label: batchMode.value ? t('common.exitBatchEdit') : t('common.batchEdit'), key: 'batch' }];
   if (props.allowDesc) {
-    list.push({ label: showDesc.value ? '隐藏描述列' : '显示描述列', key: 'desc' });
+    list.push({ label: showDesc.value ? t('common.hideDescColumn') : t('common.showDescColumn'), key: 'desc' });
   }
   return list;
 });
@@ -203,23 +210,23 @@ function valueSuggestions(row) {
       type="textarea"
       size="small"
       :autosize="{ minRows: 4, maxRows: 14 }"
-      placeholder="每行一条：key: value；以 // 开头表示停用"
+      :placeholder="t('common.batchPlaceholder')"
     />
     <div class="kv-batch-foot">
-      <n-button size="tiny" @click="batchMode = false">取消</n-button>
-      <n-button size="tiny" type="primary" @click="applyBatch">应用</n-button>
+      <n-button size="tiny" @click="batchMode = false">{{ t('app.cancel') }}</n-button>
+      <n-button size="tiny" type="primary" @click="applyBatch">{{ t('common.apply') }}</n-button>
     </div>
   </div>
 
   <div v-else class="kv-table" :class="{ 'with-desc': showDesc }">
     <div class="row head">
       <div class="cell check" />
-      <div class="cell key">{{ keyPlaceholder }}</div>
-      <div class="cell value">{{ valuePlaceholder }}</div>
-      <div v-if="showDesc" class="cell desc">描述</div>
+      <div class="cell key">{{ keyPlaceholderText }}</div>
+      <div class="cell value">{{ valuePlaceholderText }}</div>
+      <div v-if="showDesc" class="cell desc">{{ t('common.description') }}</div>
       <div class="cell action">
         <n-dropdown trigger="click" :options="menuOptions" @select="onMenuSelect">
-          <button class="menu-button" title="表格选项">
+          <button class="menu-button" :title="t('common.tableOptions')">
             <n-icon size="14" :component="Dots" />
           </button>
         </n-dropdown>
@@ -244,7 +251,7 @@ function valueSuggestions(row) {
         <var-input
           bare
           :model-value="row.key"
-          :placeholder="keyPlaceholder"
+          :placeholder="keyPlaceholderText"
           :readonly="disabled"
           :suggest="keySuggestions"
           @update:model-value="(v) => { updateRow(index, { key: v }); }"
@@ -255,7 +262,7 @@ function valueSuggestions(row) {
         <var-input
           bare
           :model-value="row.value"
-          :placeholder="valuePlaceholder"
+          :placeholder="valuePlaceholderText"
           :readonly="disabled"
           :scope="scope"
           :suggest="valueSuggestions(row)"
@@ -267,7 +274,7 @@ function valueSuggestions(row) {
         <var-input
           bare
           :model-value="row.desc"
-          placeholder="描述"
+          :placeholder="t('common.description')"
           :readonly="disabled"
           @update:model-value="(v) => { updateRow(index, { desc: v }); }"
         />
@@ -278,7 +285,7 @@ function valueSuggestions(row) {
         <button
           v-if="!disabled && (row.key || row.value)"
           class="delete-button"
-          title="删除这一行"
+          :title="t('common.deleteRow')"
           @click="removeRow(index)"
         >
           <n-icon size="15" :component="Trash" />

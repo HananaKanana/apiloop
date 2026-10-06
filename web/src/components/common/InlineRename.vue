@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 /**
  * 双击改名（参考 Postman）：平时是一段文字，双击变成同样大小的输入框、文字全选。
@@ -16,6 +17,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['commit']);
+
+const { t } = useI18n();
 
 const editing = ref(false);
 const draft = ref('');
@@ -69,7 +72,7 @@ function onKeydown(event) {
     v-else
     class="inline-rename"
     :class="{ editable: editable }"
-    :title="editable ? '双击重命名' : ''"
+    :title="editable ? t('common.renameHint') : ''"
     @dblclick="start"
   >{{ value || placeholder }}</span>
 </template>

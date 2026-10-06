@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NInput } from 'naive-ui';
 import {
   Decoration,
@@ -50,6 +51,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'enter']);
+
+const { t } = useI18n();
 
 const host = ref(null);
 const focused = ref(false);
@@ -131,11 +134,26 @@ function valuePreview(entry) {
   return value.length > props.previewLimit ? value.slice(0, props.previewLimit) + '…' : value;
 }
 
-/** 环境 > 目录 > 项目：生效的那一级排前面 */
+/**
+ * 环境 > 目录 > 项目：生效的那一级排前面。
+ *
+ * 判断依据是 `utils/variables.js` 给的 `source` 文案的前缀 —— 那份文案现在是中文
+ * （`环境「x」` / `目录「x」` / `项目`），T24 迁移 utils 时会变成英文（术语表：
+ * 环境 Environment、目录 Folder），所以**中英前缀都认**。只认中文的话，迁移之后
+ * 排序会悄悄失效（全退化成 0），界面上看不出报错、只是顺序不对。
+ */
+const SOURCE_RANKS = [
+  { rank: 2, prefixes: ['环境', 'Environment'] },
+  { rank: 1, prefixes: ['目录', 'Folder'] }
+];
+
 function sourceRank(source) {
   const text = String(source || '');
-  if (text.indexOf('环境') === 0) return 2;
-  if (text.indexOf('目录') === 0) return 1;
+  for (let i = 0; i < SOURCE_RANKS.length; i += 1) {
+    const item = SOURCE_RANKS[i];
+    const hit = item.prefixes.some(function (prefix) { return text.indexOf(prefix) === 0; });
+    if (hit) return item.rank;
+  }
   return 0;
 }
 
@@ -148,7 +166,7 @@ function dynamicCompletionOptions() {
     return {
       label: item.label,
       detail: item.detail,
-      info: '内置动态变量',
+      info: t('common.dynamicVariable'),
       boost: -1,
       apply: applyCompletion
     };
@@ -260,16 +278,16 @@ const variableTooltip = hoverTooltip(function (editorView, pos) {
 
   let content;
   if (item.kind === 'mock') {
-    content = '{{@' + item.name + '}}：mock 占位符，只在 mock 渲染时展开';
+    content = t('common.tooltipMock', { token: '{{@' + item.name + '}}' });
   } else if (item.kind === 'dynamic') {
-    content = '{{' + item.name + '}}：内置动态变量，每出现一次生成一个新值';
+    content = t('common.tooltipDynamic', { token: '{{' + item.name + '}}' });
   } else if (item.kind === 'literal') {
-    content = '不是变量，发送时原样保留';
+    content = t('common.tooltipLiteral');
   } else {
     const entry = currentScope().get(item.name);
     content = entry
       ? (entry.secret ? '••••' : String(entry.value || '')) + ' · ' + entry.source
-      : '未定义 —— 在环境、目录或项目变量里添加';
+      : t('common.tooltipUndefined');
   }
 
   return {

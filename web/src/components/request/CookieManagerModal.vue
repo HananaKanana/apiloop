@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -37,6 +38,7 @@ const projects = useProjectStore();
 const session = useSessionStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const cookies = ref([]);
 const loading = ref(false);
@@ -112,7 +114,7 @@ function toggleReveal(cookie) {
 }
 
 function formatExpires(expires) {
-  if (!expires) return '会话';
+  if (!expires) return t('request.session');
   const date = new Date(expires);
   function pad(number) { return String(number).padStart(2, '0'); }
   return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
@@ -121,15 +123,15 @@ function formatExpires(expires) {
 
 function removeOne(cookie) {
   dialog.error({
-    title: '删除 Cookie',
-    content: '确定删除「' + cookie.name + '」（' + cookie.domain + '）吗？',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('request.deleteCookieTitle'),
+    content: t('request.deleteCookieBody', { name: cookie.name, domain: cookie.domain }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await cookiesApi.removeCookie(cookie.id);
         await load();
-        message.success('已删除');
+        message.success(t('request.deleted'));
       } catch (err) {
         message.error(err.message);
       }
@@ -139,15 +141,15 @@ function removeOne(cookie) {
 
 function clearDomain(domain) {
   dialog.error({
-    title: '清空该域名',
-    content: '确定清空「' + domain + '」下的全部 Cookie 吗？',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('request.clearDomainAction'),
+    content: t('request.clearDomainBody', { domain: domain }),
+    positiveText: t('request.clear'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await cookiesApi.clearCookies(projects.currentId, domain);
         await load();
-        message.success('已清空');
+        message.success(t('request.cleared'));
       } catch (err) {
         message.error(err.message);
       }
@@ -157,15 +159,15 @@ function clearDomain(domain) {
 
 function clearAll() {
   dialog.error({
-    title: '清空全部 Cookie',
-    content: '确定清空当前项目下你自己的全部 Cookie 吗？',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('request.clearAllTitle'),
+    content: t('request.clearAllBody'),
+    positiveText: t('request.clear'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await cookiesApi.clearCookies(projects.currentId);
         await load();
-        message.success('已清空');
+        message.success(t('request.cleared'));
       } catch (err) {
         message.error(err.message);
       }
@@ -211,17 +213,17 @@ async function submitAdd() {
   const name = addForm.value.name.trim();
 
   if (!domain) {
-    message.warning('请填写域名');
+    message.warning(t('request.domainRequired'));
     return;
   }
   if (!name) {
-    message.warning('请填写 cookie 名');
+    message.warning(t('request.cookieNameRequired'));
     return;
   }
 
   const expires = parseExpires(addForm.value.expires);
   if (!expires.ok) {
-    message.warning('过期时间看不懂：用 2026-09-30 18:00，或者 10 位秒 / 13 位毫秒时间戳；留空表示会话 cookie');
+    message.warning(t('request.expiresInvalid'));
     return;
   }
 
@@ -238,7 +240,7 @@ async function submitAdd() {
     });
     showAdd.value = false;
     await load();
-    message.success('已保存');
+    message.success(t('request.saved'));
   } catch (err) {
     // 域名 / cookie 名不合法这类 400 由服务端说清楚
     message.error(err.message);
@@ -252,21 +254,21 @@ async function submitAdd() {
   <n-modal
     :show="show"
     preset="card"
-    title="Cookie 管理"
+    :title="t('request.cookieTitle')"
     style="width: 780px; max-width: 94vw"
     @update:show="emit('update:show', $event)"
   >
     <div class="cookie-manager">
       <p class="tip">
-        这些 Cookie 只属于你自己（{{ session.displayName || '当前用户' }} 在「{{
-          projects.current ? projects.current.name : '当前项目'
-        }}」下各一份），项目里的其他成员看不到，也不会用在他们的请求里。
-        发送请求时自动带上，响应里的 Set-Cookie 自动写回。
+        {{ t('request.cookieTip', {
+          user: session.displayName || t('request.currentUser'),
+          project: projects.current ? projects.current.name : t('request.currentProject')
+        }) }}
       </p>
 
       <n-space align="center" :size="8">
-        <n-button size="small" type="primary" secondary @click="openAdd">手动添加</n-button>
-        <n-button size="small" quaternary @click="load">刷新</n-button>
+        <n-button size="small" type="primary" secondary @click="openAdd">{{ t('request.addManual') }}</n-button>
+        <n-button size="small" quaternary @click="load">{{ t('request.refresh') }}</n-button>
         <n-button
           v-if="cookies.length"
           size="small"
@@ -274,7 +276,7 @@ async function submitAdd() {
           type="error"
           @click="clearAll"
         >
-          清空全部
+          {{ t('request.clearAll') }}
         </n-button>
       </n-space>
 
@@ -284,17 +286,17 @@ async function submitAdd() {
             <div class="group-head">
               <span class="domain">{{ group.domain }}</span>
               <n-button size="tiny" quaternary type="error" @click="clearDomain(group.domain)">
-                清空该域名
+                {{ t('request.clearDomainAction') }}
               </n-button>
             </div>
 
             <div class="table">
               <div class="row head">
-                <span class="cell name">名称</span>
-                <span class="cell value">值</span>
-                <span class="cell path">路径</span>
-                <span class="cell expires">过期</span>
-                <span class="cell flags">标记</span>
+                <span class="cell name">{{ t('request.name') }}</span>
+                <span class="cell value">{{ t('request.value') }}</span>
+                <span class="cell path">{{ t('request.path') }}</span>
+                <span class="cell expires">{{ t('request.expires') }}</span>
+                <span class="cell flags">{{ t('request.flags') }}</span>
                 <span class="cell action" />
               </div>
 
@@ -302,7 +304,7 @@ async function submitAdd() {
                 <span class="cell name" :title="cookie.name">{{ cookie.name }}</span>
                 <span
                   class="cell value clickable"
-                  :title="revealed[cookie.id] ? '点击隐藏' : '点击查看'"
+                  :title="revealed[cookie.id] ? t('request.clickToHide') : t('request.clickToView')"
                   @click="toggleReveal(cookie)"
                 >
                   {{ revealed[cookie.id] ? cookie.value : '••••••' }}
@@ -312,11 +314,11 @@ async function submitAdd() {
                 <span class="cell flags">
                   <n-tag v-if="cookie.secure" size="tiny" :bordered="false">Secure</n-tag>
                   <n-tag v-if="cookie.httpOnly" size="tiny" :bordered="false">HttpOnly</n-tag>
-                  <n-tag v-if="!cookie.hostOnly" size="tiny" :bordered="false" type="info">域</n-tag>
+                  <n-tag v-if="!cookie.hostOnly" size="tiny" :bordered="false" type="info">{{ t('request.domainTag') }}</n-tag>
                 </span>
                 <span class="cell action">
                   <n-button size="tiny" quaternary type="error" @click="removeOne(cookie)">
-                    删除
+                    {{ t('app.delete') }}
                   </n-button>
                 </span>
               </div>
@@ -324,45 +326,45 @@ async function submitAdd() {
           </div>
         </div>
 
-        <n-empty v-else-if="!loading" size="small" description="还没有 cookie" class="empty" />
+        <n-empty v-else-if="!loading" size="small" :description="t('request.emptyCookies')" class="empty" />
       </n-spin>
     </div>
 
     <n-modal
       v-model:show="showAdd"
       preset="card"
-      title="添加 / 修改 Cookie"
+      :title="t('request.addCookieTitle')"
       style="width: 520px; max-width: 94vw"
     >
       <n-form label-placement="top">
-        <n-form-item label="域名">
-          <n-input v-model:value="addForm.domain" placeholder="example.com，或以 . 开头表示发给子域名" />
+        <n-form-item :label="t('request.domainLabel')">
+          <n-input v-model:value="addForm.domain" :placeholder="t('request.domainPlaceholder')" />
         </n-form-item>
-        <n-form-item label="名称">
+        <n-form-item :label="t('request.name')">
           <n-input v-model:value="addForm.name" placeholder="sid" />
         </n-form-item>
-        <n-form-item label="值">
+        <n-form-item :label="t('request.value')">
           <n-input v-model:value="addForm.value" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
         </n-form-item>
-        <n-form-item label="路径">
+        <n-form-item :label="t('request.path')">
           <n-input v-model:value="addForm.path" placeholder="/" />
         </n-form-item>
-        <n-form-item label="过期时间">
+        <n-form-item :label="t('request.expiresLabel')">
           <n-input
             v-model:value="addForm.expires"
-            placeholder="2026-09-30 18:00，或 10 位秒 / 13 位毫秒时间戳；留空表示会话 cookie"
+            :placeholder="t('request.expiresPlaceholder')"
           />
         </n-form-item>
         <n-space align="center" :size="16">
-          <n-checkbox v-model:checked="addForm.secure">Secure（只走 https）</n-checkbox>
+          <n-checkbox v-model:checked="addForm.secure">{{ t('request.secureCheckbox') }}</n-checkbox>
           <n-checkbox v-model:checked="addForm.httpOnly">HttpOnly</n-checkbox>
         </n-space>
       </n-form>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showAdd = false">取消</n-button>
-          <n-button type="primary" :loading="adding" @click="submitAdd">保存</n-button>
+          <n-button @click="showAdd = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" :loading="adding" @click="submitAdd">{{ t('request.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

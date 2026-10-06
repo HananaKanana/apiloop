@@ -1,5 +1,6 @@
 <script setup>
 import { computed, h } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NSelect, NTooltip } from 'naive-ui';
 import VarInput from '@/components/common/VarInput.vue';
 import { methodColor } from '@/utils/method';
@@ -27,6 +28,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:method', 'update:url', 'send', 'cancel', 'paste-curl']);
+
+const { t } = useI18n();
 
 /**
  * 地址栏里粘贴一段 cURL 时，像 Postman 那样直接把整条请求填满。
@@ -111,7 +114,7 @@ const METHOD_SELECT_THEME = {
         borderless
         :model-value="url"
         :scope="scope"
-        placeholder="https://example.com/api/users/:id，支持 {{变量}}"
+        :placeholder="t('request.urlPlaceholder')"
         @update:model-value="(v) => emit('update:url', v)"
         @enter="emit('send')"
       />
@@ -125,7 +128,7 @@ const METHOD_SELECT_THEME = {
       secondary
       @click="emit('cancel')"
     >
-      取消
+      {{ t('app.cancel') }}
     </n-button>
     <!--
       直接打开云端、云端又不发送请求：按钮变灰，悬停说清楚该去哪儿。
@@ -134,7 +137,7 @@ const METHOD_SELECT_THEME = {
     <n-tooltip v-else-if="sendBlocked" trigger="hover">
       <template #trigger>
         <span class="send-wrap">
-          <n-button class="send" size="small" disabled :bordered="false">发送</n-button>
+          <n-button class="send" size="small" disabled :bordered="false">{{ t('request.send') }}</n-button>
         </span>
       </template>
       {{ sendBlockedHint }}
@@ -149,7 +152,7 @@ const METHOD_SELECT_THEME = {
       :bordered="false"
       @click="emit('send')"
     >
-      发送
+      {{ t('request.send') }}
     </n-button>
   </div>
 </template>

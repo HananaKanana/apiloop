@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton } from 'naive-ui';
 import { formatBytes } from '@/utils/bytes';
 
@@ -18,6 +19,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['save-example']);
+
+const { t } = useI18n();
 
 const listEl = ref(null);
 const expanded = ref(-1);
@@ -85,7 +88,7 @@ function toggle(index) {
 
 const overflowText = computed(function () {
   if (!props.dropped) return '';
-  return '只显示最近 2000 条，更早的 ' + props.dropped + ' 条已经丢弃。';
+  return t('response.sseOverflow', { n: props.dropped });
 });
 </script>
 
@@ -96,28 +99,28 @@ const overflowText = computed(function () {
     </n-alert>
 
     <div class="toolbar">
-      <span class="count">共 {{ events.length }} 条事件</span>
-      <span class="tip">点一行展开看完整 data</span>
+      <span class="count">{{ t('response.sseCount', { n: events.length }) }}</span>
+      <span class="tip">{{ t('response.sseTip') }}</span>
       <span class="spacer" />
       <n-button
         v-if="canSave"
         size="tiny"
         secondary
         type="primary"
-        title="按每个事件的到达时间算出 delay，存成 sse 类型的示例"
+        :title="t('response.sseSaveTitle')"
         @click="emit('save-example')"
       >
-        保存为 SSE 示例
+        {{ t('response.sseSave') }}
       </n-button>
     </div>
 
     <div ref="listEl" class="list" @scroll="onScroll">
       <template v-if="events.length">
         <div class="head row">
-          <span>时间</span>
+          <span>{{ t('response.sseTime') }}</span>
           <span>event</span>
           <span>data</span>
-          <span class="right">长度</span>
+          <span class="right">{{ t('response.sseLength') }}</span>
         </div>
 
         <div v-for="(item, index) in events" :key="index" class="item">
@@ -139,7 +142,7 @@ const overflowText = computed(function () {
         </div>
       </template>
 
-      <p v-else class="empty">还没有收到事件。</p>
+      <p v-else class="empty">{{ t('response.sseEmpty') }}</p>
     </div>
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 /**
  * 分阶段耗时。timings 里的值是毫秒，某个阶段没发生就是 null。
@@ -9,12 +10,14 @@ const props = defineProps({
   timings: { type: Object, default: null }
 });
 
+const { t } = useI18n();
+
 const STAGES = [
-  { key: 'dns', label: 'DNS 解析' },
-  { key: 'connect', label: '建立连接' },
-  { key: 'tls', label: 'TLS 握手' },
-  { key: 'ttfb', label: '等待首字节' },
-  { key: 'download', label: '下载响应' }
+  { key: 'dns', labelKey: 'timingDns' },
+  { key: 'connect', labelKey: 'timingConnect' },
+  { key: 'tls', labelKey: 'timingTls' },
+  { key: 'ttfb', labelKey: 'timingTtfb' },
+  { key: 'download', labelKey: 'timingDownload' }
 ];
 
 const STAGE_COLORS = {
@@ -30,7 +33,7 @@ const rows = computed(function () {
   return STAGES.map(function (stage) {
     return {
       key: stage.key,
-      label: stage.label,
+      label: t('response.' + stage.labelKey),
       color: STAGE_COLORS[stage.key],
       value: source[stage.key] === null || source[stage.key] === undefined ? null : source[stage.key]
     };
@@ -61,7 +64,7 @@ function fmt(value) {
 
 <template>
   <div class="timings">
-    <p class="total">总耗时 <b>{{ fmt(total) }}</b></p>
+    <p class="total">{{ t('response.totalTiming') }} <b>{{ fmt(total) }}</b></p>
 
     <div v-for="row in rows" :key="row.key" class="stage">
       <div class="label">{{ row.label }}</div>

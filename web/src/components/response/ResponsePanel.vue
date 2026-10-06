@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -33,22 +34,28 @@ const props = defineProps({
 
 const emit = defineEmits(['save-example', 'save-sse-example', 'resend', 'add-assertion', 'add-extract']);
 
-const ERROR_TEXT = {
-  TIMEOUT: '请求超时，对方在限定时间内没有返回。',
-  ABORTED: '请求已取消。',
-  DNS: '域名解析失败，检查一下主机名。',
-  CONNECT: '连不上目标服务器，检查地址和端口，或者对方没在监听。',
-  TLS: 'TLS 握手失败，证书可能有问题（自签名证书默认是放行的，说明不是这个原因）。',
-  INVALID_URL: 'URL 不合法。',
-  INVALID_HEADER: '请求头不合法。',
-  FILE: '读取本地文件失败。',
-  PROXY: '代理不可用：连不上代理，或者 CONNECT 隧道被拒绝了。检查系统设置里的代理地址，或者关掉这次请求的「使用系统代理」。',
-  SCRIPT: '「请求前」脚本出错，请求没有发送。改完脚本再发，或者在「设置」页签里关掉这次请求的「执行脚本」。',
-  OTHER: '请求失败。'
-};
+const { t } = useI18n();
+
+const ERROR_TEXT = computed(function () {
+  return {
+    TIMEOUT: t('response.errorTimeout'),
+    ABORTED: t('response.errorAborted'),
+    DNS: t('response.errorDns'),
+    CONNECT: t('response.errorConnect'),
+    TLS: t('response.errorTls'),
+    INVALID_URL: t('response.errorInvalidUrl'),
+    INVALID_HEADER: t('response.errorInvalidHeader'),
+    FILE: t('response.errorFile'),
+    PROXY: t('response.errorProxy'),
+    SCRIPT: t('response.errorScript'),
+    OTHER: t('response.errorOther')
+  };
+});
 
 /** 云端不发送请求时的那句话，按钮的悬停提示和这里共用同一份文案 */
-const SERVER_SEND_DISABLED_TEXT = '云端不发送请求，请从本机的 apiloop 打开';
+const SERVER_SEND_DISABLED_TEXT = computed(function () {
+  return t('response.serverSendDisabled');
+});
 
 const activeTab = ref('body');
 
@@ -146,7 +153,7 @@ const responseCookies = computed(function () {
       if (key === 'domain') cookie.domain = value;
       else if (key === 'path') cookie.path = value;
       else if (key === 'expires') cookie.expires = value;
-      else if (key === 'max-age') cookie.expires = cookie.expires || ('Max-Age ' + value + ' 秒');
+      else if (key === 'max-age') cookie.expires = cookie.expires || t('response.maxAge', { value: value });
       else if (key === 'httponly') cookie.httpOnly = true;
       else if (key === 'secure') cookie.secure = true;
       else if (key === 'samesite') cookie.sameSite = value;
@@ -202,8 +209,8 @@ const statusType = computed(function () {
 
 const errorText = computed(function () {
   if (!error.value) return '';
-  const base = ERROR_TEXT[error.value.code] || ERROR_TEXT.OTHER;
-  return base + '（' + error.value.code + '：' + error.value.message + '）';
+  const base = ERROR_TEXT.value[error.value.code] || ERROR_TEXT.value.OTHER;
+  return t('response.errorWithCode', { message: base, code: error.value.code, detail: error.value.message });
 });
 
 /* ---------------- 网关相关的三种情况（G2） ---------------- */
@@ -275,7 +282,7 @@ const testTabClass = computed(function () {
 });
 
 function scriptErrorTitle(item) {
-  return item.phase === 'prerequest' ? '「请求前」脚本出错' : '「响应后」脚本出错';
+  return item.phase === 'prerequest' ? t('response.scriptErrorPrerequest') : t('response.scriptErrorResponse');
 }
 
 /** 只有文本响应能存成示例；二进制存下来没意义 */
@@ -300,9 +307,9 @@ const canSaveSseExample = computed(function () {
 
 const saveHint = computed(function () {
   if (props.readonly) return '';
-  if (!props.tab.apiId) return '临时标签页要先保存成接口，才能存示例';
-  if (!response.value) return '先发一次请求';
-  if (!canSaveExample.value) return '二进制响应不能存成示例';
+  if (!props.tab.apiId) return t('response.saveHintTemp');
+  if (!response.value) return t('response.saveHintSendFirst');
+  if (!canSaveExample.value) return t('response.saveHintBinary');
   return '';
 });
 
@@ -316,7 +323,7 @@ function requestBodyText() {
     <n-spin :show="tab.sending">
       <div class="inner">
         <!-- 还没发过请求：给一句提示，别让面板空着 -->
-        <div v-if="idle" class="idle">点击发送，或按 Enter，查看响应</div>
+        <div v-if="idle" class="idle">{{ t('response.idleHint') }}</div>
 
         <template v-else>
 
@@ -336,12 +343,11 @@ function requestBodyText() {
 
         <!-- Mac 第一次访问局域网被系统拦下：给一套能照着做的步骤，而不是一行错误 -->
         <div v-if="localNetworkHint" class="local-network">
-          <p class="ln-title">需要允许本地网络访问</p>
+          <p class="ln-title">{{ t('response.localNetworkTitle') }}</p>
           <p class="ln-body">
-            系统刚才弹出了「允许 node 访问本地网络」，请点「允许」后重新发送。
-            如果没看到弹框：打开「系统设置 → 隐私与安全性 → 本地网络」，把 node 打开。
+            {{ t('response.localNetworkBody') }}
           </p>
-          <n-button size="small" type="primary" @click="emit('resend')">重新发送</n-button>
+          <n-button size="small" type="primary" @click="emit('resend')">{{ t('response.resend') }}</n-button>
         </div>
 
         <n-alert
@@ -369,11 +375,11 @@ function requestBodyText() {
         </n-alert>
 
         <n-alert v-if="tab.cancelled && !tab.sending" type="info" :show-icon="false" class="notice">
-          这次请求已经取消。服务端会照常记一条历史（状态是「已取消」），里面是断开前收到的部分。
+          {{ t('response.cancelledNotice') }}
         </n-alert>
 
         <n-alert v-if="tab.historyTruncated" type="info" :show-icon="false" class="notice">
-          这条历史里的响应体超过了 256 KB，落库时做了截断，下面是截断后的内容。
+          {{ t('response.historyTruncatedNotice') }}
         </n-alert>
 
         <div class="tabs">
@@ -395,28 +401,28 @@ function requestBodyText() {
                   <!-- 请求发成功了，但历史和变量没存到云端：响应照常看，这里只提醒一句 -->
                   <n-tooltip v-if="recordError" trigger="hover">
                     <template #trigger>
-                      <n-tag size="small" :bordered="false" type="warning">未保存历史</n-tag>
+                      <n-tag size="small" :bordered="false" type="warning">{{ t('response.recordErrorTag') }}</n-tag>
                     </template>
                     {{ recordError }}
                   </n-tooltip>
 
                   <!-- 接收中：只报进度，不报耗时/最终大小（都还没定） -->
                   <span v-if="tab.sending" class="metric">
-                    接收中… {{ formatBytes(tab.receivedBytes) }}
+                    {{ t('response.receiving', { size: formatBytes(tab.receivedBytes) }) }}
                   </span>
                   <template v-else-if="result">
-                    <span class="metric">耗时 {{ formatMs(result.timings && result.timings.total) }}</span>
-                    <span class="metric">大小 {{ formatBytes(response.size) }}</span>
+                    <span class="metric">{{ t('response.duration', { time: formatMs(result.timings && result.timings.total) }) }}</span>
+                    <span class="metric">{{ t('response.size', { size: formatBytes(response.size) }) }}</span>
                   </template>
 
                   <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
-                    经由代理 {{ proxy.url }}
+                    {{ t('response.viaProxy', { url: proxy.url }) }}
                   </n-tag>
 
                   <n-popover v-if="redirects.length" trigger="click" placement="bottom-start">
                     <template #trigger>
                       <n-tag size="small" :bordered="false" type="info" class="clickable">
-                        重定向 {{ redirects.length }} 次
+                        {{ t('response.redirectCount', { n: redirects.length }) }}
                       </n-tag>
                     </template>
                     <div class="redirect-list">
@@ -433,17 +439,17 @@ function requestBodyText() {
                 </template>
 
                 <template v-else-if="tab.sending">
-                  <span class="metric">正在连接…</span>
+                  <span class="metric">{{ t('response.connecting') }}</span>
                 </template>
 
                 <template v-else>
-                  <span class="metric">还没发送</span>
+                  <span class="metric">{{ t('response.notSentYet') }}</span>
                 </template>
 
                 <n-popover v-if="!readonly && !isSse && saveHint" trigger="hover" placement="top-end">
                   <template #trigger>
                     <span>
-                      <n-button size="tiny" disabled>保存为示例</n-button>
+                      <n-button size="tiny" disabled>{{ t('response.saveExample') }}</n-button>
                     </span>
                   </template>
                   {{ saveHint }}
@@ -456,11 +462,11 @@ function requestBodyText() {
                   :loading="savingExample"
                   @click="emit('save-example')"
                 >
-                  保存为示例
+                  {{ t('response.saveExample') }}
                 </n-button>
               </div>
             </template>
-            <n-tab-pane name="body" tab="Body" :disabled="!response">
+            <n-tab-pane name="body" :tab="t('response.bodyTab')" :disabled="!response">
               <body-viewer
                 v-if="response"
                 :response="response"
@@ -473,12 +479,12 @@ function requestBodyText() {
             </n-tab-pane>
 
             <!-- 测试脚本调用过 pm.visualizer.set 才有（参考 Postman 的 Visualize） -->
-            <n-tab-pane v-if="scriptVisualizer" name="visualize" tab="可视化">
+            <n-tab-pane v-if="scriptVisualizer" name="visualize" :tab="t('response.visualizeTab')">
               <visualizer-view :visualizer="scriptVisualizer" />
             </n-tab-pane>
 
             <!-- 只有 content-type 是 text/event-stream 的响应才有这个页签 -->
-            <n-tab-pane v-if="tab.sseEvents" name="events" tab="事件">
+            <n-tab-pane v-if="tab.sseEvents" name="events" :tab="t('response.eventsTab')">
               <sse-events-table
                 :events="tab.sseEvents"
                 :dropped="tab.sseDropped || 0"
@@ -490,12 +496,12 @@ function requestBodyText() {
             <!-- 有测试才有「测试结果」，有输出才有「控制台」—— 空页签是噪音 -->
             <n-tab-pane v-if="scriptTests.length" name="tests">
               <template #tab>
-                <span :class="testTabClass">测试结果 {{ testCount.passed }}/{{ testCount.total }}</span>
+                <span :class="testTabClass">{{ t('response.testResults', { passed: testCount.passed, total: testCount.total }) }}</span>
               </template>
               <div class="script-list">
                 <div v-for="(item, index) in scriptTests" :key="index" class="test-row">
                   <span class="mark" :class="{ fail: !item.passed }">
-                    {{ item.passed ? '通过' : '失败' }}
+                    {{ item.passed ? t('response.testPassed') : t('response.testFailed') }}
                   </span>
                   <span class="test-name">{{ item.name }}</span>
                   <!-- 可视化断言（第六轮第 1 节）的结果和脚本的测试结果混在一起，标一下来源 -->
@@ -505,7 +511,7 @@ function requestBodyText() {
               </div>
             </n-tab-pane>
 
-            <n-tab-pane v-if="scriptConsole.length" name="console" tab="控制台">
+            <n-tab-pane v-if="scriptConsole.length" name="console" :tab="t('response.consoleTab')">
               <div class="script-list">
                 <div
                   v-for="(line, index) in scriptConsole"
@@ -522,18 +528,18 @@ function requestBodyText() {
 
             <n-tab-pane name="cookies" :disabled="!displayHeaders">
               <template #tab>
-                <span>Cookies<span v-if="responseCookies.length" class="tab-count">{{ responseCookies.length }}</span></span>
+                <span>{{ t('response.cookiesTab') }}<span v-if="responseCookies.length" class="tab-count">{{ responseCookies.length }}</span></span>
               </template>
               <div v-if="responseCookies.length" class="cookie-table">
                 <div class="cookie-row head">
-                  <span>名称</span><span>值</span><span>Domain</span><span>Path</span><span>过期</span><span>属性</span>
+                  <span>{{ t('response.cookieName') }}</span><span>{{ t('response.cookieValue') }}</span><span>{{ t('response.cookieDomain') }}</span><span>{{ t('response.cookiePath') }}</span><span>{{ t('response.cookieExpires') }}</span><span>{{ t('response.cookieAttributes') }}</span>
                 </div>
                 <div v-for="(cookie, index) in responseCookies" :key="index" class="cookie-row">
                   <span class="mono strong" :title="cookie.name">{{ cookie.name }}</span>
                   <span class="mono" :title="cookie.value">{{ cookie.value }}</span>
                   <span :title="cookie.domain">{{ cookie.domain || '—' }}</span>
                   <span>{{ cookie.path || '—' }}</span>
-                  <span :title="cookie.expires">{{ cookie.expires || '会话' }}</span>
+                  <span :title="cookie.expires">{{ cookie.expires || t('response.cookieSession') }}</span>
                   <span class="flags">
                     <span v-if="cookie.httpOnly" class="flag">HttpOnly</span>
                     <span v-if="cookie.secure" class="flag">Secure</span>
@@ -541,21 +547,21 @@ function requestBodyText() {
                   </span>
                 </div>
               </div>
-              <div v-else class="empty-tab">这次响应没有设置 Cookie</div>
+              <div v-else class="empty-tab">{{ t('response.noCookies') }}</div>
             </n-tab-pane>
 
             <n-tab-pane name="headers" :disabled="!displayHeaders">
               <template #tab>
-                <span>Headers<span v-if="displayHeaders && displayHeaders.length" class="tab-count">{{ displayHeaders.length }}</span></span>
+                <span>{{ t('response.headersTab') }}<span v-if="displayHeaders && displayHeaders.length" class="tab-count">{{ displayHeaders.length }}</span></span>
               </template>
               <headers-table v-if="displayHeaders" :headers="displayHeaders" />
             </n-tab-pane>
 
-            <n-tab-pane name="timings" tab="耗时" :disabled="!result">
+            <n-tab-pane name="timings" :tab="t('response.timingsTab')" :disabled="!result">
               <timings-bar v-if="result" :timings="result.timings" />
             </n-tab-pane>
 
-            <n-tab-pane name="request" tab="请求" :disabled="!request">
+            <n-tab-pane name="request" :tab="t('response.requestTab')" :disabled="!request">
               <div v-if="request" class="sent-request">
                 <div class="line">
                   <span class="method">{{ request.method }}</span>
@@ -563,7 +569,7 @@ function requestBodyText() {
                 </div>
                 <headers-table :headers="request.headers" />
                 <template v-if="requestBodyText()">
-                  <p class="label">请求体</p>
+                  <p class="label">{{ t('response.requestBody') }}</p>
                   <pre class="body-preview">{{ requestBodyText() }}</pre>
                 </template>
               </div>
