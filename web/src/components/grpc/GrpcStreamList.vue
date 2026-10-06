@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NEmpty } from 'naive-ui';
 import { formatClock, prettyJson } from './grpc-util';
 
@@ -13,6 +14,8 @@ const props = defineProps({
   state: { type: Object, default: null }
 });
 
+const { t } = useI18n();
+
 const listRef = ref(null);
 const expanded = ref(null);
 const follow = ref(true);
@@ -22,9 +25,9 @@ const entries = computed(function () {
 });
 
 function label(entry) {
-  if (entry.kind === 'sent') return '发出';
-  if (entry.kind === 'received') return '收到';
-  return '提示';
+  if (entry.kind === 'sent') return t('grpc.entrySent');
+  if (entry.kind === 'received') return t('grpc.entryReceived');
+  return t('grpc.entrySystem');
 }
 
 function preview(entry) {
@@ -63,12 +66,12 @@ watch(
 <template>
   <div class="stream">
     <div class="head">
-      <span class="label">消息</span>
+      <span class="label">{{ t('grpc.messages') }}</span>
       <span v-if="state && state.status" class="status">
         {{ state.status.name }}
         <span v-if="state.durationMs !== null">· {{ state.durationMs }}ms</span>
       </span>
-      <n-button size="tiny" quaternary class="clear" @click="clear">清空</n-button>
+      <n-button size="tiny" quaternary class="clear" @click="clear">{{ t('grpc.clear') }}</n-button>
     </div>
 
     <div ref="listRef" class="list" @scroll="onScroll">
@@ -89,7 +92,7 @@ watch(
       <n-empty
         v-if="!entries.length"
         size="small"
-        description="还没有消息"
+        :description="t('grpc.noMessagesYet')"
         class="empty"
       />
     </div>
@@ -100,17 +103,17 @@ watch(
     </div>
 
     <div v-if="state && state.tests && state.tests.length" class="tests">
-      <p class="label">测试结果</p>
+      <p class="label">{{ t('grpc.testsLabel') }}</p>
       <div v-for="(item, index) in state.tests" :key="index" class="test" :class="{ bad: !item.passed }">
-        {{ item.passed ? '通过' : '失败' }}：{{ item.name }}
+        {{ item.passed ? t('grpc.passed') : t('grpc.failed') }}：{{ item.name }}
         <span v-if="item.message" class="msg">{{ item.message }}</span>
       </div>
     </div>
 
     <div v-if="state && state.extracted && state.extracted.length" class="tests">
-      <p class="label">提取到的变量</p>
+      <p class="label">{{ t('grpc.extractedVars') }}</p>
       <div v-for="(item, index) in state.extracted" :key="index" class="test">
-        {{ item.key }} = {{ item.value }}（{{ item.scope === 'environment' ? '环境' : '项目' }}）
+        {{ item.key }} = {{ item.value }}（{{ item.scope === 'environment' ? t('layout.entityEnvironment') : t('layout.entityProject') }}）
       </div>
     </div>
   </div>

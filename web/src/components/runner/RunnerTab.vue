@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -40,6 +41,7 @@ const tabs = useTabsStore();
 const tree = useTreeStore();
 const envs = useEnvStore();
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 const runner = computed(function () { return props.tab.runner; });
 
@@ -95,8 +97,9 @@ async function saveAsSuite() {
   try {
     const now = new Date();
     const pad = function (n) { return String(n).padStart(2, '0'); };
-    const name = '测试集 ' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + ' ' +
+    const stamp = pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + ' ' +
       pad(now.getHours()) + ':' + pad(now.getMinutes());
+    const name = t('runner.suiteName', { stamp: stamp });
 
     const data = await suitesApi.createSuite(projects.currentId, {
       name: name,
@@ -105,7 +108,7 @@ async function saveAsSuite() {
 
     // 侧栏那一栏读的是这个 store：放进去，切过去就能看到
     suites.put(Object.assign({}, data.suite, { data: undefined }));
-    message.success('已存为测试集「' + data.suite.name + '」');
+    message.success(t('runner.suiteSaved', { name: data.suite.name }));
     tabs.openSuite(data.suite.id, data.suite.name);
   } catch (err) {
     message.error(err.message);
@@ -127,9 +130,9 @@ const envId = computed({
 });
 
 const envOptions = computed(function () {
-  const list = [{ label: '无环境', value: '' }];
+  const list = [{ label: t('runner.noEnvironment'), value: '' }];
   // 内置 Mock 环境：本机未登录时用不了（mock 服务在云端）
-  list.push({ label: 'Mock（内置）', value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
+  list.push({ label: t('runner.mockBuiltIn'), value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });
@@ -194,9 +197,9 @@ function rowStatusType(row) {
 
 function rowStatusText(row) {
   if (row.pending) return '…';
-  if (row.aborted) return '已停止';
+  if (row.aborted) return t('runner.stopped');
   if (row.status) return String(row.status);
-  return '失败';
+  return t('runner.failed');
 }
 
 function rowTestsText(row) {
@@ -226,7 +229,7 @@ const sendBlocked = computed(function () {
 
 function onStart() {
   if (sendBlocked.value) {
-    message.warning('网页版不能运行，请在客户端里使用');
+    message.warning(t('runner.webBlocked'));
     return;
   }
   runnerStore.start(props.tab);
@@ -253,13 +256,13 @@ function onStop() {
         <template #icon>
           <n-icon :component="DeviceFloppy" />
         </template>
-        存为测试集
+        {{ t('runner.saveAsSuite') }}
       </n-button>
       <n-button v-if="runner.running" size="small" type="error" secondary @click="onStop">
         <template #icon>
           <n-icon :component="PlayerStop" />
         </template>
-        停止
+        {{ t('runner.stop') }}
       </n-button>
       <!-- 网页版、云端不替网页发请求：外面套一层 span 是因为禁用的按钮不派发鼠标事件，提示挂不上去 -->
       <n-tooltip v-else-if="sendBlocked" trigger="hover">
@@ -269,11 +272,11 @@ function onStop() {
               <template #icon>
                 <n-icon :component="PlayerPlay" />
               </template>
-              开始运行
+              {{ t('runner.start') }}
             </n-button>
           </span>
         </template>
-        网页版不能运行，请在客户端里使用（或让管理员在云端开启发送）
+        {{ t('runner.webBlockedHint') }}
       </n-tooltip>
       <n-button
         v-else
@@ -285,7 +288,7 @@ function onStop() {
         <template #icon>
           <n-icon :component="PlayerPlay" />
         </template>
-        开始运行
+        {{ t('runner.start') }}
       </n-button>
     </div>
 
@@ -293,9 +296,9 @@ function onStop() {
       <!-- 左边：要跑的请求，按目录树顺序，默认全选 -->
       <aside class="pane-list">
         <div class="pane-title">
-          <span>要跑的请求（{{ checkedCount }}/{{ items.length }}）</span>
+          <span>{{ t('runner.requestsTitle', { checked: checkedCount, total: items.length }) }}</span>
           <button v-if="items.length" class="link" @click="toggleAll">
-            {{ allChecked ? '全不选' : '全选' }}
+            {{ allChecked ? t('runner.unselectAll') : t('runner.selectAll') }}
           </button>
         </div>
         <div class="list">
@@ -314,11 +317,11 @@ function onStop() {
               class="method"
               :style="{ color: methodColor(node.api.method) }"
             >{{ String(node.api.method || 'GET').toUpperCase() }}</span>
-            <span class="name">{{ node.name || '(未命名接口)' }}</span>
+            <span class="name">{{ node.name || t('runner.unnamedApi') }}</span>
           </label>
 
           <div v-if="!items.length" class="list-empty">
-            这个{{ tab.folderId ? '目录' : '项目' }}里还没有接口
+            {{ t('runner.emptyList', { scope: tab.folderId ? t('runner.folder') : t('runner.project') }) }}
           </div>
         </div>
       </aside>
@@ -327,7 +330,7 @@ function onStop() {
       <section class="pane-main">
         <div class="settings">
           <div class="field">
-            <span class="label">环境</span>
+            <span class="label">{{ t('runner.environment') }}</span>
             <n-select
               v-model:value="envId"
               size="small"
@@ -337,7 +340,7 @@ function onStop() {
             />
           </div>
           <div class="field">
-            <span class="label">次数</span>
+            <span class="label">{{ t('runner.repeat') }}</span>
             <n-input-number
               v-model:value="runner.repeat"
               size="small"
@@ -348,7 +351,7 @@ function onStop() {
             />
           </div>
           <div class="field">
-            <span class="label">请求间隔</span>
+            <span class="label">{{ t('runner.interval') }}</span>
             <n-input-number
               v-model:value="runner.intervalMs"
               size="small"
@@ -358,30 +361,30 @@ function onStop() {
               :disabled="runner.running"
               style="width: 110px"
             />
-            <span class="unit">毫秒</span>
+            <span class="unit">{{ t('runner.milliseconds') }}</span>
           </div>
           <label class="field switch">
             <n-checkbox v-model:checked="runner.stopOnFail" :disabled="runner.running" />
-            <span>有断言失败时停下来</span>
+            <span>{{ t('runner.stopOnFail') }}</span>
           </label>
           <label class="field switch">
             <n-checkbox v-model:checked="runner.recordHistory" :disabled="runner.running" />
-            <span>记到历史里</span>
+            <span>{{ t('runner.recordHistory') }}</span>
           </label>
         </div>
 
         <div v-if="runner.error" class="notice">{{ runner.error }}</div>
 
         <div v-if="runner.results.length" class="summary">
-          <span>共 {{ runner.total }} 个请求，已完成 {{ runner.done }}</span>
+          <span>{{ t('runner.progress', { total: runner.total, done: runner.done }) }}</span>
           <span class="dot">·</span>
           <span>
-            断言
-            <b :class="{ bad: summary.failed > 0 }">{{ summary.passed }}</b>/{{ summary.total }} 通过
+            {{ t('runner.assertions') }}
+            <b :class="{ bad: summary.failed > 0 }">{{ summary.passed }}</b>/{{ summary.total }} {{ t('runner.passedWord') }}
           </span>
-          <span v-if="summary.failed" class="bad">失败 {{ summary.failed }}</span>
+          <span v-if="summary.failed" class="bad">{{ t('runner.failedLabel', { n: summary.failed }) }}</span>
           <span class="dot">·</span>
-          <span>耗时 {{ formatMs(elapsedMs) }}</span>
+          <span>{{ t('runner.elapsed', { time: formatMs(elapsedMs) }) }}</span>
         </div>
 
         <div v-if="runner.results.length" class="filter">
@@ -389,12 +392,12 @@ function onStop() {
             class="filter-item"
             :class="{ active: filter === 'all' }"
             @click="filter = 'all'"
-          >全部 {{ summary.requests }}</button>
+          >{{ t('runner.filterAll', { n: summary.requests }) }}</button>
           <button
             class="filter-item"
             :class="{ active: filter === 'failed' }"
             @click="filter = 'failed'"
-          >只看失败 {{ failedCount }}</button>
+          >{{ t('runner.filterFailed', { n: failedCount }) }}</button>
         </div>
 
         <div class="results">
@@ -410,7 +413,7 @@ function onStop() {
                 size="14"
                 :component="row.open ? ChevronDown : ChevronRight"
               />
-              <span class="round">第 {{ row.round }} 次</span>
+              <span class="round">{{ t('runner.roundNth', { n: row.round }) }}</span>
               <span class="method" :style="{ color: methodColor(row.method) }">{{ row.method }}</span>
               <button class="name link" :title="row.url" @click.stop="openApiTab(row)">{{ row.name }}</button>
               <span class="spacer" />
@@ -435,7 +438,7 @@ function onStop() {
                   <span v-if="!item.passed && item.error" class="test-reason">{{ item.error }}</span>
                 </div>
               </div>
-              <div v-else-if="!row.error" class="detail-empty">这个接口没有断言</div>
+              <div v-else-if="!row.error" class="detail-empty">{{ t('runner.noAssertions') }}</div>
 
               <div v-if="row.console.length" class="console">
                 <div v-for="(line, index) in row.console" :key="index" class="console-line">
@@ -447,11 +450,11 @@ function onStop() {
           </div>
 
           <div v-if="!runner.results.length" class="placeholder">
-            {{ runner.running ? '正在运行…' : '点右上角「开始运行」，按顺序把这些接口跑一遍' }}
+            {{ runner.running ? t('runner.running') : t('runner.idleHint') }}
           </div>
 
           <div v-else-if="!visibleRows.length" class="placeholder">
-            没有失败的请求
+            {{ t('runner.noFailedRequests') }}
           </div>
         </div>
       </section>

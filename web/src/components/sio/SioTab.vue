@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -42,6 +43,7 @@ const sio = useSioStore();
 const tabs = useTabsStore();
 const gateway = useGatewayStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const activePane = ref('connect');
 const state = computed(function () { return sio.stateOf(props.tab.key); });
@@ -68,12 +70,12 @@ const connectBlocked = computed(function () {
 
 const statusText = computed(function () {
   const current = state.value;
-  if (!current) return '未连接';
-  if (current.status === 'open') return '已连接';
-  if (current.status === 'connecting') return '连接中…';
-  if (current.status === 'error') return '出错';
-  if (current.status === 'closed') return '已断开';
-  return '未连接';
+  if (!current) return t('sio.statusIdle');
+  if (current.status === 'open') return t('sio.statusOpen');
+  if (current.status === 'connecting') return t('sio.statusConnecting');
+  if (current.status === 'error') return t('sio.statusError');
+  if (current.status === 'closed') return t('sio.statusClosed');
+  return t('sio.statusIdle');
 });
 
 const statusType = computed(function () {
@@ -91,10 +93,12 @@ function emptySio() {
   return { path: '/socket.io', namespace: '/', transports: 'polling', listenEvents: [], sends: [] };
 }
 
-const TRANSPORT_OPTIONS = [
-  { label: '先长轮询再升级', value: 'polling' },
-  { label: '只用 WebSocket', value: 'websocket' }
-];
+const TRANSPORT_OPTIONS = computed(function () {
+  return [
+    { label: t('sio.transportPolling'), value: 'polling' },
+    { label: t('sio.transportWebsocket'), value: 'websocket' }
+  ];
+});
 
 /** 监听名单在界面上是一行一个事件名 */
 const listenText = computed({
@@ -133,7 +137,7 @@ function onAuthBlur() {
   try {
     JSON.parse(text);
   } catch (err) {
-    message.warning('auth 不是合法的 JSON，暂时没有保存');
+    message.warning(t('sio.authInvalid'));
   }
 }
 
@@ -144,7 +148,7 @@ function touch() {
 async function connect() {
   // 网页版、云端不替网页建连接：按钮已经灰了，这里兜一次（重连、常用发送也走这儿）
   if (connectBlocked.value) {
-    message.warning('网页版不能连接，请在客户端里使用');
+    message.warning(t('sio.connectBlocked'));
     return;
   }
 
@@ -157,7 +161,7 @@ async function connect() {
   const ok = await sio.connect(props.tab.key, payload);
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '连接失败');
+    message.error((current && current.error) || t('sio.connectFailed'));
   }
 }
 
@@ -185,12 +189,12 @@ function parseArgs(text) {
 
 async function sendNow(eventName, argsText, ack) {
   if (!connected.value) {
-    message.warning('还没有连接');
+    message.warning(t('sio.notConnected'));
     return;
   }
   const event = String(eventName || '').trim();
   if (!event) {
-    message.warning('先写事件名');
+    message.warning(t('sio.eventNameRequired'));
     return;
   }
 
@@ -198,14 +202,14 @@ async function sendNow(eventName, argsText, ack) {
   try {
     args = parseArgs(argsText);
   } catch (err) {
-    message.error('参数不是合法的 JSON');
+    message.error(t('sio.argsInvalid'));
     return;
   }
 
   const ok = await sio.emit(props.tab.key, { event: event, args: args, ack: ack === true });
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '发送失败');
+    message.error((current && current.error) || t('sio.sendFailed'));
   }
 }
 
@@ -237,7 +241,7 @@ async function persist() {
 async function addCurrentAsSend() {
   const event = String(draftEvent.value || '').trim();
   if (!event) {
-    message.warning('先写事件名');
+    message.warning(t('sio.eventNameRequired'));
     return;
   }
   const list = (sioCfg.value.sends || []).slice();
@@ -253,7 +257,7 @@ async function addCurrentAsSend() {
   if (props.tab.apiId) {
     try {
       await persist();
-      message.success('已记下这条常用发送');
+      message.success(t('sio.commonSaved'));
     } catch (err) {
       message.error(err.message);
     }
@@ -285,7 +289,7 @@ async function save() {
   try {
     const api = await persist();
     if (api) tabs.markSaved(props.tab, api);
-    message.success('已保存');
+    message.success(t('sio.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -304,7 +308,7 @@ onMounted(function () {
       <inline-rename
         :value="tab.title"
         :editable="editable && Boolean(tab.apiId)"
-        placeholder="接口名字"
+        :placeholder="t('sio.titlePlaceholder')"
         class="title"
         @commit="(name) => tabs.applyRename('api', tab.apiId, name)"
       />
@@ -315,23 +319,23 @@ onMounted(function () {
         <n-tooltip v-if="!connected && connectBlocked" trigger="hover">
           <template #trigger>
             <span class="connect-wrap">
-              <n-button size="small" type="primary" disabled>连接</n-button>
+              <n-button size="small" type="primary" disabled>{{ t('sio.connect') }}</n-button>
             </span>
           </template>
-          网页版不能连接，请在客户端里使用（或让管理员在云端开启发送）
+          {{ t('sio.connectBlockedTooltip') }}
         </n-tooltip>
         <n-button v-else-if="!connected" size="small" type="primary" :disabled="!editable" @click="connect">
-          连接
+          {{ t('sio.connect') }}
         </n-button>
         <template v-else>
-          <n-button size="small" @click="reconnect">重连</n-button>
-          <n-button size="small" type="error" ghost @click="disconnect">断开</n-button>
+          <n-button size="small" @click="reconnect">{{ t('sio.reconnect') }}</n-button>
+          <n-button size="small" type="error" ghost @click="disconnect">{{ t('sio.disconnect') }}</n-button>
         </template>
-        <n-button v-if="tab.apiId && editable" size="small" :loading="saving" @click="save">保存</n-button>
+        <n-button v-if="tab.apiId && editable" size="small" :loading="saving" @click="save">{{ t('sio.save') }}</n-button>
       </div>
     </div>
 
-    <div v-if="!editable" class="notice">只读角色：连接参数不能改，「连接」也不可用。</div>
+    <div v-if="!editable" class="notice">{{ t('sio.readonlyNotice') }}</div>
 
     <div class="addr">
       <var-input
@@ -358,9 +362,9 @@ onMounted(function () {
     </div>
 
     <n-tabs v-model:value="activePane" type="line" size="small" class="panes">
-      <n-tab-pane name="connect" tab="连接">
+      <n-tab-pane name="connect" :tab="t('sio.tabConnect')">
         <div class="field">
-          <span class="label">传输方式</span>
+          <span class="label">{{ t('sio.transportLabel') }}</span>
           <n-select
             :value="sioCfg.transports"
             :options="TRANSPORT_OPTIONS"
@@ -371,25 +375,25 @@ onMounted(function () {
           />
         </div>
 
-        <p class="label">请求头</p>
+        <p class="label">{{ t('sio.headerLabel') }}</p>
         <key-value-table
           :model-value="spec.params.headers"
           :disabled="!editable"
-          key-placeholder="头名"
-          value-placeholder="值"
+          :key-placeholder="t('sio.headerPlaceholder')"
+          :value-placeholder="t('sio.valuePlaceholder')"
           @update:model-value="(v) => { spec.params.headers = v; touch(); }"
         />
 
-        <p class="label">查询参数</p>
+        <p class="label">{{ t('sio.queryLabel') }}</p>
         <key-value-table
           :model-value="spec.params.query"
           :disabled="!editable"
-          key-placeholder="参数名"
-          value-placeholder="值"
+          :key-placeholder="t('sio.paramName')"
+          :value-placeholder="t('sio.valuePlaceholder')"
           @update:model-value="(v) => { spec.params.query = v; touch(); }"
         />
 
-        <p class="label">鉴权（请求头 / 查询参数，和 HTTP 接口同一套规则）</p>
+        <p class="label">{{ t('sio.authLabel') }}</p>
         <auth-editor
           :model-value="spec.auth"
           :disabled="!editable"
@@ -397,8 +401,8 @@ onMounted(function () {
         />
 
         <p class="label">
-          握手 auth（JSON）
-          <span class="note">Socket.IO 的 auth 是握手时带过去的对象，和上面的鉴权不一样</span>
+          {{ t('sio.handshakeAuthLabel') }}
+          <span class="note">{{ t('sio.handshakeAuthNote') }}</span>
         </p>
         <n-input
           type="textarea"
@@ -412,8 +416,8 @@ onMounted(function () {
         />
 
         <p class="label">
-          监听的事件
-          <span class="note">一行一个；留空表示监听全部事件</span>
+          {{ t('sio.listenEventsLabel') }}
+          <span class="note">{{ t('sio.listenEventsNote') }}</span>
         </p>
         <n-input
           type="textarea"
@@ -426,20 +430,20 @@ onMounted(function () {
         />
       </n-tab-pane>
 
-      <n-tab-pane name="send" tab="发送">
+      <n-tab-pane name="send" :tab="t('sio.tabSend')">
         <div class="send-row">
           <n-input
             v-model:value="draftEvent"
             :disabled="!editable"
             size="small"
             class="event"
-            placeholder="事件名"
+            :placeholder="t('sio.eventNamePlaceholder')"
           />
-          <n-checkbox v-model:checked="draftAck" :disabled="!editable">等待确认（ack）</n-checkbox>
+          <n-checkbox v-model:checked="draftAck" :disabled="!editable">{{ t('sio.waitAck') }}</n-checkbox>
           <n-button size="small" type="primary" :disabled="!editable || !connected" @click="sendDraft">
-            发送
+            {{ t('sio.send') }}
           </n-button>
-          <n-button size="small" :disabled="!editable" @click="addCurrentAsSend">存为常用</n-button>
+          <n-button size="small" :disabled="!editable" @click="addCurrentAsSend">{{ t('sio.saveAsCommon') }}</n-button>
         </div>
 
         <n-input
@@ -448,24 +452,24 @@ onMounted(function () {
           size="small"
           :disabled="!editable"
           :autosize="{ minRows: 3, maxRows: 8 }"
-          placeholder='["你好", 1]'
+          :placeholder="t('sio.argsPlaceholder')"
         />
 
-        <p class="label" style="margin-top: 14px">常用发送</p>
+        <p class="label" style="margin-top: 14px">{{ t('sio.commonSends') }}</p>
         <div v-if="sends.length" class="sends">
           <div v-for="item in sends" :key="item.id" class="send-item">
             <n-button size="tiny" quaternary @click="useSend(item)">{{ item.event }}</n-button>
             <span class="args">{{ item.args }}</span>
             <n-tag v-if="item.ack" size="tiny">ack</n-tag>
             <n-button v-if="editable" size="tiny" quaternary type="error" @click="removeSend(item.id)">
-              删除
+              {{ t('app.delete') }}
             </n-button>
           </div>
         </div>
-        <p v-else class="empty">还没有常用发送。写一条事件、点「存为常用」，下次一点就发。</p>
+        <p v-else class="empty">{{ t('sio.noSends') }}</p>
       </n-tab-pane>
 
-      <n-tab-pane name="log" tab="消息">
+      <n-tab-pane name="log" :tab="t('sio.tabLog')">
         <ws-message-log :events="(state && state.events) || []" :dropped="(state && state.dropped) || 0" />
       </n-tab-pane>
     </n-tabs>

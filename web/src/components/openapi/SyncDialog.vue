@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -41,6 +42,7 @@ const emit = defineEmits(['update:show']);
 
 const tree = useTreeStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const show = computed({
   get: function () { return props.show; },
@@ -66,7 +68,9 @@ const selected = ref({ added: [], changed: [], removed: [] });
 const expanded = ref([]);
 
 const scopeText = computed(function () {
-  return props.folderId ? '目录「' + props.folderName + '」（含子目录）' : '整个项目';
+  return props.folderId
+    ? t('openapi.scopeFolder', { name: props.folderName })
+    : t('openapi.scopeProject');
 });
 
 const isEmpty = computed(function () {
@@ -129,15 +133,15 @@ async function check() {
   // 网页版而且云端不替人拉地址：「地址」那一栏本来就被禁掉了，这里再兜一次
   // （探测回来之前先切到「地址」的话，模式还停在 url）
   if (mode.value === 'url' && urlFetchBlocked.value) {
-    message.warning('网页版不能填地址拉取，请切到「粘贴内容」或在客户端里检查');
+    message.warning(t('openapi.urlBlockedCheck'));
     return;
   }
   if (mode.value === 'url' && !url.value.trim() && !readSavedUrl()) {
-    message.warning('填一个地址，或者切到「粘贴内容」');
+    message.warning(t('openapi.urlRequired'));
     return;
   }
   if (mode.value === 'text' && !text.value.trim()) {
-    message.warning('把 OpenAPI 定义粘进来');
+    message.warning(t('openapi.textRequired'));
     return;
   }
 
@@ -175,7 +179,7 @@ function selectedCount() {
 
 async function apply() {
   if (!selectedCount()) {
-    message.warning('一项都没选');
+    message.warning(t('openapi.nothingSelected'));
     return;
   }
 
@@ -188,8 +192,11 @@ async function apply() {
       remove: selected.value.removed
     }));
 
-    message.success('新增 ' + (data.added || 0) + ' 个、更新 ' + (data.updated || 0) +
-      ' 个、移到回收站 ' + (data.removed || 0) + ' 个');
+    message.success(t('openapi.applyResult', {
+      added: data.added || 0,
+      updated: data.updated || 0,
+      removed: data.removed || 0
+    }));
     await tree.refresh();
     show.value = false;
   } catch (err) {
@@ -250,25 +257,25 @@ function changeSummary(item) {
   <n-modal
     v-model:show="show"
     preset="card"
-    title="从 OpenAPI 同步更新"
+    :title="t('openapi.dialogTitle')"
     style="width: 780px; max-width: 94vw"
   >
-    <div class="scope">范围：{{ scopeText }}</div>
+    <div class="scope">{{ t('openapi.scope', { scope: scopeText }) }}</div>
 
     <n-radio-group v-model:value="mode" size="small" class="mode">
-      <n-radio-button value="url" :disabled="urlFetchBlocked">地址</n-radio-button>
-      <n-radio-button value="text">粘贴内容</n-radio-button>
+      <n-radio-button value="url" :disabled="urlFetchBlocked">{{ t('openapi.modeUrl') }}</n-radio-button>
+      <n-radio-button value="text">{{ t('openapi.modeText') }}</n-radio-button>
     </n-radio-group>
 
     <p v-if="urlFetchBlocked" class="url-blocked">
-      网页版不能填地址拉取（云端访问不到内网），请把文档内容粘贴进来；要填地址请在 apiloop 客户端里同步。
+      {{ t('openapi.urlBlockedHint') }}
     </p>
     <n-input
       v-if="mode === 'url'"
       v-model:value="url"
       size="small"
       clearable
-      placeholder="接口文档地址，比如 http://内网地址/v3/api-docs 或 /swagger.json"
+      :placeholder="t('openapi.urlPlaceholder')"
       @keyup.enter="check"
     />
     <n-input
@@ -276,14 +283,14 @@ function changeSummary(item) {
       v-model:value="text"
       type="textarea"
       :autosize="{ minRows: 5, maxRows: 10 }"
-      placeholder="粘贴 OpenAPI / Swagger 定义（JSON 或 YAML）"
+      :placeholder="t('openapi.textPlaceholder')"
     />
 
     <n-space align="center" :size="10" class="actions">
       <n-button size="small" type="primary" :loading="checking" @click="check">
-        检查更新
+        {{ t('openapi.check') }}
       </n-button>
-      <span class="hint">地址会记住，下次自动填上</span>
+      <span class="hint">{{ t('openapi.urlRemembered') }}</span>
     </n-space>
 
     <n-alert v-if="errorText" type="error" :show-icon="false" class="notice">
@@ -291,7 +298,7 @@ function changeSummary(item) {
     </n-alert>
 
     <template v-if="diff">
-      <p v-if="isEmpty" class="latest">已经是最新的</p>
+      <p v-if="isEmpty" class="latest">{{ t('openapi.upToDate') }}</p>
 
       <template v-else>
         <!-- 新增 -->
@@ -301,7 +308,7 @@ function changeSummary(item) {
               :checked="allChecked('added')"
               @update:checked="(value) => toggleGroup('added', value)"
             />
-            <span class="group-title">新增（{{ diff.added.length }}）</span>
+            <span class="group-title">{{ t('openapi.groupAdded', { n: diff.added.length }) }}</span>
           </div>
           <div v-for="item in diff.added" :key="item.key" class="row">
             <n-checkbox
@@ -310,8 +317,8 @@ function changeSummary(item) {
             />
             <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
             <span class="path">{{ item.path }}</span>
-            <span class="name">{{ item.name || '(未命名)' }}</span>
-            <span class="where">→ {{ item.folderName || '项目根目录' }}</span>
+            <span class="name">{{ item.name || t('openapi.unnamed') }}</span>
+            <span class="where">→ {{ item.folderName || t('openapi.rootFolder') }}</span>
           </div>
         </section>
 
@@ -322,7 +329,7 @@ function changeSummary(item) {
               :checked="allChecked('changed')"
               @update:checked="(value) => toggleGroup('changed', value)"
             />
-            <span class="group-title">有改动（{{ diff.changed.length }}）</span>
+            <span class="group-title">{{ t('openapi.groupChanged', { n: diff.changed.length }) }}</span>
           </div>
           <div v-for="item in diff.changed" :key="item.apiId" class="row-wrap">
             <div class="row">
@@ -338,7 +345,7 @@ function changeSummary(item) {
               />
               <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
               <span class="path">{{ item.url }}</span>
-              <span class="name">{{ item.name || '(未命名)' }}</span>
+              <span class="name">{{ item.name || t('openapi.unnamed') }}</span>
               <span class="summary">{{ changeSummary(item) }}</span>
             </div>
 
@@ -348,8 +355,8 @@ function changeSummary(item) {
                   {{ change.label }}<span v-if="change.summary" class="change-summary">（{{ change.summary }}）</span>
                 </div>
                 <div class="change-body">
-                  <pre class="side before">{{ change.before || '（空）' }}</pre>
-                  <pre class="side after">{{ change.after || '（空）' }}</pre>
+                  <pre class="side before">{{ change.before || t('openapi.empty') }}</pre>
+                  <pre class="side after">{{ change.after || t('openapi.empty') }}</pre>
                 </div>
               </div>
             </div>
@@ -363,8 +370,8 @@ function changeSummary(item) {
               :checked="allChecked('removed')"
               @update:checked="(value) => toggleGroup('removed', value)"
             />
-            <span class="group-title">文档里已删除（{{ diff.removed.length }}）</span>
-            <span class="group-note">勾了才处理，会放进回收站（不是真删）</span>
+            <span class="group-title">{{ t('openapi.groupRemoved', { n: diff.removed.length }) }}</span>
+            <span class="group-note">{{ t('openapi.groupRemovedNote') }}</span>
           </div>
           <div v-for="item in diff.removed" :key="item.apiId" class="row">
             <n-checkbox
@@ -373,20 +380,20 @@ function changeSummary(item) {
             />
             <span class="method" :style="{ color: methodColor(item.method) }">{{ item.method }}</span>
             <span class="path">{{ item.url }}</span>
-            <span class="name">{{ item.name || '(未命名)' }}</span>
+            <span class="name">{{ item.name || t('openapi.unnamed') }}</span>
           </div>
         </section>
 
         <p class="tip">
-          只更新地址、参数、请求体字段、名称和说明；你写的脚本、示例、Mock、鉴权设置都会保留。
+          {{ t('openapi.applyTip') }}
         </p>
       </template>
     </template>
 
     <template #footer>
       <n-space justify="end" align="center">
-        <span v-if="diff && !isEmpty" class="hint">已选 {{ selectedCount() }} 项</span>
-        <n-button size="small" @click="show = false">取消</n-button>
+        <span v-if="diff && !isEmpty" class="hint">{{ t('openapi.selectedCount', { n: selectedCount() }) }}</span>
+        <n-button size="small" @click="show = false">{{ t('app.cancel') }}</n-button>
         <n-button
           size="small"
           type="primary"
@@ -394,7 +401,7 @@ function changeSummary(item) {
           :loading="applying"
           @click="apply"
         >
-          同步所选
+          {{ t('openapi.apply') }}
         </n-button>
       </n-space>
     </template>

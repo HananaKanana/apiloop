@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -31,6 +32,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:show', 'confirm']);
 const tree = useTreeStore();
+const { t } = useI18n();
 
 const visible = computed({
   get: function () { return props.show; },
@@ -96,41 +98,41 @@ function pathOf(entry) {
   <n-modal
     v-model:show="visible"
     preset="card"
-    title="保存所选记录"
+    :title="t('record.saveDialogTitle')"
     class="save-modal"
     :bordered="false"
     :mask-closable="!saving"
   >
     <div class="body">
       <div v-if="matched.length" class="group">
-        <p class="label">存为示例（{{ matched.length }} 条）</p>
-        <p class="hint">加到各自对应的接口上；勾了「设为 Mock 返回」就把接口的 Mock 指向新示例。</p>
+        <p class="label">{{ t('record.saveMatchedGroup', { n: matched.length }) }}</p>
+        <p class="hint">{{ t('record.saveMatchedHint') }}</p>
         <ul class="rows">
           <li v-for="entry in matched.slice(0, 8)" :key="entry.id">
             <span class="m">{{ entry.method }}</span> {{ pathOf(entry) }}
             <span class="to">→ {{ entry.match.apiName }}</span>
           </li>
         </ul>
-        <p v-if="matched.length > 8" class="more">…还有 {{ matched.length - 8 }} 条</p>
+        <p v-if="matched.length > 8" class="more">{{ t('record.moreItems', { n: matched.length - 8 }) }}</p>
       </div>
 
       <div v-if="unmatched.length" class="group">
-        <p class="label">新建接口（{{ unmatched.length }} 个）</p>
-        <p class="hint">这些请求没对上已有接口，会按录到的方法和地址建出新接口再加示例。</p>
+        <p class="label">{{ t('record.createGroup', { n: unmatched.length }) }}</p>
+        <p class="hint">{{ t('record.createHint') }}</p>
         <ul class="rows">
           <li v-for="entry in unmatched.slice(0, 8)" :key="entry.id">
             <span class="m">{{ entry.method }}</span> {{ pathOf(entry) }}
           </li>
         </ul>
-        <p v-if="unmatched.length > 8" class="more">…还有 {{ unmatched.length - 8 }} 个</p>
+        <p v-if="unmatched.length > 8" class="more">{{ t('record.moreCreated', { n: unmatched.length - 8 }) }}</p>
 
         <div class="field">
-          <span class="field-label">放到目录</span>
+          <span class="field-label">{{ t('record.folderLabel') }}</span>
           <n-select
             v-model:value="folderId"
             size="small"
             clearable
-            placeholder="项目根目录"
+            :placeholder="t('record.rootFolder')"
             :options="folderOptions"
           />
         </div>
@@ -138,19 +140,19 @@ function pathOf(entry) {
 
       <div class="options">
         <n-checkbox v-if="unmatched.length" v-model:checked="paramize">
-          路径里的数字 / ID 换成参数（/orders/1001 → /orders/:id）
+          {{ t('record.paramize') }}
         </n-checkbox>
         <n-checkbox v-model:checked="setMock">
-          设为 Mock 返回（后端挂了就切到 Mock）
+          {{ t('record.setMock') }}
         </n-checkbox>
       </div>
     </div>
 
     <template #footer>
       <n-space justify="end">
-        <n-button :disabled="saving" @click="visible = false">取消</n-button>
+        <n-button :disabled="saving" @click="visible = false">{{ t('app.cancel') }}</n-button>
         <n-button type="primary" :loading="saving" @click="confirm">
-          保存（{{ matched.length + unmatched.length }}）
+          {{ t('record.saveCount', { n: matched.length + unmatched.length }) }}
         </n-button>
       </n-space>
     </template>

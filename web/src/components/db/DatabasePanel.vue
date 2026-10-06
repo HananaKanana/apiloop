@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NForm,
@@ -51,6 +52,7 @@ const emit = defineEmits(['update:databases']);
 
 const env = useEnvStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const databases = computed(function () { return props.databases || []; });
 
@@ -58,6 +60,14 @@ const editing = ref(null);
 const showEditor = ref(false);
 const testing = ref(false);
 const testResult = ref(null);
+
+/** 编辑弹窗的标题：有名字就带上，没名字就是新增 */
+const editorTitle = computed(function () {
+  const row = editing.value;
+  return row && row.name
+    ? t('db.editConnectionTitle', { name: row.name })
+    : t('db.newConnectionTitle');
+});
 
 /** 选中的环境（内置 Mock 环境不存库，测试连接时当没选 —— 和提取变量的口径一致） */
 const environmentId = computed(function () {
@@ -100,11 +110,11 @@ function onTypeChange(type) {
 function save() {
   const row = editing.value;
   if (!String(row.name || '').trim()) {
-    message.warning('请给这个连接起个名字');
+    message.warning(t('db.nameRequired'));
     return;
   }
   if (!String(row.host || '').trim()) {
-    message.warning('请填写主机');
+    message.warning(t('db.hostRequired'));
     return;
   }
 
@@ -145,24 +155,24 @@ const noEnvironment = computed(function () { return !environmentId.value; });
  * 模板里不能直接写 `{{ '{{变量}}' }}` —— 字符串里的 `}}` 会把插值提前关掉。
  * 提示文案统一放在 script 里（AssertionsPane 也是这么办的）。
  */
-const VAR_SAMPLE = '{{变量}}';
-const VAR_PASSWORD = '{{dbPassword}}';
-const HOST_PLACEHOLDER = '127.0.0.1（可以写 {{dbHost}}）';
-const PASSWORD_PLACEHOLDER = '可以写 {{dbPassword}}';
+const varSample = computed(function () { return t('db.varSample'); });
+const varPassword = computed(function () { return t('db.varPassword'); });
+const hostPlaceholder = computed(function () { return t('db.hostPlaceholder'); });
+const passwordPlaceholder = computed(function () { return t('db.passwordPlaceholder'); });
 </script>
 
 <template>
   <div class="block">
     <p class="hint">
-      连接里每个字段都能写 <code>{{ VAR_SAMPLE }}</code> —— 开发环境和测试环境连的是不同的库时，
-      在环境里设一个变量来区分；密码建议写成 <code>{{ VAR_PASSWORD }}</code> 并在环境里设成保密变量。
+      {{ t('db.hintLead') }} <code>{{ varSample }}</code> {{ t('db.hintMid') }}
+      <code>{{ varPassword }}</code> {{ t('db.hintTail') }}
     </p>
 
     <div class="table">
       <div class="row head">
-        <div class="cell">名字</div>
-        <div class="cell">类型</div>
-        <div class="cell">地址</div>
+        <div class="cell">{{ t('db.name') }}</div>
+        <div class="cell">{{ t('db.type') }}</div>
+        <div class="cell">{{ t('db.address') }}</div>
         <div class="cell action" />
       </div>
 
@@ -171,40 +181,40 @@ const PASSWORD_PLACEHOLDER = '可以写 {{dbPassword}}';
         <div class="cell">{{ typeLabel(row.type) }}</div>
         <div class="cell mono">{{ addressOf(row) }}</div>
         <div class="cell action">
-          <n-button v-if="!locked" size="tiny" quaternary @click="openEdit(row)">编辑</n-button>
-          <n-button v-if="!locked" size="tiny" quaternary type="error" @click="remove(row)">删除</n-button>
+          <n-button v-if="!locked" size="tiny" quaternary @click="openEdit(row)">{{ t('db.edit') }}</n-button>
+          <n-button v-if="!locked" size="tiny" quaternary type="error" @click="remove(row)">{{ t('app.delete') }}</n-button>
         </div>
       </div>
 
       <div v-if="!databases.length" class="empty">
-        还没有连接。加了之后，接口的「数据库」页签里就能选它来造数据、查数据。
+        {{ t('db.emptyConnections') }}
       </div>
     </div>
 
     <div v-if="!locked" class="tools">
-      <n-button size="small" @click="openNew">+ 新增连接</n-button>
+      <n-button size="small" @click="openNew">{{ t('db.addConnection') }}</n-button>
     </div>
-    <p v-if="!localAllowed" class="hint">网页版连不了数据库：连接要在客户端里新增、修改和测试（数据库操作也只在客户端里执行）。</p>
-    <p v-else-if="disabled" class="hint">只读角色只能看连接列表，不能改。</p>
+    <p v-if="!localAllowed" class="hint">{{ t('db.webUnavailable') }}</p>
+    <p v-else-if="disabled" class="hint">{{ t('db.readonlyHint') }}</p>
 
     <n-modal
       :show="showEditor"
       preset="card"
-      :title="editing && editing.name ? '编辑连接：' + editing.name : '新增连接'"
+      :title="editorTitle"
       style="width: 520px"
       :mask-closable="false"
       @update:show="(v) => { if (!v) closeEditor(); }"
     >
       <n-form v-if="editing" label-placement="left" label-width="80" size="small">
-        <n-form-item label="名字">
+        <n-form-item :label="t('db.name')">
           <n-input
             :value="editing.name"
-            placeholder="比如：开发库"
+            :placeholder="t('db.namePlaceholder')"
             @update:value="(v) => patch({ name: v })"
           />
         </n-form-item>
 
-        <n-form-item label="类型">
+        <n-form-item :label="t('db.type')">
           <n-select
             :value="editing.type"
             :options="TYPE_OPTIONS"
@@ -212,67 +222,67 @@ const PASSWORD_PLACEHOLDER = '可以写 {{dbPassword}}';
           />
         </n-form-item>
 
-        <n-form-item label="主机">
+        <n-form-item :label="t('db.host')">
           <n-input
             :value="editing.host"
-            :placeholder="HOST_PLACEHOLDER"
+            :placeholder="hostPlaceholder"
             @update:value="(v) => patch({ host: v })"
           />
         </n-form-item>
 
-        <n-form-item label="端口">
+        <n-form-item :label="t('db.port')">
           <n-input
             :value="editing.port === null || editing.port === undefined ? '' : String(editing.port)"
-            :placeholder="'默认 ' + (DEFAULT_PORTS[editing.type] || '')"
+            :placeholder="t('db.portPlaceholder', { port: DEFAULT_PORTS[editing.type] || '' })"
             @update:value="(v) => patch({ port: v })"
           />
         </n-form-item>
 
-        <n-form-item label="用户名">
+        <n-form-item :label="t('db.user')">
           <n-input
             :value="editing.user"
-            :placeholder="editing.type === 'redis' ? 'Redis 6 之前没有用户名，留空' : 'root'"
+            :placeholder="editing.type === 'redis' ? t('db.userPlaceholderRedis') : 'root'"
             @update:value="(v) => patch({ user: v })"
           />
         </n-form-item>
 
-        <n-form-item label="密码">
+        <n-form-item :label="t('db.password')">
           <div class="password-cell">
             <n-input
               :value="editing.password"
               type="password"
               show-password-on="click"
-              :placeholder="PASSWORD_PLACEHOLDER"
+              :placeholder="passwordPlaceholder"
               @update:value="(v) => patch({ password: v })"
             />
             <p v-if="warning" class="warn">{{ warning }}</p>
           </div>
         </n-form-item>
 
-        <n-form-item :label="editing.type === 'redis' ? '库号' : '数据库名'">
+        <n-form-item :label="editing.type === 'redis' ? t('db.labelRedisDb') : t('db.labelDatabase')">
           <n-input
             :value="editing.database"
-            :placeholder="editing.type === 'redis' ? '0（默认）' : 'demo'"
+            :placeholder="editing.type === 'redis' ? t('db.dbIndexPlaceholder') : 'demo'"
             @update:value="(v) => patch({ database: v })"
           />
         </n-form-item>
       </n-form>
 
       <p v-if="noEnvironment" class="hint">
-        现在没有选环境，连接里的 <code>{{ VAR_SAMPLE }}</code> 替换不出来，测试连接会失败。
+        {{ t('db.noEnvLead') }} <code>{{ varSample }}</code> {{ t('db.noEnvTail') }}
       </p>
 
       <div v-if="testResult" class="result" :class="{ bad: !testResult.ok }">
-        <template v-if="testResult.ok">连接成功（{{ testResult.timeMs }} ms）</template>
-        <template v-else>连接失败：{{ testResult.error }}</template>
+        <template v-if="testResult.ok">{{ t('db.testOk', { ms: testResult.timeMs }) }}</template>
+        <template v-else>{{ t('db.testFail', { error: testResult.error }) }}</template>
       </div>
 
       <template #footer>
         <n-space justify="space-between" align="center" style="width: 100%">
-          <n-button size="small" :loading="testing" @click="runTest">测试连接</n-button>
+          <n-button size="small" :loading="testing" @click="runTest">{{ t('db.testConnection') }}</n-button>
           <n-space>
-            <n-button size="small" @click="closeEditor">取消</n-button>
-            <n-button size="small" type="primary" @click="save">确定</n-button>
+            <n-button size="small" @click="closeEditor">{{ t('app.cancel') }}</n-button>
+            <n-button size="small" type="primary" @click="save">{{ t('app.confirm') }}</n-button>
           </n-space>
         </n-space>
       </template>

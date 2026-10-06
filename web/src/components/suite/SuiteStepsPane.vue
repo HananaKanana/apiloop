@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -38,10 +39,19 @@ const projects = useProjectStore();
 const tabs = useTabsStore();
 const tree = useTreeStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const steps = computed(function () { return props.suite.steps || []; });
 
 const canEdit = computed(function () { return projects.canEdit && !props.disabled; });
+
+/** 失败时的处理方式：依赖语言，必须用 computed 包住，切语言才会变 */
+const onFailOptions = computed(function () {
+  return [
+    { label: t('suite.onFailContinue'), value: 'continue' },
+    { label: t('suite.onFailSkipIteration'), value: 'skipIteration' }
+  ];
+});
 
 function update(next) {
   emit('change', { steps: next });
@@ -201,7 +211,7 @@ function openAdd() {
 function confirmAdd() {
   const picked = checkedApisInOrder();
   if (!picked.length) {
-    message.warning('先勾几个接口');
+    message.warning(t('suite.pickApisFirst'));
     return;
   }
 
@@ -219,7 +229,7 @@ function confirmAdd() {
 
   update(next);
   showAdd.value = false;
-  message.success('加了 ' + picked.length + ' 个接口');
+  message.success(t('suite.addedApis', { n: picked.length }));
 }
 
 // 步骤里引用的接口不在当前项目的目录树里（被删了）：拉一次树，好判断哪些标红
@@ -233,16 +243,16 @@ watch(
 <template>
   <div class="pane">
     <div class="toolbar">
-      <span class="hint">按顺序执行；点开一行可以给这一步<b>追加</b>断言和提取变量。</span>
+      <span class="hint">{{ t('suite.stepsHintLead') }}<b>{{ t('suite.stepsHintBold') }}</b>{{ t('suite.stepsHintAfter') }}</span>
       <span class="spacer" />
       <n-button size="small" :disabled="!canEdit" @click="openAdd">
         <template #icon><n-icon :component="Plus" /></template>
-        添加接口
+        {{ t('suite.addApi') }}
       </n-button>
     </div>
 
     <p v-if="!steps.length" class="empty">
-      还没有步骤。点「添加接口」从目录树里挑几个 —— 同一个接口可以加多次。
+      {{ t('suite.emptySteps') }}
     </p>
 
     <div v-else class="grid">
@@ -279,7 +289,7 @@ watch(
           </template>
           <template v-else>
             <span class="method gone">—</span>
-            <span class="name gone">接口已删除</span>
+            <span class="name gone">{{ t('suite.apiDeleted') }}</span>
           </template>
 
           <span class="spacer" />
@@ -289,10 +299,7 @@ watch(
             size="tiny"
             :disabled="!canEdit"
             :value="step.onFail || 'continue'"
-            :options="[
-              { label: '失败时继续', value: 'continue' },
-              { label: '失败时跳过本轮', value: 'skipIteration' }
-            ]"
+            :options="onFailOptions"
             @update:value="(value) => patchStep(index, { onFail: value })"
           />
 
@@ -307,15 +314,15 @@ watch(
             <template #suffix>ms</template>
           </n-input-number>
 
-          <n-button size="tiny" quaternary :disabled="!canEdit" title="删除这一步" @click="removeStep(index)">
+          <n-button size="tiny" quaternary :disabled="!canEdit" :title="t('suite.removeStep')" @click="removeStep(index)">
             <template #icon><n-icon :component="Trash" /></template>
           </n-button>
         </div>
 
         <div v-if="expandedId === step.id" class="detail">
           <p class="detail-hint">
-            接口自己的断言照样会跑，这里的是在它之后追加的。
-            <button v-if="apiOf(step)" class="link" @click="tabs.openApi(step.apiId)">打开接口</button>
+            {{ t('suite.detailHint') }}
+            <button v-if="apiOf(step)" class="link" @click="tabs.openApi(step.apiId)">{{ t('suite.openApi') }}</button>
           </p>
 
           <assertions-pane
@@ -331,8 +338,8 @@ watch(
     </div>
 
     <!-- 添加接口：目录树多选（勾目录 = 它下面的接口按树的顺序全加进来） -->
-    <n-modal v-model:show="showAdd" preset="card" title="添加接口" style="width: 520px; max-width: 94vw">
-      <p class="pick-hint">勾目录会把它下面的接口按树的顺序一起加进来；WebSocket 接口不能加。</p>
+    <n-modal v-model:show="showAdd" preset="card" :title="t('suite.addApi')" style="width: 520px; max-width: 94vw">
+      <p class="pick-hint">{{ t('suite.pickHint') }}</p>
       <div class="pick-tree">
         <n-tree
           v-if="pickerNodes.length"
@@ -344,12 +351,12 @@ watch(
           :selectable="false"
           @update:checked-keys="(keys) => { checkedKeys = keys.filter((k) => apiNodeKeys.indexOf(k) > -1); }"
         />
-        <p v-else class="empty">这个项目还没有接口。</p>
+        <p v-else class="empty">{{ t('suite.noApis') }}</p>
       </div>
       <template #footer>
         <n-space justify="end">
-          <n-button size="small" @click="showAdd = false">取消</n-button>
-          <n-button size="small" type="primary" @click="confirmAdd">添加</n-button>
+          <n-button size="small" @click="showAdd = false">{{ t('app.cancel') }}</n-button>
+          <n-button size="small" type="primary" @click="confirmAdd">{{ t('suite.add') }}</n-button>
         </n-space>
       </template>
     </n-modal>

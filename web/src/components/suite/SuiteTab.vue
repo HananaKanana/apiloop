@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -47,6 +48,7 @@ const runs = useSuiteRunStore();
 const gateway = useGatewayStore();
 const tabs = useTabsStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const suite = ref(null);
 const loading = ref(false);
@@ -65,7 +67,7 @@ const envOptions = computed(function () {
   const list = envs.environments.map(function (env) {
     return { label: env.name, value: env.id };
   });
-  return [{ label: 'Mock（内置）', value: MOCK_ENV_ID }].concat(list);
+  return [{ label: t('suite.mockEnv'), value: MOCK_ENV_ID }].concat(list);
 });
 
 const environmentId = ref('');
@@ -126,7 +128,7 @@ async function save() {
     suites.put(Object.assign({}, data.suite, { data: undefined }));
     tabs.renameSuite(suiteId.value, data.suite.name);
   } catch (err) {
-    message.error('保存失败：' + err.message);
+    message.error(t('suite.saveFailed', { message: err.message }));
   }
 }
 
@@ -170,7 +172,7 @@ watch(
 function run() {
   if (gateway.cloudSendBlocked) {
     // 网页版、云端不替网页发请求（SERVER_SEND=0）。开了 SERVER_SEND=1 的云端照样能跑
-    message.warning('网页版不能运行测试集，请在客户端里运行');
+    message.warning(t('suite.webCannotRun'));
     return;
   }
   if (!suite.value) return;
@@ -196,8 +198,13 @@ const progress = computed(function () {
 
   return {
     label: state.iterations
-      ? '第 ' + (iteration + 1) + '/' + state.iterations + ' 轮 · 第 ' + (index + 1) + '/' + state.stepCount + ' 步'
-      : '准备中…',
+      ? t('suite.progressRoundStep', {
+        iteration: iteration + 1,
+        iterations: state.iterations,
+        index: index + 1,
+        steps: state.stepCount
+      })
+      : t('suite.preparing'),
     percent: state.stepCount && state.iterations
       ? Math.min(100, Math.round((state.steps.filter(function (s) { return !s.skipped; }).length /
         (state.stepCount * state.iterations)) * 100))
@@ -277,7 +284,7 @@ function backToEdit() {
         :disabled="!canEdit"
         @rename="rename"
       />
-      <span v-if="suite" class="meta">{{ suite.stepCount }} 步</span>
+      <span v-if="suite" class="meta">{{ t('suite.stepCount', { n: suite.stepCount }) }}</span>
 
       <span class="spacer" />
 
@@ -292,14 +299,14 @@ function backToEdit() {
 
       <n-button v-if="isRunning" size="small" type="warning" @click="stop">
         <template #icon><n-icon :component="PlayerStop" /></template>
-        停止
+        {{ t('suite.stop') }}
       </n-button>
       <n-button v-else size="small" type="primary" :disabled="!suite" @click="run">
         <template #icon><n-icon :component="PlayerPlay" /></template>
-        运行
+        {{ t('suite.run') }}
       </n-button>
 
-      <n-button v-if="view !== 'edit'" size="small" quaternary @click="backToEdit">返回编辑</n-button>
+      <n-button v-if="view !== 'edit'" size="small" quaternary @click="backToEdit">{{ t('suite.backToEdit') }}</n-button>
     </div>
 
     <div class="body">
@@ -312,9 +319,9 @@ function backToEdit() {
             <div class="progress-head">
               <span class="progress-label">{{ progress.label }}</span>
               <span class="spacer" />
-              <span class="failed-count" :class="{ bad: failedCount }">失败 {{ failedCount }}</span>
+              <span class="failed-count" :class="{ bad: failedCount }">{{ t('suite.failedCountLabel', { n: failedCount }) }}</span>
               <n-button size="tiny" quaternary @click="onlyFailed = !onlyFailed">
-                {{ onlyFailed ? '看全部' : '只看失败' }}
+                {{ onlyFailed ? t('suite.viewAll') : t('suite.onlyFailed') }}
               </n-button>
             </div>
 
@@ -328,7 +335,7 @@ function backToEdit() {
                 :class="{ failed: step.ok === false, skipped: step.skipped }"
               >
                 <span class="mark">{{ step.ok === false ? '✗' : '✓' }}</span>
-                <span class="iter">第 {{ (Number(step.iteration) || 0) + 1 }} 轮</span>
+                <span class="iter">{{ t('suite.roundN', { n: (Number(step.iteration) || 0) + 1 }) }}</span>
                 <span class="method">{{ step.method }}</span>
                 <span class="name">{{ step.name }}</span>
                 <span class="spacer" />
@@ -347,16 +354,16 @@ function backToEdit() {
           <!-- 编辑：四个页签 -->
           <!-- tabs-padding 和上面标题行的左右边距（16px）对齐，不设的话「步骤」贴着左边的分隔线 -->
           <n-tabs v-else v-model:value="activePane" type="line" size="small" animated :tabs-padding="16">
-            <n-tab-pane name="steps" tab="步骤">
+            <n-tab-pane name="steps" :tab="t('suite.paneSteps')">
               <suite-steps-pane :suite="suite" :disabled="isRunning" @change="patch" />
             </n-tab-pane>
-            <n-tab-pane name="data" tab="数据">
+            <n-tab-pane name="data" :tab="t('suite.paneData')">
               <suite-data-pane :suite="suite" :disabled="isRunning" @change="patch" />
             </n-tab-pane>
-            <n-tab-pane name="settings" tab="设置">
+            <n-tab-pane name="settings" :tab="t('suite.paneSettings')">
               <suite-settings-pane :suite="suite" :disabled="isRunning" @change="patch" />
             </n-tab-pane>
-            <n-tab-pane name="runs" tab="运行记录">
+            <n-tab-pane name="runs" :tab="t('suite.paneRuns')">
               <suite-runs-pane :suite="suite" @open="openRun" />
             </n-tab-pane>
           </n-tabs>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -66,6 +67,7 @@ const tabs = useTabsStore();
 const tree = useTreeStore();
 const message = useMessage();
 const prompt = usePrompt();
+const { t } = useI18n();
 
 /**
  * 「可以写 `{{变量}}`」这句话里的那个占位符。
@@ -73,7 +75,7 @@ const prompt = usePrompt();
  * 放在这里而不是直接写进模板：Vue 的插值语法里出现 `}}` 会被提前截断
  * （见 docs/HANDOFF.md 的「前端约定」）。
  */
-const varHint = '{{变量}}';
+const varHint = computed(function () { return t('grpc.varHint'); });
 
 const activePane = ref('message');
 const spec = computed(function () { return props.tab.spec; });
@@ -181,7 +183,7 @@ const selectOptions = computed(function () {
 
   const parts = splitMethodValue(value);
   list.unshift({
-    label: parts.service + ' / ' + parts.method + '（未解析）',
+    label: t('grpc.methodUnparsed', { service: parts.service, method: parts.method }),
     value: value,
     disabled: false
   });
@@ -191,10 +193,12 @@ const selectOptions = computed(function () {
 /* ---------------- 服务定义来源：proto 文件 / 服务端反射 ---------------- */
 
 /** 'proto'（导入的文件）或 'reflection'（反射拿到的描述） */
-const SOURCE_OPTIONS = [
-  { label: '导入 proto 文件', value: 'proto' },
-  { label: '服务端反射', value: 'reflection' }
-];
+const SOURCE_OPTIONS = computed(function () {
+  return [
+    { label: t('grpc.sourceProto'), value: 'proto' },
+    { label: t('grpc.sourceReflection'), value: 'reflection' }
+  ];
+});
 
 const source = computed({
   get: function () { return grpcCfg.value.source === 'reflection' ? 'reflection' : 'proto'; },
@@ -230,7 +234,7 @@ const fetchedText = computed(function () {
 async function doReflect() {
   if (!isGateway.value) return;
   if (!String(spec.value.url || '').trim()) {
-    message.warning('先填服务地址（host:port）');
+    message.warning(t('grpc.fillTargetFirst'));
     return;
   }
 
@@ -255,13 +259,13 @@ async function doReflect() {
     parseError.value = '';
 
     if (data.tooLarge) {
-      message.warning('描述太大没有保存，每次打开需要重新获取');
+      message.warning(t('grpc.reflectTooLarge'));
     } else {
-      message.success('已获取到 ' + services.value.length + ' 个服务');
+      message.success(t('grpc.reflectedCount', { n: services.value.length }));
     }
   } catch (err) {
     services.value = [];
-    parseError.value = (err && err.message) || '获取失败';
+    parseError.value = (err && err.message) || t('grpc.reflectFailed');
     message.error(parseError.value);
   } finally {
     reflecting.value = false;
@@ -298,7 +302,7 @@ async function doParse() {
     parseError.value = '';
   } catch (err) {
     services.value = [];
-    parseError.value = (err && err.message) || '解析失败';
+    parseError.value = (err && err.message) || t('grpc.parseFailed');
   } finally {
     parsing.value = false;
   }
@@ -394,7 +398,7 @@ const messageText = computed({
 function fillExample() {
   const text = exampleOf(services.value, grpcCfg.value.service, grpcCfg.value.method);
   if (!text) {
-    message.warning(isGateway.value ? '先选一个方法（proto 解析成功之后才有示例）' : '解析 proto 要在客户端里打开这个接口');
+    message.warning(isGateway.value ? t('grpc.noMethodForExample') : t('grpc.parseProtoInClient'));
     return;
   }
   messageText.value = text;
@@ -417,15 +421,15 @@ function useSaved(index) {
 async function saveAsSaved() {
   const text = String(grpcCfg.value.message || '').trim();
   if (!text) {
-    message.warning('消息是空的，先写一条');
+    message.warning(t('grpc.messageEmpty'));
     return;
   }
 
   const name = await prompt({
-    title: '存为常用消息',
-    label: '给这条消息起个名字，下次从「常用消息」里一点就填进来',
-    value: '常用消息 ' + (savedMessages.value.length + 1),
-    placeholder: '查 1 号用户'
+    title: t('grpc.saveAsSavedTitle'),
+    label: t('grpc.saveAsSavedLabel'),
+    value: t('grpc.savedMessageDefaultName', { n: savedMessages.value.length + 1 }),
+    placeholder: t('grpc.savedMessagePlaceholder')
   });
   if (!name || !String(name).trim()) return;
 
@@ -437,12 +441,12 @@ async function saveAsSaved() {
   if (props.tab.apiId) {
     try {
       await persist();
-      message.success('已存为常用消息');
+      message.success(t('grpc.savedMessageSaved'));
     } catch (err) {
       message.error(err.message);
     }
   } else {
-    message.success('已存为常用消息（保存到目录之后才会留下来）');
+    message.success(t('grpc.savedMessageSavedLocal'));
   }
 }
 
@@ -478,11 +482,11 @@ const deadline = computed({
 
 const callDisabledReason = computed(function () {
   if (!isGateway.value) return needsStream.value
-    ? '网页版不能连接 gRPC，请在客户端里使用'
-    : '网页版不能调用 gRPC，请在客户端里使用';
-  if (!editable.value) return '只读角色不能发起调用';
-  if (!String(spec.value.url || '').trim()) return '先填服务地址（host:port）';
-  if (!grpcCfg.value.service || !grpcCfg.value.method) return '先选服务和方法';
+    ? t('grpc.webNoStream')
+    : t('grpc.webNoCall');
+  if (!editable.value) return t('grpc.readonlyNoCall');
+  if (!String(spec.value.url || '').trim()) return t('grpc.fillTargetFirst');
+  if (!grpcCfg.value.service || !grpcCfg.value.method) return t('grpc.selectServiceMethod');
   return '';
 });
 
@@ -550,7 +554,7 @@ async function onConnect() {
 async function onSend() {
   const text = String(grpcCfg.value.message || '').trim();
   if (!text) {
-    message.warning('先写一条消息');
+    message.warning(t('grpc.writeMessageFirst'));
     return;
   }
 
@@ -582,7 +586,7 @@ async function copyGrpcurl() {
     streaming: needsStream.value
   });
   await copyText(command);
-  message.success('已复制 grpcurl 命令');
+  message.success(t('grpc.copiedGrpcurl'));
 }
 
 /* ---------------- 保存 ---------------- */
@@ -607,7 +611,7 @@ async function save() {
   try {
     const api = await persist();
     if (api) tabs.markSaved(props.tab, api);
-    message.success('已保存');
+    message.success(t('grpc.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -636,15 +640,15 @@ onMounted(function () {
       <inline-rename
         :value="tab.title"
         :editable="editable && Boolean(tab.apiId)"
-        placeholder="接口名字"
+        :placeholder="t('grpc.namePlaceholder')"
         class="title"
         @commit="(name) => tabs.applyRename('api', tab.apiId, name)"
       />
       <span class="method" :style="{ color: methodColor('GRPC') }">gRPC</span>
 
       <div class="bar-tools">
-        <n-button size="small" @click="copyGrpcurl">复制为 grpcurl</n-button>
-        <n-button v-if="tab.apiId && editable" size="small" :loading="saving" @click="save">保存</n-button>
+        <n-button size="small" @click="copyGrpcurl">{{ t('grpc.copyAsGrpcurl') }}</n-button>
+        <n-button v-if="tab.apiId && editable" size="small" :loading="saving" @click="save">{{ t('grpc.save') }}</n-button>
       </div>
     </div>
 
@@ -671,7 +675,7 @@ onMounted(function () {
         :disabled="!editable"
         size="small"
         filterable
-        placeholder="服务 / 方法"
+        :placeholder="t('grpc.serviceMethodPlaceholder')"
         class="method-select"
         @update:value="(v) => {
           const parts = splitMethodValue(v);
@@ -688,7 +692,7 @@ onMounted(function () {
         :disabled="!streamOpen && Boolean(callDisabledReason)"
         @click="onConnect"
       >
-        {{ streamOpen ? '断开' : '连接' }}
+        {{ streamOpen ? t('grpc.disconnect') : t('grpc.connect') }}
       </n-button>
       <n-button
         v-else
@@ -698,22 +702,21 @@ onMounted(function () {
         :disabled="!running && Boolean(callDisabledReason)"
         @click="onCall"
       >
-        {{ running ? '取消' : '调用' }}
+        {{ running ? t('app.cancel') : t('grpc.call') }}
       </n-button>
     </div>
 
     <div v-if="!editable" class="notice">
-      只读角色：能看已配好的内容，但参数改不了、也存不了，调用同样不可用。
+      {{ t('grpc.readonlyNotice') }}
     </div>
     <div v-if="!isGateway" class="notice">
-      网页版不能调用 gRPC，请在客户端里使用；而且<b>在客户端里打开才能解析 proto</b>，
-      这里服务 / 方法下拉只显示已保存的那一个。
+      {{ t('grpc.webNoCallPrefix') }}<b>{{ t('grpc.webNoCallBold') }}</b>{{ t('grpc.webNoCallSuffix') }}
     </div>
 
     <n-alert v-if="parseError" type="error" :show-icon="false" class="parse-error">
       {{ parseError }}
     </n-alert>
-    <p v-if="parsing" class="dim">正在解析 proto…</p>
+    <p v-if="parsing" class="dim">{{ t('grpc.parsingProto') }}</p>
     <n-alert
       v-else-if="isGateway && services.length === 0 && hasDefinition"
       type="warning"
@@ -721,8 +724,8 @@ onMounted(function () {
       class="parse-error"
     >
       {{ source === 'reflection'
-        ? '存下来的描述里没有解析出服务，重新「从服务获取」一次。'
-        : '还没有解析出服务。检查下面的 proto 文件内容对不对。' }}
+        ? t('grpc.reflectEmpty')
+        : t('grpc.parseEmpty') }}
     </n-alert>
 
     <n-alert
@@ -736,19 +739,19 @@ onMounted(function () {
 
     <div class="split">
       <n-tabs v-model:value="activePane" type="line" size="small" class="panes">
-        <n-tab-pane name="message" tab="消息">
+        <n-tab-pane name="message" :tab="t('grpc.messages')">
           <div class="row">
-            <n-button size="small" :disabled="!editable" @click="fillExample">生成示例</n-button>
+            <n-button size="small" :disabled="!editable" @click="fillExample">{{ t('grpc.generateExample') }}</n-button>
             <n-select
               :value="null"
               :options="savedOptions"
               :disabled="!editable || !savedOptions.length"
               size="small"
-              placeholder="常用消息"
+              :placeholder="t('grpc.savedMessages')"
               class="saved"
               @update:value="useSaved"
             />
-            <n-button size="small" :disabled="!editable" @click="saveAsSaved">存为常用</n-button>
+            <n-button size="small" :disabled="!editable" @click="saveAsSaved">{{ t('grpc.saveAsSaved') }}</n-button>
           </div>
 
           <code-editor
@@ -767,30 +770,30 @@ onMounted(function () {
               :disabled="!editable || !streamOpen || (streamState && streamState.halfClosed)"
               @click="onSend"
             >
-              发送
+              {{ t('grpc.send') }}
             </n-button>
             <n-button
               size="small"
               :disabled="!editable || !streamOpen || (streamState && streamState.halfClosed)"
               @click="onEndSend"
             >
-              结束发送
+              {{ t('grpc.endSend') }}
             </n-button>
             <span class="dim">
               {{ streamOpen
-                ? ((streamState && streamState.halfClosed) ? '已经结束发送，等服务端回完' : '先「连接」，再逐条发；发完点「结束发送」')
-                : '先点上面的「连接」' }}
+                ? ((streamState && streamState.halfClosed) ? t('grpc.streamHalfClosed') : t('grpc.streamSendHint'))
+                : t('grpc.streamConnectFirst') }}
             </span>
           </div>
 
           <template v-if="savedMessages.length">
-            <p class="label">常用消息</p>
+            <p class="label">{{ t('grpc.savedMessages') }}</p>
             <div class="saved-list">
               <div v-for="(item, index) in savedMessages" :key="index" class="saved-item">
                 <n-button size="tiny" quaternary @click="useSaved(index)">{{ item.name }}</n-button>
                 <span class="saved-text">{{ item.message }}</span>
                 <n-button v-if="editable" size="tiny" quaternary type="error" @click="removeSaved(index)">
-                  删除
+                  {{ t('app.delete') }}
                 </n-button>
               </div>
             </div>
@@ -798,18 +801,18 @@ onMounted(function () {
         </n-tab-pane>
 
         <n-tab-pane name="metadata" tab="Metadata">
-          <p class="label">调用时带过去的 metadata（键和值都能写 <code>{{ varHint }}</code>）</p>
+          <p class="label">{{ t('grpc.metadataHintPrefix') }}<code>{{ varHint }}</code>{{ t('grpc.metadataHintSuffix') }}</p>
           <key-value-table
             :model-value="grpcCfg.metadata"
             :disabled="!editable"
             :scope="scope"
-            key-placeholder="键"
-            value-placeholder="值"
+            :key-placeholder="t('grpc.keyPlaceholder')"
+            :value-placeholder="t('grpc.valuePlaceholder')"
             @update:model-value="(v) => { grpcCfg.metadata = v; touch(); }"
           />
         </n-tab-pane>
 
-        <n-tab-pane name="proto" tab="服务定义">
+        <n-tab-pane name="proto" :tab="t('grpc.tabDefinition')">
           <div class="row">
             <n-select
               :value="source"
@@ -827,22 +830,22 @@ onMounted(function () {
                 :loading="reflecting"
                 @click="doReflect"
               >
-                从服务获取
+                {{ t('grpc.fetchFromServer') }}
               </n-button>
-              <span class="dim">{{ reflection ? '获取于 ' + fetchedText : '还没获取过' }}</span>
+              <span class="dim">{{ reflection ? t('grpc.fetchedAt', { time: fetchedText }) : t('grpc.notFetchedYet') }}</span>
             </template>
-            <span v-else class="dim">改动之后会自动重新解析</span>
+            <span v-else class="dim">{{ t('grpc.autoReparse') }}</span>
           </div>
 
           <!-- 服务端反射 -->
           <template v-if="source === 'reflection'">
             <p v-if="reflection" class="label">
-              拿到 <b>{{ services.length }}</b> 个服务、<b>{{ methodCount }}</b> 个方法，获取于 {{ fetchedText }}。
-              描述已经随接口保存，之后打开不用再连服务端。
+              {{ t('grpc.reflectedGot') }}<b>{{ services.length }}</b>{{ t('grpc.reflectedServicesSuffix') }}<b>{{ methodCount }}</b>{{ t('grpc.reflectedMethodsAt', { time: fetchedText }) }}
+              {{ t('grpc.reflectedSaved') }}
             </p>
-            <n-empty v-else size="small" description="还没从服务端获取过描述" />
+            <n-empty v-else size="small" :description="t('grpc.noReflectionYet')" />
             <p v-if="!isGateway" class="dim">
-              网页版没有这个接口：服务 / 方法下拉只显示已保存的那一个，要重新获取请在客户端里打开。
+              {{ t('grpc.webNoReflectHint') }}
             </p>
           </template>
 
@@ -851,9 +854,9 @@ onMounted(function () {
             <div class="row">
               <label class="file-pick">
                 <input type="file" accept=".proto" multiple :disabled="!editable" @change="onPick" />
-                <n-button size="small" :disabled="!editable">导入 .proto</n-button>
+                <n-button size="small" :disabled="!editable">{{ t('grpc.importProto') }}</n-button>
               </label>
-              <n-button size="small" :disabled="!editable" @click="addFile">新建</n-button>
+              <n-button size="small" :disabled="!editable" @click="addFile">{{ t('grpc.newFile') }}</n-button>
             </div>
 
             <div v-if="files.length" class="files">
@@ -866,14 +869,14 @@ onMounted(function () {
               >
                 <span class="fname">{{ file.name }}</span>
                 <n-button v-if="editable" size="tiny" quaternary type="error" @click.stop="removeFile(index)">
-                  删除
+                  {{ t('app.delete') }}
                 </n-button>
               </div>
             </div>
-            <n-empty v-else size="small" description="还没有 proto 文件" />
+            <n-empty v-else size="small" :description="t('grpc.noProtoFiles')" />
 
             <template v-if="activeValid">
-              <p class="label">文件名（import 别人的时候按这个名字找）</p>
+              <p class="label">{{ t('grpc.fileNameLabel') }}</p>
               <n-input v-model:value="activeName" size="small" :disabled="!editable" placeholder="user.proto" />
               <code-editor
                 v-model="activeContent"
@@ -886,11 +889,9 @@ onMounted(function () {
           </template>
         </n-tab-pane>
 
-        <n-tab-pane name="assertions" tab="断言">
+        <n-tab-pane name="assertions" :tab="t('grpc.tabAssertions')">
           <p class="label">
-            调用结束之后按下面的「响应」跑断言、提取变量（和 HTTP 接口的用法一样）：
-            状态码是 gRPC 的状态码，响应头是 metadata 和 trailers 合起来，响应体是一元那条消息、
-            服务端流是全部消息组成的数组。
+            {{ t('grpc.assertionsHint') }}
           </p>
           <assertions-pane
             v-model:assertions="assertions"
@@ -900,9 +901,9 @@ onMounted(function () {
           />
         </n-tab-pane>
 
-        <n-tab-pane name="settings" tab="设置">
+        <n-tab-pane name="settings" :tab="t('grpc.tabSettings')">
           <div class="field">
-            <span class="label">超时（毫秒）</span>
+            <span class="label">{{ t('grpc.timeoutLabel') }}</span>
             <n-input-number
               v-model:value="deadline"
               :min="DEADLINE_MIN"
@@ -913,7 +914,7 @@ onMounted(function () {
             />
           </div>
           <p class="note">
-            到点就取消这次调用，状态里会写 DEADLINE_EXCEEDED。默认 {{ DEADLINE_DEFAULT }} 毫秒。
+            {{ t('grpc.timeoutNote', { n: DEADLINE_DEFAULT }) }}
           </p>
         </n-tab-pane>
       </n-tabs>

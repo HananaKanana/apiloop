@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert } from 'naive-ui';
 import { formatBytes } from '@/utils/bytes';
 
@@ -16,6 +17,7 @@ const props = defineProps({
   events: { type: Array, default: function () { return []; } },
   dropped: { type: Number, default: 0 }
 });
+const { t } = useI18n();
 
 const listEl = ref(null);
 const expanded = ref(-1);
@@ -59,7 +61,7 @@ function formatTime(ms) {
 /** 消息正文：文本用 text，二进制只有 base64 */
 function body(item) {
   if (item.text !== undefined && item.text !== null) return String(item.text);
-  if (item.base64) return '（二进制内容，' + formatBytes(item.size) + '）';
+  if (item.base64) return t('ws.logBinarySummary', { size: formatBytes(item.size) });
   return '';
 }
 
@@ -85,18 +87,18 @@ function toggle(index) {
 /** 系统行（连接 / 关闭 / 出错）的文案 */
 function systemText(item) {
   if (item.type === 'open') {
-    return item.protocol ? '已连接，子协议 ' + item.protocol : '已连接';
+    return item.protocol ? t('ws.logConnectedProtocol', { protocol: item.protocol }) : t('ws.logConnected');
   }
   if (item.type === 'close') {
-    return '连接已关闭：code ' + item.code + (item.reason ? '，' + item.reason : '');
+    return t('ws.logClosed', { code: item.code }) + (item.reason ? t('ws.logClosedReason', { reason: item.reason }) : '');
   }
-  if (item.type === 'error') return '出错：' + item.message;
+  if (item.type === 'error') return t('ws.logError', { message: item.message });
   return item.text || '';
 }
 
 const overflowText = computed(function () {
   if (!props.dropped) return '';
-  return '只显示最近 2000 条，更早的 ' + props.dropped + ' 条已经丢弃。';
+  return t('ws.logOverflow', props.dropped);
 });
 </script>
 
@@ -116,7 +118,7 @@ const overflowText = computed(function () {
             @click="toggle(index)"
           >
             <span class="dir" :class="item.direction === 'out' ? 'out' : 'in'">
-              {{ item.direction === 'out' ? '↑ 发出' : (item.direction === 'ack' ? '↩ 确认' : '↓ 收到') }}
+              {{ item.direction === 'out' ? t('ws.directionOut') : (item.direction === 'ack' ? t('ws.directionAck') : t('ws.directionIn')) }}
             </span>
             <span class="time">{{ formatTime(item.time) }}</span>
             <span v-if="item.event" class="name">{{ item.event }}</span>
@@ -132,13 +134,13 @@ const overflowText = computed(function () {
           <div v-if="expanded === index" class="detail">
             <pre class="detail-body">{{ pretty(item) }}</pre>
             <div v-if="item.truncated" class="detail-meta">
-              这条消息超过了 64 KB，服务端只保留了前面一部分，长度显示的是原始大小。
+              {{ t('ws.truncatedNote') }}
             </div>
           </div>
         </div>
       </template>
 
-      <p v-else class="empty">还没有消息。</p>
+      <p v-else class="empty">{{ t('ws.empty') }}</p>
     </div>
   </div>
 </template>

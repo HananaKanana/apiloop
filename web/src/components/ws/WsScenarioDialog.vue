@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NModal, NSpace } from 'naive-ui';
 
 /**
@@ -21,6 +22,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:show', 'confirm']);
+const { t } = useI18n();
 
 const body = computed(function () {
   if (!props.scenario) return '';
@@ -32,40 +34,37 @@ const body = computed(function () {
   <n-modal
     :show="show"
     preset="card"
-    title="保存为 mock"
+    :title="t('ws.scenarioTitle')"
     style="width: 720px; max-width: 94vw"
     @update:show="(v) => emit('update:show', v)"
   >
     <n-alert type="info" :show-icon="false" class="notice">
-      连接后会推送 <strong>{{ stats.pushed }}</strong> 条，
-      生成 <strong>{{ stats.ruleCount }}</strong> 条规则<template v-if="stats.skipped">，
-      跳过 <strong>{{ stats.skipped }}</strong> 条二进制消息</template>。
+      {{ t('ws.scenarioPushLead') }}<strong>{{ stats.pushed }}</strong>{{ t('ws.scenarioPushMid') }}<strong>{{ stats.ruleCount }}</strong>{{ t('ws.scenarioRuleTail') }}<template v-if="stats.skipped">{{ t('ws.scenarioSkipLead') }}<strong>{{ stats.skipped }}</strong>{{ t('ws.scenarioSkipTail') }}</template>{{ t('ws.scenarioPeriod') }}
     </n-alert>
 
     <n-alert v-if="stats.skipped" type="warning" :show-icon="false" class="notice">
-      二进制消息没法按文本匹配，回放时不会出现。
+      {{ t('ws.scenarioBinaryNote') }}
     </n-alert>
 
     <n-alert v-if="stats.cappedDelays" type="warning" :show-icon="false" class="notice">
-      有 {{ stats.cappedDelays }} 处间隔超过 60 秒，按 60 秒保存（契约规定的上限）。
+      {{ t('ws.scenarioCappedDelays', stats.cappedDelays) }}
     </n-alert>
 
     <n-alert v-if="stats.truncated" type="warning" :show-icon="false" class="notice">
-      步骤总数超过 1000，只保留了前 1000 步，还有 {{ stats.truncated }} 步没有保存。
+      {{ t('ws.scenarioTruncated', stats.truncated) }}
     </n-alert>
 
     <n-alert v-if="stats.duplicates" type="info" :show-icon="false" class="notice">
-      有 {{ stats.duplicates }} 条重复的发送消息。规则是「第一条匹配上的生效」，
-      重复的那条和它收到的回复都回放不到，只保留了第一条规则。
+      {{ t('ws.scenarioDuplicates', stats.duplicates) }}
     </n-alert>
 
-    <p class="label">生成的场景</p>
+    <p class="label">{{ t('ws.scenarioGenerated') }}</p>
     <pre class="preview">{{ body }}</pre>
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="emit('update:show', false)">取消</n-button>
-        <n-button type="primary" :loading="saving" @click="emit('confirm')">保存</n-button>
+        <n-button @click="emit('update:show', false)">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="saving" @click="emit('confirm')">{{ t('ws.save') }}</n-button>
       </n-space>
     </template>
   </n-modal>

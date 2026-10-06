@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -49,9 +50,10 @@ const envs = useEnvStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 /** 未定义变量那条提示里的例子 —— 模板的 `{{ }}` 插值里不能出现 `}}`，所以写在 script 里 */
-const VAR_EXAMPLE = '{{名字}}';
+const varExample = computed(function () { return t('load.varExample'); });
 
 const state = computed(function () { return props.tab.load; });
 const running = computed(function () { return Boolean(state.value && state.value.running); });
@@ -69,8 +71,8 @@ const envId = computed({
 });
 
 const envOptions = computed(function () {
-  const list = [{ label: '无环境', value: '' }];
-  list.push({ label: 'Mock（内置）', value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
+  const list = [{ label: t('load.noEnvironment'), value: '' }];
+  list.push({ label: t('load.mockBuiltIn'), value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });
@@ -80,7 +82,7 @@ const envOptions = computed(function () {
 const envName = computed(function () {
   const id = envId.value;
   if (!id) return '';
-  if (id === MOCK_ENV_ID) return 'Mock（内置）';
+  if (id === MOCK_ENV_ID) return t('load.mockBuiltIn');
   const env = envs.environments.find(function (item) { return item.id === id; });
   return env ? env.name : '';
 });
@@ -109,10 +111,10 @@ function onStart() {
 
   if (isProductionEnv(envName.value)) {
     dialog.error({
-      title: '压测生产环境',
-      content: '你要压测的是生产环境：' + envName.value + '。确定继续吗？',
-      positiveText: '继续压测',
-      negativeText: '取消',
+      title: t('load.prodTitle'),
+      content: t('load.prodConfirm', { env: envName.value }),
+      positiveText: t('load.prodContinue'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { return loadStore.start(props.tab); }
     });
     return;
@@ -150,11 +152,13 @@ const meta = computed(function () {
   return { method: request.method || '', url: request.url || '', envName: envName.value };
 });
 
-const STATUS_LABELS = {
-  finished: '跑完了',
-  stopped: '已停止',
-  error: '出错了'
-};
+const statusLabels = computed(function () {
+  return {
+    finished: t('load.statusFinished'),
+    stopped: t('load.statusStopped'),
+    error: t('load.statusError')
+  };
+});
 
 function statusType(status) {
   if (status === 'finished') return 'success';
@@ -166,9 +170,9 @@ async function copySummary() {
   if (!summary.value) return;
   try {
     await copyText(summaryText(summary.value, meta.value));
-    message.success('已复制结果');
+    message.success(t('load.resultCopied'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 
@@ -203,14 +207,14 @@ const elapsedText = computed(function () {
   <div class="load-tab">
     <!-- 网页版（不是客户端）：压测这条路不存在 -->
     <n-alert v-if="blocked" type="warning" :show-icon="false" class="notice">
-      网页版不能压测，请在客户端里使用。
+      {{ t('load.blockedNotice') }}
     </n-alert>
 
     <!-- ============================ 设置 ============================ -->
     <div class="card">
       <div class="settings">
         <label class="field">
-          <span>环境</span>
+          <span>{{ t('load.environment') }}</span>
           <n-select
             size="small"
             :value="envId"
@@ -221,7 +225,7 @@ const elapsedText = computed(function () {
         </label>
 
         <label class="field">
-          <span>并发数</span>
+          <span>{{ t('load.concurrency') }}</span>
           <n-input-number
             v-model:value="settings.concurrency"
             size="small"
@@ -232,10 +236,10 @@ const elapsedText = computed(function () {
         </label>
 
         <label class="field wide">
-          <span>停止条件</span>
+          <span>{{ t('load.stopCondition') }}</span>
           <n-radio-group v-model:value="settings.mode" size="small" :disabled="running">
-            <n-radio-button value="count">按次数</n-radio-button>
-            <n-radio-button value="duration">按时长</n-radio-button>
+            <n-radio-button value="count">{{ t('load.byCount') }}</n-radio-button>
+            <n-radio-button value="duration">{{ t('load.byDuration') }}</n-radio-button>
           </n-radio-group>
           <n-input-number
             v-if="settings.mode === 'count'"
@@ -255,12 +259,12 @@ const elapsedText = computed(function () {
               :disabled="running"
               class="small-input"
             />
-            <span class="unit">秒</span>
+            <span class="unit">{{ t('load.seconds') }}</span>
           </template>
         </label>
 
         <label class="field">
-          <span>预热</span>
+          <span>{{ t('load.rampUp') }}</span>
           <n-input-number
             v-model:value="settings.rampUpSec"
             size="small"
@@ -268,11 +272,11 @@ const elapsedText = computed(function () {
             :max="range('rampUpSec').max"
             :disabled="running"
           />
-          <span class="unit">秒</span>
+          <span class="unit">{{ t('load.seconds') }}</span>
         </label>
 
         <label class="field">
-          <span>超时</span>
+          <span>{{ t('load.timeout') }}</span>
           <n-input-number
             v-model:value="settings.timeoutMs"
             size="small"
@@ -280,35 +284,35 @@ const elapsedText = computed(function () {
             :max="range('timeoutMs').max"
             :disabled="running"
           />
-          <span class="unit">毫秒</span>
+          <span class="unit">{{ t('load.milliseconds') }}</span>
         </label>
 
         <label class="field wide">
-          <span>算成功</span>
+          <span>{{ t('load.countAsSuccess') }}</span>
           <n-input
             v-model:value="settings.okStatusText"
             size="small"
             :disabled="running"
-            placeholder="留空是 2xx 和 3xx，也可以写 200,201"
+            :placeholder="t('load.okStatusPlaceholder')"
           />
         </label>
       </div>
 
       <p class="hint">
-        压测只看状态码和响应时间：不跑脚本、不跑断言、不记历史。变量在开始时按环境算一次。
+        {{ t('load.hint') }}
       </p>
 
       <div class="actions">
-        <n-button v-if="running" type="warning" secondary size="small" @click="onStop">停止</n-button>
+        <n-button v-if="running" type="warning" secondary size="small" @click="onStop">{{ t('load.stop') }}</n-button>
         <n-tooltip v-else-if="blocked" trigger="hover">
           <template #trigger>
-            <span><n-button size="small" type="primary" disabled>开始压测</n-button></span>
+            <span><n-button size="small" type="primary" disabled>{{ t('load.start') }}</n-button></span>
           </template>
-          网页版不能压测，请在客户端里使用
+          {{ t('load.blockedHint') }}
         </n-tooltip>
-        <n-button v-else size="small" type="primary" @click="onStart">开始压测</n-button>
+        <n-button v-else size="small" type="primary" @click="onStart">{{ t('load.start') }}</n-button>
 
-        <span class="warn">压测会对目标服务器产生真实压力，请先和接口负责人确认</span>
+        <span class="warn">{{ t('load.pressureWarning') }}</span>
       </div>
 
       <n-alert
@@ -326,7 +330,7 @@ const elapsedText = computed(function () {
         :show-icon="false"
         class="notice inline"
       >
-        这些变量没有值，地址里会原样带着 {{ VAR_EXAMPLE }} 发出去：{{ state.missingVariables.join('、') }}
+        {{ t('load.missingVariables', { example: varExample, vars: state.missingVariables.join(t('load.listSeparator')) }) }}
       </n-alert>
     </div>
 
@@ -334,14 +338,14 @@ const elapsedText = computed(function () {
 
     <div v-if="running || summary || state.ticks.length" class="card">
       <div class="nums">
-        <div class="num"><b>{{ formatCount(live.sent) }}</b><span>已发</span></div>
-        <div class="num ok"><b>{{ formatCount(live.ok) }}</b><span>成功</span></div>
-        <div class="num fail"><b>{{ formatCount(live.failed) }}</b><span>失败</span></div>
-        <div class="num"><b>{{ live.qps }}</b><span>当前 QPS</span></div>
-        <div class="num"><b>{{ formatMs(live.avgMs) }}</b><span>平均响应</span></div>
+        <div class="num"><b>{{ formatCount(live.sent) }}</b><span>{{ t('load.sent') }}</span></div>
+        <div class="num ok"><b>{{ formatCount(live.ok) }}</b><span>{{ t('load.success') }}</span></div>
+        <div class="num fail"><b>{{ formatCount(live.failed) }}</b><span>{{ t('load.failed') }}</span></div>
+        <div class="num"><b>{{ live.qps }}</b><span>{{ t('load.currentQps') }}</span></div>
+        <div class="num"><b>{{ formatMs(live.avgMs) }}</b><span>{{ t('load.avgResponse') }}</span></div>
         <div class="num"><b>{{ formatMs(live.p95Ms) }}</b><span>P95</span></div>
-        <div class="num"><b>{{ formatCount(live.active) }}</b><span>进行中</span></div>
-        <div class="num"><b>{{ elapsedText }}</b><span>已用时间</span></div>
+        <div class="num"><b>{{ formatCount(live.active) }}</b><span>{{ t('load.active') }}</span></div>
+        <div class="num"><b>{{ elapsedText }}</b><span>{{ t('load.elapsedTime') }}</span></div>
       </div>
 
       <div class="progress">
@@ -354,27 +358,27 @@ const elapsedText = computed(function () {
       <template v-if="summary">
         <div class="summary-head">
           <n-tag :type="statusType(state.status)" size="small" :bordered="false">
-            {{ STATUS_LABELS[state.status] || state.status }}
+            {{ statusLabels[state.status] || state.status }}
           </n-tag>
           <span v-if="meta.method" class="method" :style="{ color: methodColor(meta.method) }">{{ meta.method }}</span>
           <span class="url">{{ meta.url }}</span>
           <span class="spacer" />
-          <n-button size="tiny" @click="copySummary">复制结果</n-button>
+          <n-button size="tiny" @click="copySummary">{{ t('load.copyResult') }}</n-button>
         </div>
 
         <div class="cards">
-          <div class="mini"><span>总请求</span><b>{{ formatCount(summary.sent) }}</b></div>
-          <div class="mini"><span>成功</span><b>{{ formatCount(summary.ok) }}</b></div>
-          <div class="mini"><span>失败</span><b>{{ formatCount(summary.failed) }}</b></div>
-          <div class="mini"><span>错误率</span><b>{{ formatPercent(summary.errorRate) }}</b></div>
-          <div class="mini"><span>总用时</span><b>{{ formatDuration(summary.durationMs) }}</b></div>
-          <div class="mini"><span>平均 QPS</span><b>{{ summary.qps }}</b></div>
+          <div class="mini"><span>{{ t('load.totalRequests') }}</span><b>{{ formatCount(summary.sent) }}</b></div>
+          <div class="mini"><span>{{ t('load.success') }}</span><b>{{ formatCount(summary.ok) }}</b></div>
+          <div class="mini"><span>{{ t('load.failed') }}</span><b>{{ formatCount(summary.failed) }}</b></div>
+          <div class="mini"><span>{{ t('load.errorRate') }}</span><b>{{ formatPercent(summary.errorRate) }}</b></div>
+          <div class="mini"><span>{{ t('load.totalDuration') }}</span><b>{{ formatDuration(summary.durationMs) }}</b></div>
+          <div class="mini"><span>{{ t('load.avgQps') }}</span><b>{{ summary.qps }}</b></div>
         </div>
 
         <div class="cards">
-          <div class="mini"><span>最小</span><b>{{ formatMs(summary.minMs) }}</b></div>
-          <div class="mini"><span>平均</span><b>{{ formatMs(summary.avgMs) }}</b></div>
-          <div class="mini"><span>最大</span><b>{{ formatMs(summary.maxMs) }}</b></div>
+          <div class="mini"><span>{{ t('load.min') }}</span><b>{{ formatMs(summary.minMs) }}</b></div>
+          <div class="mini"><span>{{ t('load.avg') }}</span><b>{{ formatMs(summary.avgMs) }}</b></div>
+          <div class="mini"><span>{{ t('load.max') }}</span><b>{{ formatMs(summary.maxMs) }}</b></div>
           <div class="mini"><span>P50</span><b>{{ formatMs(summary.p50Ms) }}</b></div>
           <div class="mini"><span>P90</span><b>{{ formatMs(summary.p90Ms) }}</b></div>
           <div class="mini"><span>P95</span><b>{{ formatMs(summary.p95Ms) }}</b></div>
@@ -383,8 +387,8 @@ const elapsedText = computed(function () {
 
         <div class="groups">
           <div class="group">
-            <p class="group-title">状态码分布</p>
-            <p v-if="!(summary.statusCodes || []).length" class="group-empty">没有拿到任何响应</p>
+            <p class="group-title">{{ t('load.statusCodesTitle') }}</p>
+            <p v-if="!(summary.statusCodes || []).length" class="group-empty">{{ t('load.noResponses') }}</p>
             <p v-for="item in summary.statusCodes" :key="item.status" class="group-row">
               <span class="code">{{ item.status }}</span>
               <span class="count">× {{ formatCount(item.count) }}</span>
@@ -392,9 +396,9 @@ const elapsedText = computed(function () {
           </div>
 
           <div class="group">
-            <p class="group-title">错误分组</p>
+            <p class="group-title">{{ t('load.errorsTitle') }}</p>
             <p v-if="!(summary.errors || []).length" class="group-empty">
-              没有网络错误（状态码不对的都算失败，见左边的状态码分布）
+              {{ t('load.noNetworkErrors') }}
             </p>
             <p v-for="item in summary.errors" :key="item.group" class="group-row">
               <span class="code">{{ item.group }}</span>
@@ -405,18 +409,24 @@ const elapsedText = computed(function () {
         </div>
 
         <p v-if="summary.aborted" class="hint">
-          有 {{ formatCount(summary.aborted) }} 个请求在停止时被取消，它们既不算成功也不算失败。
+          {{ t('load.aborted', { n: summary.aborted }) }}
         </p>
       </template>
 
       <!-- 上一次的结果：留在下面方便对比 -->
       <template v-if="previous">
-        <p class="previous-title">上次结果</p>
+        <p class="previous-title">{{ t('load.previousTitle') }}</p>
         <p class="previous">
-          总请求 {{ formatCount(previous.sent) }} · 成功 {{ formatCount(previous.ok) }} ·
-          失败 {{ formatCount(previous.failed) }}（{{ formatPercent(previous.errorRate) }}）·
-          平均 {{ formatMs(previous.avgMs) }} · P95 {{ formatMs(previous.p95Ms) }} ·
-          QPS {{ previous.qps }} · 用时 {{ formatDuration(previous.durationMs) }}
+          {{ t('load.previousSummary', {
+            sent: formatCount(previous.sent),
+            ok: formatCount(previous.ok),
+            failed: formatCount(previous.failed),
+            rate: formatPercent(previous.errorRate),
+            avg: formatMs(previous.avgMs),
+            p95: formatMs(previous.p95Ms),
+            qps: previous.qps,
+            duration: formatDuration(previous.durationMs)
+          }) }}
         </p>
       </template>
     </div>

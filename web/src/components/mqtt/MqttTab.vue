@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -58,6 +59,7 @@ const ui = useUiStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const paneTabsTheme = usePaneTabsTheme();
+const { t } = useI18n();
 
 /** 这个接口和云端对不上：顶部一条红提示 + 「处理」入口（和 WsTab 那条一致） */
 const conflicted = computed(function () {
@@ -114,15 +116,17 @@ const busy = computed(function () {
   return status.value === 'connecting';
 });
 
-const STATUS_TEXT = {
-  idle: '未连接',
-  connecting: '连接中…',
-  open: '已连接',
-  reconnecting: '重连中…',
-  closed: '已断开',
-  error: '出错',
-  ended: '会话已结束'
-};
+const STATUS_TEXT = computed(function () {
+  return {
+    idle: t('mqtt.statusIdle'),
+    connecting: t('mqtt.statusConnecting'),
+    open: t('mqtt.statusOpen'),
+    reconnecting: t('mqtt.statusReconnecting'),
+    closed: t('mqtt.statusClosed'),
+    error: t('mqtt.statusError'),
+    ended: t('mqtt.statusEnded')
+  };
+});
 
 /**
  * 状态标签的配色：**只给需要人管的那几档上色**，已断开 / 未连接保持中性 ——
@@ -137,7 +141,7 @@ const STATUS_TYPE = {
 };
 
 const statusText = computed(function () {
-  return STATUS_TEXT[status.value] || status.value;
+  return STATUS_TEXT.value[status.value] || status.value;
 });
 
 const statusType = computed(function () {
@@ -148,8 +152,8 @@ const statusType = computed(function () {
 const channelHint = computed(function () {
   const current = state.value;
   if (!current) return '';
-  if (current.channel === 'retrying') return '事件流断了，正在重连…';
-  if (current.channel === 'ended') return '会话已被服务端回收';
+  if (current.channel === 'retrying') return t('mqtt.channelRetrying');
+  if (current.channel === 'ended') return t('mqtt.channelEnded');
   return '';
 });
 
@@ -191,22 +195,26 @@ const QOS_OPTIONS = [
   { label: '2', value: 2 }
 ];
 
-const QOS_OPTIONS_LONG = [
-  { label: '0（最多一次）', value: 0 },
-  { label: '1（至少一次）', value: 1 },
-  { label: '2（恰好一次）', value: 2 }
-];
+const QOS_OPTIONS_LONG = computed(function () {
+  return [
+    { label: t('mqtt.qos0'), value: 0 },
+    { label: t('mqtt.qos1'), value: 1 },
+    { label: t('mqtt.qos2'), value: 2 }
+  ];
+});
 
-const PAYLOAD_LANGS = [
-  { label: 'JSON', value: 'json' },
-  { label: '文本', value: 'text' }
-];
+const PAYLOAD_LANGS = computed(function () {
+  return [
+    { label: t('mqtt.payloadJson'), value: 'json' },
+    { label: t('mqtt.payloadText'), value: 'text' }
+  ];
+});
 
 /**
  * 模板里**不能直接写 `{{变量}}`** —— Vue 会把它当成插值（一个叫「变量」的绑定），
  * 轻则渲染成空、重则报错。这种带花括号的示例文案一律放脚本里。
  */
-const VAR_HINT = '{{变量}}';
+const VAR_HINT = computed(function () { return t('mqtt.varHint'); });
 
 /* ---------------- 改了就标未保存 ---------------- */
 
@@ -248,7 +256,7 @@ function connectPayload() {
 async function onConnect() {
   // 网页版没有 /mqtt（只在客户端里有）：按钮已经灰了，但地址栏回车也会走到这里，兜一次
   if (connectBlocked.value) {
-    message.warning('网页版不能连接 MQTT，请在客户端里使用');
+    message.warning(t('mqtt.connectBlocked'));
     return;
   }
   // 连接中再点一次会建出两个会话，前一个就漏在服务端了
@@ -256,20 +264,20 @@ async function onConnect() {
 
   const url = String(spec.value.url || '').trim();
   if (!url) {
-    message.warning('请先填写 broker 地址');
+    message.warning(t('mqtt.brokerRequired'));
     return;
   }
   // 地址以 {{变量}} 开头时本机判不了，交给服务端在变量替换之后再判，它返回的是同一个中文错误
   if (url.indexOf('{{') !== 0 && !URL_SCHEMES.test(url)) {
-    message.warning('地址要以 mqtt://、mqtts://、ws:// 或 wss:// 开头');
+    message.warning(t('mqtt.schemeRequired'));
     return;
   }
   if (!projects.currentId) {
-    message.warning('还没有选中项目');
+    message.warning(t('mqtt.noProject'));
     return;
   }
   if (mqttCfg.value.clean === false && !String(mqttCfg.value.clientId || '').trim()) {
-    message.warning('关掉 clean session 时要填客户端 ID，broker 靠它认住这个会话');
+    message.warning(t('mqtt.clientIdRequired'));
     return;
   }
 
@@ -277,7 +285,7 @@ async function onConnect() {
   const ok = await mqtt.connect(props.tab.key, connectPayload());
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '连接失败');
+    message.error((current && current.error) || t('mqtt.connectFailed'));
   }
 }
 
@@ -349,8 +357,8 @@ function subState(row) {
 function subStatusText(row) {
   const hit = subState(row);
   if (!hit) return '—';
-  if (hit.error) return 'broker 拒绝';
-  return '已订阅';
+  if (hit.error) return t('mqtt.subRejected');
+  return t('mqtt.subSubscribed');
 }
 
 function subStatusType(row) {
@@ -361,10 +369,10 @@ function subStatusType(row) {
 
 function subStatusHint(row) {
   const hit = subState(row);
-  if (!hit) return '还没有订阅过这个主题';
+  if (!hit) return t('mqtt.subNever');
   if (hit.error) return hit.error;
-  if (hit.granted === null || hit.granted === undefined) return 'broker 已接受这次订阅';
-  return 'broker 授予的 QoS：' + hit.granted;
+  if (hit.granted === null || hit.granted === undefined) return t('mqtt.subAccepted');
+  return t('mqtt.subGranted', { qos: hit.granted });
 }
 
 function isSubscribed(row) {
@@ -375,13 +383,13 @@ function isSubscribed(row) {
 async function subscribeRow(row) {
   const topic = String(row.topic || '').trim();
   if (!topic) {
-    message.warning('先填主题');
+    message.warning(t('mqtt.topicRequired'));
     return;
   }
   const ok = await mqtt.subscribe(props.tab.key, { topic: topic, qos: row.qos });
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '订阅失败');
+    message.error((current && current.error) || t('mqtt.subscribeFailed'));
   }
 }
 
@@ -391,7 +399,7 @@ async function unsubscribeRow(row) {
   const ok = await mqtt.unsubscribe(props.tab.key, topic);
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '取消订阅失败');
+    message.error((current && current.error) || t('mqtt.unsubscribeFailed'));
   }
 }
 
@@ -436,7 +444,7 @@ const commonForm = ref({ name: '' });
 function openSaveCommon() {
   const topic = String(draftTopic.value || '').trim();
   if (!topic) {
-    message.warning('先填发布主题');
+    message.warning(t('mqtt.publishTopicRequired'));
     return;
   }
   commonForm.value = { name: topic };
@@ -446,7 +454,7 @@ function openSaveCommon() {
 async function confirmSaveCommon() {
   const name = String(commonForm.value.name || '').trim();
   if (!name) {
-    message.warning('给这条常用发布起个名字');
+    message.warning(t('mqtt.commonNameRequired'));
     return;
   }
 
@@ -467,7 +475,7 @@ async function confirmSaveCommon() {
       const api = await persist();
       // 存回接口了就把快照对齐，别在标签页上留一个假的「未保存」圆点
       if (api) tabs.markSaved(props.tab, api);
-      message.success('已记下这条常用发布');
+      message.success(t('mqtt.commonSaved'));
     } catch (err) {
       message.error(err.message);
     }
@@ -494,15 +502,15 @@ async function removeSaved(index) {
 async function publishNow() {
   const topic = String(draftTopic.value || '').trim();
   if (!connected.value) {
-    message.warning('还没有连接');
+    message.warning(t('mqtt.notConnected'));
     return;
   }
   if (!topic) {
-    message.warning('先填发布主题');
+    message.warning(t('mqtt.publishTopicRequired'));
     return;
   }
   if (topic.indexOf('+') > -1 || topic.indexOf('#') > -1) {
-    message.warning('发布的主题不能带 + 或 #（那是订阅用的通配符）');
+    message.warning(t('mqtt.publishWildcard'));
     return;
   }
 
@@ -514,7 +522,7 @@ async function publishNow() {
   });
   if (!ok) {
     const current = state.value;
-    message.error((current && current.error) || '发布失败');
+    message.error((current && current.error) || t('mqtt.publishFailed'));
   }
 }
 
@@ -536,7 +544,7 @@ async function save() {
   try {
     const api = await persist();
     if (api) tabs.markSaved(props.tab, api);
-    message.success('已保存');
+    message.success(t('mqtt.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -547,7 +555,7 @@ async function save() {
 /* ---------------- 保存到目录（临时标签页） ---------------- */
 
 function folderOptions() {
-  const list = [{ label: '（根目录）', value: null }];
+  const list = [{ label: t('mqtt.rootFolder'), value: null }];
   (function walk(nodes, depth) {
     (nodes || []).forEach(function (node) {
       if (node.kind !== 'folder') return;
@@ -583,7 +591,7 @@ async function renameTitle(name) {
   try {
     await tree.renameApi(props.tab.apiId, name);
     tabs.applyRename('api', props.tab.apiId, name);
-    message.success('已重命名');
+    message.success(t('mqtt.renamed'));
   } catch (err) {
     message.error(err.message);
   }
@@ -607,7 +615,7 @@ function openSaveDialog() {
 
 async function confirmSaveToFolder() {
   if (!String(saveForm.value.name || '').trim()) {
-    message.warning('请填写接口名称');
+    message.warning(t('mqtt.apiNameRequired'));
     return;
   }
 
@@ -624,7 +632,7 @@ async function confirmSaveToFolder() {
     tabs.markSaved(props.tab, data.api);
     showSaveDialog.value = false;
     await tree.refresh();
-    message.success('已保存到目录');
+    message.success(t('mqtt.savedToFolder'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -640,7 +648,7 @@ function onKeydown(event) {
   event.preventDefault();
 
   if (!canEdit.value) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('mqtt.readonlyCannotSave'));
     return;
   }
   if (bound.value) save();
@@ -674,8 +682,8 @@ watch(
   <div class="mqtt-tab">
     <!-- 这个接口和云端对不上：顶部一条红提示 + 处理入口 -->
     <div v-if="conflicted" class="conflict-bar">
-      <span class="conflict-text">这个接口和云端有冲突</span>
-      <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+      <span class="conflict-text">{{ t('mqtt.conflictText') }}</span>
+      <n-button size="tiny" type="error" ghost @click="openConflict">{{ t('mqtt.resolve') }}</n-button>
     </div>
 
     <!-- 面包屑：项目 › 目录… › 名字（最后一级双击改名） -->
@@ -694,7 +702,7 @@ watch(
         class="url"
         :model-value="spec.url"
         :scope="scope"
-        placeholder="mqtt://broker.example.com:1883，支持 {{变量}}"
+        :placeholder="t('mqtt.urlPlaceholder')"
         @update:model-value="(v) => { spec.url = v; }"
         @enter="onConnect"
       />
@@ -703,26 +711,26 @@ watch(
       <span v-if="channelHint" class="channel-hint">{{ channelHint }}</span>
 
       <n-button v-if="connected" size="small" type="warning" secondary @click="onDisconnect">
-        断开
+        {{ t('mqtt.disconnect') }}
       </n-button>
       <!-- 网页版没有 /mqtt：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
       <n-tooltip v-else-if="connectBlocked" trigger="hover">
         <template #trigger>
           <span class="connect-wrap">
-            <n-button size="small" type="primary" disabled>连接</n-button>
+            <n-button size="small" type="primary" disabled>{{ t('mqtt.connect') }}</n-button>
           </span>
         </template>
-        网页版不能连接 MQTT，请在客户端里使用
+        {{ t('mqtt.connectBlocked') }}
       </n-tooltip>
       <n-button v-else size="small" type="primary" :loading="busy" @click="onConnect">
-        连接
+        {{ t('mqtt.connect') }}
       </n-button>
 
       <n-button v-if="canEdit && bound" size="small" :loading="saving" @click="save">
-        保存
+        {{ t('mqtt.save') }}
       </n-button>
       <n-button v-if="canEdit && !bound" size="small" @click="openSaveDialog">
-        保存到目录
+        {{ t('mqtt.saveToFolder') }}
       </n-button>
     </div>
 
@@ -743,24 +751,24 @@ watch(
         :theme-overrides="paneTabsTheme"
       >
         <!-- 连接 -->
-        <n-tab-pane name="connect" tab="连接">
+        <n-tab-pane name="connect" :tab="t('mqtt.tabConnect')">
           <div class="pane">
             <div class="grid">
               <div class="field">
-                <span class="label">客户端 ID</span>
+                <span class="label">{{ t('mqtt.clientIdLabel') }}</span>
                 <div class="with-button">
                   <n-input
                     size="small"
                     :value="mqttCfg.clientId"
-                    placeholder="留空由 broker / 客户端生成"
+                    :placeholder="t('mqtt.clientIdPlaceholder')"
                     @update:value="(v) => { mqttCfg.clientId = v; touch(); }"
                   />
-                  <n-button size="small" @click="randomClientId">随机</n-button>
+                  <n-button size="small" @click="randomClientId">{{ t('mqtt.random') }}</n-button>
                 </div>
               </div>
 
               <div class="field">
-                <span class="label">协议版本</span>
+                <span class="label">{{ t('mqtt.protocolVersion') }}</span>
                 <n-select
                   size="small"
                   :value="mqttCfg.protocolVersion"
@@ -770,29 +778,29 @@ watch(
               </div>
 
               <div class="field">
-                <span class="label">用户名</span>
+                <span class="label">{{ t('mqtt.username') }}</span>
                 <n-input
                   size="small"
                   :value="mqttCfg.username"
-                  placeholder="支持 {{变量}}"
+                  :placeholder="t('mqtt.supportVar')"
                   @update:value="(v) => { mqttCfg.username = v; touch(); }"
                 />
               </div>
 
               <div class="field">
-                <span class="label">密码</span>
+                <span class="label">{{ t('mqtt.password') }}</span>
                 <n-input
                   size="small"
                   type="password"
                   show-password-on="click"
                   :value="mqttCfg.password"
-                  placeholder="支持 {{变量}}"
+                  :placeholder="t('mqtt.supportVar')"
                   @update:value="(v) => { mqttCfg.password = v; touch(); }"
                 />
               </div>
 
               <div class="field">
-                <span class="label">keepalive（秒）</span>
+                <span class="label">{{ t('mqtt.keepaliveLabel') }}</span>
                 <n-input-number
                   size="small"
                   :value="mqttCfg.keepalive"
@@ -804,7 +812,7 @@ watch(
               </div>
 
               <div class="field">
-                <span class="label">连接超时（毫秒）</span>
+                <span class="label">{{ t('mqtt.connectTimeoutLabel') }}</span>
                 <n-input-number
                   size="small"
                   :value="mqttCfg.connectTimeoutMs"
@@ -825,7 +833,7 @@ watch(
                     @update:value="(v) => { mqttCfg.clean = v; touch(); }"
                   />
                   <span class="hint">
-                    关掉它 broker 会记住这个会话（离线期间的消息、订阅都留着），要靠客户端 ID 认住
+                    {{ t('mqtt.cleanSessionHint') }}
                   </span>
                 </div>
               </div>
@@ -834,28 +842,28 @@ watch(
             <!-- 遗嘱消息：可折叠，主题留空就是不设 -->
             <div class="fold-head" @click="willOpen = !willOpen">
               <n-icon size="14" :component="willOpen ? ChevronDown : ChevronRight" />
-              <span class="fold-title">遗嘱消息</span>
+              <span class="fold-title">{{ t('mqtt.willTitle') }}</span>
               <span class="hint">
-                {{ mqttCfg.will && mqttCfg.will.topic ? '已设置：' + mqttCfg.will.topic : '主题留空就是不设' }}
+                {{ mqttCfg.will && mqttCfg.will.topic ? t('mqtt.willSet', { topic: mqttCfg.will.topic }) : t('mqtt.willEmptyHint') }}
               </span>
             </div>
 
             <div v-if="willOpen" class="grid">
               <div class="field wide">
-                <span class="label">主题</span>
+                <span class="label">{{ t('mqtt.willTopicLabel') }}</span>
                 <var-input
                   :model-value="mqttCfg.will ? mqttCfg.will.topic : ''"
                   :scope="scope"
-                  placeholder="客户端异常掉线时由 broker 代发的主题"
+                  :placeholder="t('mqtt.willTopicPlaceholder')"
                   @update:model-value="(v) => { mqttCfg.will = Object.assign({}, mqttCfg.will, { topic: v }); touch(); }"
                 />
               </div>
               <div class="field wide">
-                <span class="label">内容</span>
+                <span class="label">{{ t('mqtt.willPayloadLabel') }}</span>
                 <n-input
                   size="small"
                   :value="mqttCfg.will ? mqttCfg.will.payload : ''"
-                  placeholder="遗嘱内容，支持 {{变量}}"
+                  :placeholder="t('mqtt.willPayloadPlaceholder')"
                   @update:value="(v) => { mqttCfg.will = Object.assign({}, mqttCfg.will, { payload: v }); touch(); }"
                 />
               </div>
@@ -883,18 +891,18 @@ watch(
         </n-tab-pane>
 
         <!-- 订阅 -->
-        <n-tab-pane name="subscribe" tab="订阅">
+        <n-tab-pane name="subscribe" :tab="t('mqtt.tabSubscribe')">
           <div class="pane">
             <p class="hint">
-              连接上之后，下面<strong>启用</strong>的行会自动订阅一遍；已连接时每一行可以单独订阅 / 取消。
-              主题支持通配符 <code>+</code>（一层）和 <code>#</code>（多层）。
+              {{ t('mqtt.subHintLead') }}<strong>{{ t('mqtt.subHintStrong') }}</strong>{{ t('mqtt.subHintTail') }}
+              <code>+</code>{{ t('mqtt.subHintAnd') }} <code>#</code>{{ t('mqtt.subHintEnd') }}
             </p>
 
             <div class="sub-head">
-              <span class="col-topic">主题</span>
+              <span class="col-topic">{{ t('mqtt.colTopic') }}</span>
               <span class="col-qos">QoS</span>
-              <span class="col-enabled">启用</span>
-              <span class="col-status">状态</span>
+              <span class="col-enabled">{{ t('mqtt.colEnabled') }}</span>
+              <span class="col-status">{{ t('mqtt.colStatus') }}</span>
               <span class="col-actions" />
             </div>
 
@@ -936,7 +944,7 @@ watch(
                   size="tiny"
                   @click="unsubscribeRow(row)"
                 >
-                  取消订阅
+                  {{ t('mqtt.unsubscribe') }}
                 </n-button>
                 <n-button
                   v-else
@@ -945,23 +953,23 @@ watch(
                   :disabled="!connected"
                   @click="subscribeRow(row)"
                 >
-                  订阅
+                  {{ t('mqtt.subscribe') }}
                 </n-button>
                 <n-button size="tiny" quaternary type="error" @click="removeSubscription(index)">
-                  删除
+                  {{ t('app.delete') }}
                 </n-button>
               </span>            </div>
 
-            <p v-if="!subscriptions.length" class="empty">还没有订阅。点下面的「添加订阅」加一行。</p>
+            <p v-if="!subscriptions.length" class="empty">{{ t('mqtt.emptySubs') }}</p>
 
             <n-button size="small" secondary class="add-sub" @click="addSubscription">
-              添加订阅
+              {{ t('mqtt.addSubscription') }}
             </n-button>
           </div>
         </n-tab-pane>
 
         <!-- 发布 -->
-        <n-tab-pane name="publish" tab="发布">
+        <n-tab-pane name="publish" :tab="t('mqtt.tabPublish')">
           <div class="pane">
             <div class="pub-row">
               <var-input
@@ -993,7 +1001,7 @@ watch(
                 @update:value="(v) => { draftLang = v; }"
               />
               <n-button size="small" type="primary" :disabled="!connected" @click="publishNow">
-                发布
+                {{ t('mqtt.publish') }}
               </n-button>
               <n-select
                 class="pub-saved"
@@ -1001,11 +1009,11 @@ watch(
                 clearable
                 :value="savedPick"
                 :options="savedOptions"
-                :placeholder="saved.length ? '常用发布' : '还没有常用发布'"
+                :placeholder="saved.length ? t('mqtt.savedPlaceholder') : t('mqtt.noSaved')"
                 :disabled="!saved.length"
                 @update:value="useSaved"
               />
-              <n-button size="small" @click="openSaveCommon">存为常用</n-button>
+              <n-button size="small" @click="openSaveCommon">{{ t('mqtt.saveAsCommon') }}</n-button>
               <n-button
                 v-if="savedPick !== null"
                 size="small"
@@ -1013,13 +1021,13 @@ watch(
                 type="error"
                 @click="removeSaved(savedPick)"
               >
-                删除这条
+                {{ t('mqtt.deleteThis') }}
               </n-button>
             </div>
 
             <p class="hint">
-              主题不能带 <code>+</code> 或 <code>#</code>（那是订阅用的通配符）；内容支持
-              <code>{{ VAR_HINT }}</code>。
+              {{ t('mqtt.publishHintLead') }} <code>+</code> {{ t('mqtt.publishHintOr') }} <code>#</code>{{ t('mqtt.publishHintTail') }}
+              <code>{{ VAR_HINT }}</code>{{ t('mqtt.publishHintEnd') }}
             </p>
 
             <code-editor
@@ -1045,24 +1053,24 @@ watch(
     <n-modal
       v-model:show="showSaveDialog"
       preset="card"
-      title="保存到目录"
+      :title="t('mqtt.saveToFolder')"
       style="width: 460px; max-width: 92vw"
     >
       <n-space vertical :size="12">
         <div class="field">
-          <span class="label">名称</span>
-          <n-input v-model:value="saveForm.name" size="small" placeholder="接口名称" />
+          <span class="label">{{ t('mqtt.nameLabel') }}</span>
+          <n-input v-model:value="saveForm.name" size="small" :placeholder="t('mqtt.apiNamePlaceholder')" />
         </div>
         <div class="field">
-          <span class="label">目录</span>
+          <span class="label">{{ t('mqtt.folderLabel') }}</span>
           <n-select v-model:value="saveForm.folderId" size="small" :options="folderOptions()" />
         </div>
       </n-space>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showSaveDialog = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="confirmSaveToFolder">保存</n-button>
+          <n-button @click="showSaveDialog = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" :loading="saving" @click="confirmSaveToFolder">{{ t('mqtt.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -1070,18 +1078,18 @@ watch(
     <n-modal
       v-model:show="showCommonDialog"
       preset="card"
-      title="存为常用发布"
+      :title="t('mqtt.saveCommonTitle')"
       style="width: 420px; max-width: 92vw"
     >
       <div class="field">
-        <span class="label">名字</span>
-        <n-input v-model:value="commonForm.name" size="small" placeholder="比如「开灯」" />
+        <span class="label">{{ t('mqtt.commonNameLabel') }}</span>
+        <n-input v-model:value="commonForm.name" size="small" :placeholder="t('mqtt.commonNamePlaceholder')" />
       </div>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showCommonDialog = false">取消</n-button>
-          <n-button type="primary" @click="confirmSaveCommon">保存</n-button>
+          <n-button @click="showCommonDialog = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" @click="confirmSaveCommon">{{ t('mqtt.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

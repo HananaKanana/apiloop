@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -45,6 +46,7 @@ const tree = useTreeStore();
 const record = useRecordStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const visible = computed({
   get: function () { return props.show; },
@@ -88,7 +90,7 @@ function useVariable(key) {
 async function start() {
   const url = String(target.value || '').trim();
   if (!url) {
-    message.warning('先填目标地址');
+    message.warning(t('record.targetRequired'));
     return;
   }
 
@@ -102,7 +104,7 @@ async function start() {
       pathPrefix: String(pathPrefix.value || '').trim(),
       skipStatic: skipStatic.value
     });
-    message.success('开始录制，把接口地址改成下面的代理地址');
+    message.success(t('record.startedHint'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -113,7 +115,7 @@ async function start() {
 async function stop() {
   try {
     await record.stop(projects.currentId);
-    message.success('已停止录制，记录还留着，可以继续挑着保存');
+    message.success(t('record.stoppedHint'));
   } catch (err) {
     message.error(err.message);
   }
@@ -226,7 +228,7 @@ const unmatchedSelected = computed(function () {
 
 function openSave() {
   if (!selected.value.length) {
-    message.warning('先勾几条要保存的记录');
+    message.warning(t('record.selectFirst'));
     return;
   }
   saveVisible.value = true;
@@ -257,7 +259,7 @@ async function save(options) {
     saveVisible.value = false;
 
     const created = data.created || {};
-    message.success('新建了 ' + (created.apis || 0) + ' 个接口，加了 ' + (created.examples || 0) + ' 个示例');
+    message.success(t('record.saveCreated', { apis: created.apis || 0, examples: created.examples || 0 }));
 
     const results = data.results || [];
     const failed = results.filter(function (item) { return item.error; });
@@ -278,9 +280,9 @@ async function save(options) {
         return (entry ? entry.method + ' ' + pathText(entry) : item.entryId) + '：' + item.error;
       });
       dialog.warning({
-        title: '有 ' + failed.length + ' 条没保存成功',
+        title: t('record.saveFailedTitle', { n: failed.length }),
         content: lines.join('\n'),
-        positiveText: '知道了',
+        positiveText: t('record.gotIt'),
         style: 'width: 520px; max-width: calc(100vw - 32px)'
       });
     }
@@ -296,16 +298,16 @@ async function save(options) {
 
 function clearAll() {
   dialog.warning({
-    title: '清空记录',
-    content: '清掉这个项目录到的全部记录（不影响已经保存的接口和示例）。',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('record.clearTitle'),
+    content: t('record.clearBody'),
+    positiveText: t('record.clearAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await record.clear(projects.currentId);
         selected.value = [];
         expandedId.value = null;
-        message.success('已清空');
+        message.success(t('record.cleared'));
       } catch (err) {
         message.error(err.message);
       }
@@ -318,9 +320,9 @@ function clearAll() {
 async function copy(text) {
   try {
     await copyText(text);
-    message.success('已复制');
+    message.success(t('app.copied'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 
@@ -339,18 +341,17 @@ watch(
 
 <template>
   <n-drawer v-model:show="visible" :width="960" placement="right">
-    <n-drawer-content title="Mock 录制" closable :native-scrollbar="false">
+    <n-drawer-content :title="t('record.drawerTitle')" closable :native-scrollbar="false">
       <div class="record">
         <!-- 别的项目正在录：同一个网关只能录一个项目 -->
         <n-alert v-if="!record.isRecording && record.busy" type="warning" :show-icon="false">
-          正在录制项目「{{ record.busy.projectName }}」，同一时间只能录一个项目。
-          切到那个项目去停止，或者等它停掉。
+          {{ t('record.busyOther', { project: record.busy.projectName }) }}
         </n-alert>
 
         <!-- 没在录：开始表单 -->
         <div v-else-if="!record.isRecording" class="form">
           <div class="field">
-            <span class="field-label">目标地址</span>
+            <span class="field-label">{{ t('record.targetLabel') }}</span>
             <div class="field-body">
               <n-input v-model:value="target" placeholder="http://localhost:8080/api" />
               <n-select
@@ -358,16 +359,16 @@ watch(
                 v-model:value="varPick"
                 class="var-select"
                 size="small"
-                placeholder="用环境变量"
+                :placeholder="t('record.useEnvVar')"
                 :options="httpVariables"
                 @update:value="useVariable"
               />
             </div>
           </div>
-          <p class="tip">请求会转发到这个地址（可以带路径前缀），同时记下来。</p>
+          <p class="tip">{{ t('record.targetTip') }}</p>
 
           <div class="field">
-            <span class="field-label">端口</span>
+            <span class="field-label">{{ t('record.portLabel') }}</span>
             <div class="field-body">
               <n-input-number
                 v-model:value="port"
@@ -376,37 +377,37 @@ watch(
                 :min="0"
                 :max="65535"
                 :show-button="false"
-                placeholder="自动"
+                :placeholder="t('record.portPlaceholder')"
               />
-              <span class="tip">留空 / 0 表示自动（从 47400 起找空闲端口）</span>
+              <span class="tip">{{ t('record.portTip') }}</span>
             </div>
           </div>
 
           <div class="field">
-            <span class="field-label">只录这个前缀</span>
+            <span class="field-label">{{ t('record.prefixLabel') }}</span>
             <div class="field-body">
-              <n-input v-model:value="pathPrefix" size="small" placeholder="留空表示全录，比如 /api" />
+              <n-input v-model:value="pathPrefix" size="small" :placeholder="t('record.prefixPlaceholder')" />
             </div>
           </div>
 
           <div class="field">
-            <span class="field-label">选项</span>
+            <span class="field-label">{{ t('record.optionsLabel') }}</span>
             <div class="field-body column">
               <div class="option">
                 <n-switch v-model:value="lan" size="small" />
-                <span>允许局域网访问（手机、其他电脑）</span>
+                <span>{{ t('record.lanLabel') }}</span>
               </div>
-              <p v-if="lan" class="warn">同一网络里的人都能通过这个地址访问你的目标服务，注意别把内网服务暴露出去。</p>
+              <p v-if="lan" class="warn">{{ t('record.lanWarn') }}</p>
               <div class="option">
                 <n-switch v-model:value="skipStatic" size="small" />
-                <span>跳过静态资源（js / css / 图片 / 页面）</span>
+                <span>{{ t('record.skipStaticLabel') }}</span>
               </div>
             </div>
           </div>
 
           <n-space justify="end">
             <n-button type="primary" :disabled="!canEdit" :loading="starting" @click="start">
-              开始录制
+              {{ t('record.start') }}
             </n-button>
           </n-space>
         </div>
@@ -414,24 +415,24 @@ watch(
         <!-- 录制中 -->
         <div v-else class="status-block">
           <div class="line">
-            <span class="field-label">代理地址</span>
+            <span class="field-label">{{ t('record.proxyLabel') }}</span>
             <code class="addr">{{ record.status.localUrl }}</code>
-            <n-button size="tiny" quaternary @click="copy(record.status.localUrl)">复制</n-button>
+            <n-button size="tiny" quaternary @click="copy(record.status.localUrl)">{{ t('record.copy') }}</n-button>
           </div>
           <div v-for="url in record.status.lanUrls" :key="url" class="line">
-            <span class="field-label">局域网</span>
+            <span class="field-label">{{ t('record.lanAddr') }}</span>
             <code class="addr">{{ url }}</code>
-            <n-button size="tiny" quaternary @click="copy(url)">复制</n-button>
+            <n-button size="tiny" quaternary @click="copy(url)">{{ t('record.copy') }}</n-button>
           </div>
           <div class="line">
-            <span class="field-label">转发到</span>
+            <span class="field-label">{{ t('record.forwardTo') }}</span>
             <code class="addr">{{ record.status.target }}</code>
           </div>
           <p class="tip">
-            把前端 / App 的接口地址改成上面的代理地址，请求会转发到 {{ record.status.target }}，响应自动记在下面。
+            {{ t('record.recordingTip', { target: record.status.target }) }}
           </p>
           <n-space justify="end">
-            <n-button size="small" type="error" secondary :disabled="!canEdit" @click="stop">停止</n-button>
+            <n-button size="small" type="error" secondary :disabled="!canEdit" @click="stop">{{ t('record.stop') }}</n-button>
           </n-space>
         </div>
 
@@ -443,19 +444,19 @@ watch(
             :disabled="!visibleRows.length"
             @update:checked="toggleAll"
           >
-            全选
+            {{ t('record.selectAll') }}
           </n-checkbox>
-          <span class="count">{{ visibleRows.length }} / {{ rows.length }} 条</span>
+          <span class="count">{{ t('record.countRatio', { shown: visibleRows.length, total: rows.length }) }}</span>
 
           <n-input
             v-model:value="keyword"
             class="search"
             size="small"
             clearable
-            placeholder="按路径搜"
+            :placeholder="t('record.searchPlaceholder')"
           />
-          <n-checkbox v-model:checked="onlyUnmatched">只看没对上接口的</n-checkbox>
-          <n-checkbox v-model:checked="dedupe">去重</n-checkbox>
+          <n-checkbox v-model:checked="onlyUnmatched">{{ t('record.onlyUnmatched') }}</n-checkbox>
+          <n-checkbox v-model:checked="dedupe">{{ t('record.dedupe') }}</n-checkbox>
         </div>
 
         <div class="list">
@@ -476,31 +477,31 @@ watch(
                 {{ entry.path }}<span v-if="entry.query" class="query">?{{ entry.query }}</span>
               </span>
               <n-tag size="tiny" :bordered="false" :type="statusType(entry)">
-                {{ entry.status || '连不上' }}
+                {{ entry.status || t('record.unreachable') }}
               </n-tag>
               <span class="ms">{{ entry.durationMs }}ms</span>
               <span class="match" :class="{ none: !entry.match }">
-                {{ entry.match ? entry.match.apiName : '新接口' }}
+                {{ entry.match ? entry.match.apiName : t('record.newApi') }}
               </span>
               <button class="toggle" @click="toggleDetail(entry)">
-                {{ expandedId === entry.id ? '收起' : '详情' }}
+                {{ expandedId === entry.id ? t('record.collapse') : t('record.detail') }}
               </button>
             </div>
 
             <record-detail v-if="expandedId === entry.id" :entry="entry" />
           </div>
 
-          <n-empty v-if="record.loaded && !visibleRows.length" description="还没有记录" class="empty">
+          <n-empty v-if="record.loaded && !visibleRows.length" :description="t('record.empty')" class="empty">
             <template #extra>
               <p class="tip">
                 {{ record.isRecording
-                  ? '把接口地址改成上面的代理地址，访问一次就会出现在这里。'
-                  : '开始录制之后，访问代理地址的请求会出现在这里。' }}
+                  ? t('record.emptyRecording')
+                  : t('record.emptyIdle') }}
               </p>
             </template>
           </n-empty>
 
-          <div v-if="!record.loaded" class="loading">加载中…</div>
+          <div v-if="!record.loaded" class="loading">{{ t('record.loading') }}</div>
         </div>
 
         <div class="footer">
@@ -510,11 +511,11 @@ watch(
               :disabled="!canEdit || !selected.length"
               @click="openSave"
             >
-              保存所选（{{ selected.length }}）
+              {{ t('record.saveSelected', { n: selected.length }) }}
             </n-button>
-            <n-button :disabled="!canEdit || !record.entries.length" @click="clearAll">清空记录</n-button>
+            <n-button :disabled="!canEdit || !record.entries.length" @click="clearAll">{{ t('record.clearTitle') }}</n-button>
           </n-space>
-          <span v-if="!canEdit" class="tip">只读成员只能看记录</span>
+          <span v-if="!canEdit" class="tip">{{ t('record.readonlyHint') }}</span>
         </div>
       </div>
     </n-drawer-content>

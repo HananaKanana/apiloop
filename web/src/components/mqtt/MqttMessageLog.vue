@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NInput } from 'naive-ui';
 import { formatBytes, byteLength } from '@/utils/bytes';
 
@@ -24,6 +25,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['clear']);
+const { t } = useI18n();
 
 const listEl = ref(null);
 const expanded = ref(-1);
@@ -99,7 +101,7 @@ function body(item) {
 }
 
 function summary(item) {
-  if (item.payloadBase64) return '（二进制内容，' + formatBytes(item.size) + '）';
+  if (item.payloadBase64) return t('mqtt.logBinarySummary', { size: formatBytes(item.size) });
   const line = body(item).split('\n')[0].replace(/\s+/g, ' ');
   return line.length > 200 ? line.slice(0, 200) + '…' : line;
 }
@@ -117,10 +119,10 @@ function sizeOf(item) {
 /** 展开时的正文：JSON 美化，其余原样；二进制给 base64 */
 function pretty(item) {
   if (item.payloadBase64) {
-    return '（二进制 ' + formatBytes(item.size) + '，下面是 base64）\n' + item.payloadBase64;
+    return t('mqtt.logBinaryPretty', { size: formatBytes(item.size) }) + '\n' + item.payloadBase64;
   }
   const text = body(item);
-  if (!text) return '（空）';
+  if (!text) return t('mqtt.logEmptyBody');
   try {
     return JSON.stringify(JSON.parse(text), null, 2);
   } catch (err) {
@@ -135,22 +137,23 @@ function toggle(index) {
 /** 系统行的一句中文 */
 function systemText(item) {
   if (item.type === 'connecting') {
-    return '正在连接 ' + (item.url || '') + (item.clientId ? '，clientId ' + item.clientId : '') +
-      (item.note ? '（' + item.note + '）' : '');
+    return t('mqtt.logConnecting', { url: item.url || '' }) +
+      (item.clientId ? t('mqtt.logConnectingClientId', { clientId: item.clientId }) : '') +
+      (item.note ? t('mqtt.logConnectingNote', { note: item.note }) : '');
   }
   if (item.type === 'connected') {
-    return item.sessionPresent ? '已连接（broker 上有旧会话）' : '已连接';
+    return item.sessionPresent ? t('mqtt.logConnectedSession') : t('mqtt.logConnected');
   }
-  if (item.type === 'reconnecting') return '连接断了，正在重连…';
+  if (item.type === 'reconnecting') return t('mqtt.logReconnecting');
   if (item.type === 'subscribed') {
-    const granted = item.granted === undefined || item.granted === null ? '' : '，授予 QoS ' + item.granted;
+    const granted = item.granted === undefined || item.granted === null ? '' : t('mqtt.logSubscribeGranted', { qos: item.granted });
     return item.error
-      ? '订阅 ' + item.topic + ' 失败：' + item.error
-      : '已订阅 ' + item.topic + '（QoS ' + item.qos + granted + '）';
+      ? t('mqtt.logSubscribeFailed', { topic: item.topic, error: item.error })
+      : t('mqtt.logSubscribed', { topic: item.topic, qos: item.qos, granted: granted });
   }
-  if (item.type === 'unsubscribed') return '已取消订阅 ' + item.topic;
-  if (item.type === 'closed') return '连接已断开' + (item.reason ? '：' + item.reason : '');
-  if (item.type === 'error') return '出错：' + item.error;
+  if (item.type === 'unsubscribed') return t('mqtt.logUnsubscribed', { topic: item.topic });
+  if (item.type === 'closed') return t('mqtt.logClosed') + (item.reason ? t('mqtt.logClosedReason', { reason: item.reason }) : '');
+  if (item.type === 'error') return t('mqtt.logError', { error: item.error });
   return item.text || '';
 }
 
@@ -177,7 +180,7 @@ const visible = computed(function () {
 
 const overflowText = computed(function () {
   if (!props.dropped) return '';
-  return '只显示最近 2000 条，更早的 ' + props.dropped + ' 条已经丢弃。';
+  return t('mqtt.logOverflow', props.dropped);
 });
 </script>
 
@@ -189,12 +192,12 @@ const overflowText = computed(function () {
         size="tiny"
         clearable
         class="filter"
-        placeholder="按主题筛选"
+        :placeholder="t('mqtt.filterPlaceholder')"
       />
       <n-button size="tiny" quaternary :type="paused ? 'primary' : 'default'" @click="togglePause">
-        {{ paused ? '继续滚动' : '暂停滚动' }}
+        {{ paused ? t('mqtt.resumeScroll') : t('mqtt.pauseScroll') }}
       </n-button>
-      <n-button size="tiny" quaternary @click="emit('clear')">清空</n-button>
+      <n-button size="tiny" quaternary @click="emit('clear')">{{ t('mqtt.clear') }}</n-button>
     </div>
 
     <n-alert v-if="overflowText" type="info" :show-icon="false" class="notice">
@@ -211,7 +214,7 @@ const overflowText = computed(function () {
               @click="toggle(row.index)"
             >
               <span class="dir" :class="direction(row.item)">
-                {{ direction(row.item) === 'out' ? '↑ 发出' : '↓ 收到' }}
+                {{ direction(row.item) === 'out' ? t('mqtt.directionOut') : t('mqtt.directionIn') }}
               </span>
               <span class="time">{{ formatTime(row.item.time) }}</span>
               <span class="topic" :title="row.item.topic">{{ row.item.topic }}</span>
@@ -224,7 +227,7 @@ const overflowText = computed(function () {
             <div v-if="expanded === row.index" class="detail">
               <pre class="detail-body">{{ pretty(row.item) }}</pre>
               <div v-if="row.item.truncated" class="detail-meta">
-                这条消息超过了 64 KB，服务端只保留了前面一部分，长度显示的是原始大小。
+                {{ t('mqtt.truncatedNote') }}
               </div>
             </div>
           </template>
@@ -236,7 +239,7 @@ const overflowText = computed(function () {
         </div>
       </template>
 
-      <p v-else class="empty">{{ filter.trim() ? '没有匹配这个主题的消息。' : '还没有消息。' }}</p>
+      <p v-else class="empty">{{ filter.trim() ? t('mqtt.noMatch') : t('mqtt.empty') }}</p>
     </div>
   </div>
 </template>

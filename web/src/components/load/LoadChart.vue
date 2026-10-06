@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { chartGeometry } from '@/utils/load';
 
 /**
@@ -18,6 +19,8 @@ const props = defineProps({
   height: { type: Number, default: 190 }
 });
 
+const { t } = useI18n();
+
 const chart = computed(function () {
   return chartGeometry(props.rows, { height: props.height });
 });
@@ -26,12 +29,12 @@ const chart = computed(function () {
 <template>
   <div class="load-chart">
     <div class="legend">
-      <span class="item"><i class="dot qps" />每秒请求数</span>
-      <span class="item"><i class="dot ms" />每秒平均响应时间</span>
-      <span v-if="chart.bars.length" class="item"><i class="dot failed" />有失败的那一秒</span>
+      <span class="item"><i class="dot qps" />{{ t('load.legendQps') }}</span>
+      <span class="item"><i class="dot ms" />{{ t('load.legendMs') }}</span>
+      <span v-if="chart.bars.length" class="item"><i class="dot failed" />{{ t('load.legendFailed') }}</span>
     </div>
 
-    <p v-if="!rows.length" class="empty">还没有数据</p>
+    <p v-if="!rows.length" class="empty">{{ t('load.chartEmpty') }}</p>
 
     <svg
       v-else
@@ -40,7 +43,7 @@ const chart = computed(function () {
       :style="{ height: chart.height + 'px' }"
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label="压测曲线"
+      :aria-label="t('load.chartAria')"
     >
       <!-- 网格与两侧刻度 -->
       <g class="grid">

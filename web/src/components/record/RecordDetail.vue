@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NTag } from 'naive-ui';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import { formatJson } from '@/utils/jsonFormat';
@@ -12,6 +13,8 @@ import { formatJson } from '@/utils/jsonFormat';
 const props = defineProps({
   entry: { type: Object, required: true }
 });
+
+const { t } = useI18n();
 
 function headerText(headers) {
   const rows = Object.keys(headers || {}).map(function (name) {
@@ -32,28 +35,28 @@ function bodyText(body, contentType) {
 }
 
 const requestHeaders = computed(function () {
-  return headerText(props.entry.request && props.entry.request.headers) || '（无）';
+  return headerText(props.entry.request && props.entry.request.headers) || t('record.none');
 });
 
 const requestBody = computed(function () {
   const request = props.entry.request || {};
   if (request.bodyTruncated) {
-    return bodyText(request.body, request.contentType) + '\n\n（太长，只记了前面 1 MB）';
+    return bodyText(request.body, request.contentType) + '\n\n' + t('record.truncated');
   }
-  return bodyText(request.body, request.contentType) || '（空）';
+  return bodyText(request.body, request.contentType) || t('record.emptyValue');
 });
 
 const responseHeaders = computed(function () {
-  return headerText(props.entry.response && props.entry.response.headers) || '（无）';
+  return headerText(props.entry.response && props.entry.response.headers) || t('record.none');
 });
 
 const responseBody = computed(function () {
   const response = props.entry.response || {};
-  if (response.binary) return '（二进制内容，没有记下来）';
+  if (response.binary) return t('record.binary');
   if (response.bodyTruncated) {
-    return bodyText(response.body, response.contentType) + '\n\n（太长，只记了前面 1 MB）';
+    return bodyText(response.body, response.contentType) + '\n\n' + t('record.truncated');
   }
-  return bodyText(response.body, response.contentType) || '（空）';
+  return bodyText(response.body, response.contentType) || t('record.emptyValue');
 });
 
 const responseLanguage = computed(function () {
@@ -74,19 +77,19 @@ const requestLanguage = computed(function () {
     <n-alert v-if="entry.error" type="error" :show-icon="false">{{ entry.error }}</n-alert>
 
     <div class="meta">
-      <span class="label">对应接口</span>
+      <span class="label">{{ t('record.matchedApi') }}</span>
       <n-tag v-if="entry.match" size="tiny" :bordered="false" type="success">{{ entry.match.apiName }}</n-tag>
-      <span v-else class="none">没对上，保存时会新建接口</span>
+      <span v-else class="none">{{ t('record.noMatchHint') }}</span>
       <span v-if="entry.match" class="path">{{ entry.match.method }} {{ entry.match.path }}</span>
     </div>
 
     <div class="block">
-      <p class="label">请求头</p>
+      <p class="label">{{ t('record.requestHeaders') }}</p>
       <pre class="pre">{{ requestHeaders }}</pre>
     </div>
 
     <div class="block">
-      <p class="label">请求体</p>
+      <p class="label">{{ t('record.requestBody') }}</p>
       <code-editor
         class="body"
         :model-value="requestBody"
@@ -98,12 +101,12 @@ const requestLanguage = computed(function () {
     </div>
 
     <div class="block">
-      <p class="label">响应头</p>
+      <p class="label">{{ t('record.responseHeaders') }}</p>
       <pre class="pre">{{ responseHeaders }}</pre>
     </div>
 
     <div class="block">
-      <p class="label">响应体</p>
+      <p class="label">{{ t('record.responseBody') }}</p>
       <code-editor
         class="body"
         :model-value="responseBody"

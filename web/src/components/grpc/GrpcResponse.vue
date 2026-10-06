@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NCollapse, NCollapseItem, NEmpty, NTabPane, NTabs, NTag } from 'naive-ui';
 import BodyViewer from '@/components/response/BodyViewer.vue';
 import { byteLength, formatClock, messageResponse, statusTagType } from './grpc-util';
@@ -19,6 +20,8 @@ const props = defineProps({
   /** 这次选中的方法是不是服务端流（决定消息页签是一条还是多条） */
   streaming: { type: Boolean, default: false }
 });
+
+const { t } = useI18n();
 
 const phase = computed(function () { return (props.state && props.state.phase) || 'idle'; });
 const status = computed(function () { return props.state && props.state.status; });
@@ -50,9 +53,9 @@ const passedCount = computed(function () {
 });
 
 const testsTab = computed(function () {
-  if (!tests.value.length && !extracted.value.length) return '测试结果';
-  return '测试结果（' + passedCount.value + '/' + tests.value.length + '）' +
-    (extracted.value.length ? ' · 提取 ' + extracted.value.length : '');
+  if (!tests.value.length && !extracted.value.length) return t('grpc.testsLabel');
+  return t('grpc.testsLabel') + t('grpc.testsCount', { passed: passedCount.value, total: tests.value.length }) +
+    (extracted.value.length ? t('grpc.testsExtracted', { n: extracted.value.length }) : '');
 });
 
 /** 响应区自己的页签：只在组件内部用，不进 store（切标签页本来就会重建组件） */
@@ -71,16 +74,16 @@ function sizeOf(item) {
 <template>
   <div class="grpc-response">
     <div class="head">
-      <span class="label">响应</span>
+      <span class="label">{{ t('grpc.responseLabel') }}</span>
 
       <template v-if="phase === 'idle'">
-        <span class="dim">还没调用</span>
+        <span class="dim">{{ t('grpc.notCalledYet') }}</span>
       </template>
       <template v-else-if="phase === 'running'">
-        <n-tag size="small" type="warning">调用中…</n-tag>
+        <n-tag size="small" type="warning">{{ t('grpc.calling') }}</n-tag>
       </template>
       <template v-else-if="phase === 'cancelled'">
-        <n-tag size="small">已取消</n-tag>
+        <n-tag size="small">{{ t('grpc.cancelled') }}</n-tag>
       </template>
       <template v-else-if="status">
         <n-tag size="small" :type="statusTagType(status.name)">{{ statusLabel }}</n-tag>
@@ -88,22 +91,22 @@ function sizeOf(item) {
         <span v-if="status.details" class="details">{{ status.details }}</span>
       </template>
       <template v-else>
-        <n-tag size="small" type="error">失败</n-tag>
+        <n-tag size="small" type="error">{{ t('grpc.failed') }}</n-tag>
       </template>
 
-      <span v-if="state && state.dropped" class="dim">（消息太多，前面的 {{ state.dropped }} 条已省略）</span>
+      <span v-if="state && state.dropped" class="dim">{{ t('grpc.dropped', { n: state.dropped }) }}</span>
     </div>
 
     <p v-if="phase === 'error' && state && state.error" class="error">{{ state.error }}</p>
     <p v-if="missing.length" class="warn">
-      这些变量没有值：{{ missing.join('、') }}（原样发出去的，检查当前环境）
+      {{ t('grpc.missingVars', { vars: missing.join(t('grpc.listSeparator')) }) }}
     </p>
 
     <n-tabs v-model:value="activePane" type="line" size="small" class="panes">
-      <n-tab-pane name="messages" :tab="'消息' + (messages.length ? '（' + messages.length + '）' : '')">
+      <n-tab-pane name="messages" :tab="messages.length ? t('grpc.messages') + t('grpc.messagesCount', { n: messages.length }) : t('grpc.messages')">
         <template v-if="!messages.length">
-          <n-empty v-if="phase !== 'running'" size="small" description="没有消息" />
-          <p v-else class="dim">正在等响应…</p>
+          <n-empty v-if="phase !== 'running'" size="small" :description="t('grpc.noMessages')" />
+          <p v-else class="dim">{{ t('grpc.waitingResponse') }}</p>
         </template>
 
         <!-- 一元调用：一条消息，直接铺开 -->
@@ -134,30 +137,30 @@ function sizeOf(item) {
 
       <n-tab-pane name="metadata" tab="Metadata">
         <pre v-if="metadataText" class="json">{{ metadataText }}</pre>
-        <n-empty v-else size="small" description="没有 Metadata" />
+        <n-empty v-else size="small" :description="t('grpc.noMetadata')" />
       </n-tab-pane>
 
       <n-tab-pane name="trailers" tab="Trailers">
         <pre v-if="trailersText" class="json">{{ trailersText }}</pre>
-        <n-empty v-else size="small" description="没有 Trailers" />
+        <n-empty v-else size="small" :description="t('grpc.noTrailers')" />
       </n-tab-pane>
 
       <n-tab-pane name="tests" :tab="testsTab">
         <template v-if="!tests.length && !extracted.length">
-          <n-empty size="small" description="没有断言和提取（在「断言」页签里加）" />
+          <n-empty size="small" :description="t('grpc.noTestsOrExtracts')" />
         </template>
 
         <div v-if="tests.length" class="tests">
           <div v-for="(item, index) in tests" :key="index" class="test" :class="{ bad: !item.passed }">
-            {{ item.passed ? '通过' : '失败' }}：{{ item.name }}
+            {{ item.passed ? t('grpc.passed') : t('grpc.failed') }}：{{ item.name }}
             <span v-if="item.message" class="msg">{{ item.message }}</span>
           </div>
         </div>
 
         <div v-if="extracted.length" class="extracted">
-          <p class="label">提取到的变量</p>
+          <p class="label">{{ t('grpc.extractedVars') }}</p>
           <div v-for="(item, index) in extracted" :key="index" class="test">
-            {{ item.key }} = {{ item.value }}（{{ item.scope === 'environment' ? '环境' : '项目' }}）
+            {{ item.key }} = {{ item.value }}（{{ item.scope === 'environment' ? t('layout.entityEnvironment') : t('layout.entityProject') }}）
           </div>
         </div>
       </n-tab-pane>

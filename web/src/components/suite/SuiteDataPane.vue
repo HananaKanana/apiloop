@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NIcon, NRadioButton, NRadioGroup, useMessage } from 'naive-ui';
 import { File } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -21,6 +22,7 @@ const emit = defineEmits(['change']);
 
 const projects = useProjectStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const canEdit = computed(function () { return projects.canEdit && !props.disabled; });
 
@@ -105,9 +107,14 @@ async function runPreview() {
 /** 输入框里的提示（含换行和引号，写在模板里会被属性引号截断） */
 const placeholder = computed(function () {
   if (format.value === 'csv') {
-    return '第一行是列名，逗号分隔：\n账号,密码\nuser1,pass1\nuser2,pass2';
+    return [
+      t('suite.csvPlaceholderHeader'),
+      t('suite.csvPlaceholderRow1'),
+      t('suite.csvPlaceholderRow2'),
+      t('suite.csvPlaceholderRow3')
+    ].join('\n');
   }
-  return '[{"账号":"user1","密码":"pass1"}]';
+  return t('suite.jsonPlaceholder');
 });
 
 function pickFile() {
@@ -120,7 +127,7 @@ function onFilePicked(event) {
   if (!file) return;
 
   if (file.size > 2 * 1024 * 1024) {
-    message.error('文件超过 2 MB 了，拆小一点');
+    message.error(t('suite.fileTooLarge'));
     return;
   }
 
@@ -134,7 +141,7 @@ function onFilePicked(event) {
     }
     schedule();
   };
-  reader.onerror = function () { message.error('读文件失败'); };
+  reader.onerror = function () { message.error(t('suite.readFileFailed')); };
   reader.readAsText(file);
 }
 </script>
@@ -143,23 +150,26 @@ function onFilePicked(event) {
   <div class="pane">
     <div class="toolbar">
       <n-radio-group :value="format" size="small" :disabled="!canEdit" @update:value="(value) => { format = value; }">
-        <n-radio-button value="none">不用数据</n-radio-button>
+        <n-radio-button value="none">{{ t('suite.dataNone') }}</n-radio-button>
         <n-radio-button value="csv">CSV</n-radio-button>
         <n-radio-button value="json">JSON</n-radio-button>
       </n-radio-group>
 
       <n-button v-if="format !== 'none'" size="small" secondary :disabled="!canEdit" @click="pickFile">
         <template #icon><n-icon :component="File" /></template>
-        选文件
+        {{ t('suite.chooseFile') }}
       </n-button>
       <span v-if="fileName" class="file">{{ fileName }}</span>
     </div>
 
     <template v-if="format !== 'none'">
       <p class="hint">
-        每一行跑一轮。列名就是变量名，接口里写 <code v-pre>{{列名}}</code> 就能用；
-        脚本里用 <code>pm.iterationData.get('列名')</code>。<strong>数据变量优先于环境变量。</strong>
-        上限 1000 行 / 2 MB。
+        {{ t('suite.dataHintLead') }}
+        <code>{{ t('suite.dataHintVar') }}</code>
+        {{ t('suite.dataHintAfterVar') }}
+        <code>pm.iterationData.get('{{ t('suite.dataHintColumn') }}')</code>
+        <strong>{{ t('suite.dataHintStrong') }}</strong>
+        {{ t('suite.dataHintTail') }}
       </p>
 
       <textarea
@@ -176,7 +186,7 @@ function onFilePicked(event) {
       </n-alert>
 
       <div v-else-if="preview" class="preview">
-        <p class="count">共 {{ preview.total }} 行，会跑 {{ preview.total }} 轮（下面预览前 20 行）</p>
+        <p class="count">{{ t('suite.previewCount', { rows: preview.total, iterations: preview.total }) }}</p>
         <div class="table-wrap">
           <table class="grid">
             <thead>
@@ -196,7 +206,7 @@ function onFilePicked(event) {
       </div>
     </template>
 
-    <p v-else class="hint">不用数据时，按「设置」里那个轮数跑（默认 1 轮）。</p>
+    <p v-else class="hint">{{ t('suite.noDataHint') }}</p>
 
     <input ref="fileInput" type="file" accept=".csv,.json,text/csv,application/json" class="hidden" @change="onFilePicked" />
   </div>

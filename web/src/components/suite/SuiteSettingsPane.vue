@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NInputNumber } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 
@@ -18,6 +19,7 @@ const props = defineProps({
 const emit = defineEmits(['change']);
 
 const projects = useProjectStore();
+const { t } = useI18n();
 
 const canEdit = computed(function () { return projects.canEdit && !props.disabled; });
 
@@ -42,7 +44,7 @@ function setTimeoutMs(value) {
 <template>
   <div class="pane">
     <div class="field">
-      <span class="label">不用数据时跑几轮</span>
+      <span class="label">{{ t('suite.iterationsLabel') }}</span>
       <n-input-number
         size="small"
         :min="1"
@@ -55,7 +57,7 @@ function setTimeoutMs(value) {
     </div>
 
     <div class="field">
-      <span class="label">每个请求之间等多久</span>
+      <span class="label">{{ t('suite.delayLabel') }}</span>
       <n-input-number
         size="small"
         :min="0"
@@ -65,27 +67,26 @@ function setTimeoutMs(value) {
       >
         <template #suffix>ms</template>
       </n-input-number>
-      <span class="unit">步骤上单独设的等待在这个之外</span>
+      <span class="unit">{{ t('suite.delayUnit') }}</span>
     </div>
 
     <div class="field">
-      <span class="label">请求超时</span>
+      <span class="label">{{ t('suite.timeoutLabel') }}</span>
       <n-input-number
         size="small"
         :min="1000"
         :disabled="!canEdit"
         :value="settings.timeoutMs === undefined ? null : settings.timeoutMs"
-        placeholder="跟全局设置"
+        :placeholder="t('suite.followGlobal')"
         @update:value="setTimeoutMs"
       >
         <template #suffix>ms</template>
       </n-input-number>
-      <span class="unit">留空就跟全局设置</span>
+      <span class="unit">{{ t('suite.timeoutUnit') }}</span>
     </div>
 
     <p class="note">
-      运行时提取、脚本设置的变量<b>只在这次运行里有效</b>，不会改环境里保存的值；
-      Cookie 每次运行从空开始、步骤之间共用；不记历史。
+      {{ t('suite.noteLead') }}<b>{{ t('suite.noteStrong') }}</b>{{ t('suite.noteTail') }}
     </p>
   </div>
 </template>

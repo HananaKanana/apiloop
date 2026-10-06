@@ -6,6 +6,8 @@
  * 好处是和 `utils/preflight.js` 一样 —— 能单独跑真断言，不用起浏览器。
  */
 
+import { t } from '@/i18n';
+
 /** 选中值用服务名 + 方法名拼：服务名里不会有 `|`（proto 的标识符限制） */
 export function methodValue(service, method) {
   const svc = String(service || '').trim();
@@ -38,8 +40,8 @@ export function methodOptions(services) {
       if (!method || !method.name) return;
 
       const suffix = method.clientStreaming
-        ? ' · 客户端流（不支持）'
-        : (method.serverStreaming ? ' · 服务端流' : '');
+        ? t('grpc.methodClientStream')
+        : (method.serverStreaming ? t('grpc.methodServerStream') : '');
 
       out.push({
         label: name + ' / ' + method.name + suffix,
@@ -111,20 +113,20 @@ export function grpcurlCommand(input) {
   parts.push(String(source.target || '').trim() || '<host:port>');
   const service = String(source.service || '').trim();
   const method = String(source.method || '').trim();
-  parts.push(service && method ? service + '/' + method : '<服务>/<方法>');
+  parts.push(service && method ? service + '/' + method : t('grpc.grpcurlPlaceholder'));
 
   let command = parts.join(' ');
 
   const notes = [];
   if (streaming) {
-    notes.push('这条命令是客户端流 / 双向流：跑起来之后逐条粘贴 JSON 消息、每行一条，空行表示结束发送');
+    notes.push(t('grpc.grpcurlStreamingNote'));
   }
   if (source.source === 'reflection') {
-    notes.push('用的是服务端反射，所以不带 -proto；服务端没开反射的话要先导出 proto 文件再改成 -proto 的写法');
+    notes.push(t('grpc.grpcurlReflectionNote'));
   } else if (files.length > 1) {
-    notes.push('这个接口有 ' + files.length + ' 个 proto 文件，命令里只带了第一个；把 import 到的其它文件也放到 -import-path 那一层');
+    notes.push(t('grpc.grpcurlMultiProtoNote', { n: files.length }));
   } else if (files.length) {
-    notes.push('先把 ' + files[0].name + ' 存到当前目录（proto 存在接口里，grpcurl 读的是本地文件）');
+    notes.push(t('grpc.grpcurlLocalProtoNote', { name: files[0].name }));
   }
   if (notes.length) command += '\n\n# ' + notes.join('\n# ');
 

@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NCheckbox, NInput, NSelect } from 'naive-ui';
 import {
   PHASE_OPTIONS,
@@ -39,9 +40,19 @@ const props = defineProps({
 
 const emit = defineEmits(['update:dbOps']);
 
+const { t } = useI18n();
+
 const dbOps = computed(function () { return props.dbOps || []; });
 const groups = computed(function () { return splitByPhase(dbOps.value); });
 const options = computed(function () { return connectionOptions(props.databases); });
+
+/**
+ * 时机的展示标签：utils 的 PHASE_OPTIONS 只用来遍历顺序（它的 label 是中文、不在本次迁移范围），
+ * 界面上的文字改由本区域的语言键提供，这样英文界面下也能跟着切换。
+ */
+function phaseLabel(phase) {
+  return phase === 'post' ? t('db.phasePost') : t('db.phasePre');
+}
 
 /** 这个操作指向的连接（用来决定语句和路径的提示文案） */
 function connectionOf(op) {
@@ -95,25 +106,24 @@ function removeExtract(op, id) {
 <template>
   <div class="pane">
     <p class="label">
-      数据库操作
+      {{ t('db.paneTitle') }}
       <span class="note">
-        请求前的先跑（可以往库里造数据、把值填进这次请求）；响应后的排在断言之前
-        （断言能用刚查出来的变量）
+        {{ t('db.paneNote') }}
       </span>
     </p>
 
     <div v-if="localAllowed && !databases.length" class="notice">
-      这个项目还没有数据库连接。先到「项目设置 → 数据库」里加一个，这里才能选。
+      {{ t('db.noConnections') }}
     </div>
     <div v-if="!localAllowed" class="notice">
-      网页版连不了数据库：数据库操作只能在客户端里新增、修改和执行。这里只能看，发送时会被跳过。
+      {{ t('db.webOpsUnavailable') }}
     </div>
     <div v-if="!hasEnvironment" class="notice warn">
-      当前没有选环境（或者选的是内置的 Mock 环境），提取到「环境」的变量不会保存。
+      {{ t('db.noEnvironmentNotice') }}
     </div>
 
     <template v-for="phase in PHASE_OPTIONS" :key="phase.value">
-      <p class="group">{{ phase.label }}</p>
+      <p class="group">{{ phaseLabel(phase.value) }}</p>
 
       <div class="ops">
         <div
@@ -135,7 +145,7 @@ function removeExtract(op, id) {
               :value="op.connectionId || null"
               :options="options"
               :disabled="disabled"
-              placeholder="选连接"
+              :placeholder="t('db.selectConnection')"
               @update:value="(v) => patchOp(op.id, { connectionId: v || '' })"
             />
 
@@ -143,8 +153,8 @@ function removeExtract(op, id) {
             <span v-if="opProblem(op)" class="problem">{{ opProblem(op) }}</span>
 
             <div class="op-tools">
-              <n-button v-if="!disabled" size="tiny" quaternary @click="addExtract(op)">+ 提取</n-button>
-              <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="removeOp(op.id)">删除</n-button>
+              <n-button v-if="!disabled" size="tiny" quaternary @click="addExtract(op)">{{ t('db.addExtract') }}</n-button>
+              <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="removeOp(op.id)">{{ t('app.delete') }}</n-button>
             </div>
           </div>
 
@@ -184,11 +194,11 @@ function removeExtract(op, id) {
                 size="small"
                 :value="row.name"
                 :disabled="disabled"
-                placeholder="变量名"
+                :placeholder="t('db.variableName')"
                 @update:value="(v) => patchExtract(op, row.id, { name: v })"
               />
               <n-button v-if="!disabled" size="tiny" quaternary type="error" @click="removeExtract(op, row.id)">
-                删除
+                {{ t('app.delete') }}
               </n-button>
               <span v-else />
             </div>
@@ -196,18 +206,18 @@ function removeExtract(op, id) {
         </div>
 
         <div v-if="!groups[phase.value].length" class="empty">
-          {{ phase.value === 'pre' ? '还没有请求前的操作。' : '还没有响应后的操作。' }}
+          {{ phase.value === 'pre' ? t('db.emptyPre') : t('db.emptyPost') }}
         </div>
       </div>
 
       <div v-if="!disabled" class="tools">
-        <n-button size="small" @click="addOp(phase.value)">+ 添加{{ phase.label }}操作</n-button>
+        <n-button size="small" @click="addOp(phase.value)">{{ t('db.addOp', { phase: phaseLabel(phase.value) }) }}</n-button>
       </div>
     </template>
 
     <p class="label tail">
-      结果去哪儿看
-      <span class="note">每次操作在响应面板的「控制台」里占一行（连了什么库、语句、耗时、返回几行）</span>
+      {{ t('db.resultTitle') }}
+      <span class="note">{{ t('db.resultNote') }}</span>
     </p>
   </div>
 </template>

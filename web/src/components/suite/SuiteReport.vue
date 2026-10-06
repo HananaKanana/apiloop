@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NIcon, NTag } from 'naive-ui';
 import { ChevronDown, ChevronRight, Download } from '@vicons/tabler';
 import { dataSummary, downloadReport, formatBytes, formatMs, formatTime } from '@/utils/suiteReport';
@@ -14,11 +15,26 @@ const props = defineProps({
   run: { type: Object, required: true }
 });
 
-const STATUS_LABEL = { passed: '通过', failed: '失败', stopped: '停止', error: '出错' };
+const { t } = useI18n();
+
+/** 状态文案依赖语言，必须用 computed，切语言才会变 */
+const STATUS_LABEL = computed(function () {
+  return {
+    passed: t('suite.statusPassed'),
+    failed: t('suite.statusFailed'),
+    stopped: t('suite.statusStopped'),
+    error: t('suite.statusError')
+  };
+});
 const STATUS_TYPE = { passed: 'success', failed: 'error', stopped: 'warning', error: 'error' };
 
 const summary = computed(function () { return props.run.summary || {}; });
 const iterations = computed(function () { return (props.run.result && props.run.result.iterations) || []; });
+
+/** 轮数：summary 没给就用明细条数（和模板里原来那句三元一个口径） */
+const roundCount = computed(function () {
+  return summary.value.iterations === undefined ? iterations.value.length : summary.value.iterations;
+});
 
 /** 默认展开**失败的轮**（通过的一眼看标题就够了），用户点过的以他点的为准 */
 const overrides = ref({});
@@ -44,7 +60,7 @@ function statusType(status) {
 }
 
 function statusLabel(status) {
-  return STATUS_LABEL[status] || status || '—';
+  return STATUS_LABEL.value[status] || status || '—';
 }
 
 function headerText(headers) {
@@ -62,29 +78,29 @@ function headerText(headers) {
           {{ statusLabel(run.status) }}
         </n-tag>
         <span class="when">{{ formatTime(run.finishedAt || run.startedAt) }}</span>
-        <span class="env">{{ run.environmentName || '（没选环境）' }}</span>
-        <span v-if="run.label" class="label">构建号 {{ run.label }}</span>
+        <span class="env">{{ run.environmentName || t('suite.noEnvironment') }}</span>
+        <span v-if="run.label" class="label">{{ t('suite.buildLabel', { label: run.label }) }}</span>
         <span class="spacer" />
         <n-button size="small" secondary @click="downloadReport(run)">
           <template #icon><n-icon :component="Download" /></template>
-          导出报告
+          {{ t('suite.exportReport') }}
         </n-button>
       </div>
 
       <div class="stats">
-        <span><b>{{ summary.iterations === undefined ? iterations.length : summary.iterations }}</b> 轮</span>
-        <span><b>{{ summary.requests || 0 }}</b> 个请求</span>
-        <span class="ok"><b>{{ summary.passed || 0 }}</b> 通过</span>
-        <span :class="{ bad: summary.failed }"><b>{{ summary.failed || 0 }}</b> 失败</span>
-        <span v-if="summary.errors" class="bad"><b>{{ summary.errors }}</b> 出错</span>
-        <span>断言 <b>{{ (summary.assertions && summary.assertions.passed) || 0 }}</b> /
+        <span><b>{{ roundCount }}</b> {{ t('suite.unitRounds', roundCount) }}</span>
+        <span><b>{{ summary.requests || 0 }}</b> {{ t('suite.unitRequests', summary.requests || 0) }}</span>
+        <span class="ok"><b>{{ summary.passed || 0 }}</b> {{ t('suite.statusPassed') }}</span>
+        <span :class="{ bad: summary.failed }"><b>{{ summary.failed || 0 }}</b> {{ t('suite.statusFailed') }}</span>
+        <span v-if="summary.errors" class="bad"><b>{{ summary.errors }}</b> {{ t('suite.statusError') }}</span>
+        <span>{{ t('suite.assertions') }} <b>{{ (summary.assertions && summary.assertions.passed) || 0 }}</b> /
           <b :class="{ bad: summary.assertions && summary.assertions.failed }">{{ (summary.assertions && summary.assertions.failed) || 0 }}</b></span>
-        <span>总用时 <b>{{ formatMs(summary.durationMs) }}</b></span>
-        <span>平均 <b>{{ formatMs(summary.avgMs) }}</b></span>
+        <span>{{ t('suite.statDuration') }} <b>{{ formatMs(summary.durationMs) }}</b></span>
+        <span>{{ t('suite.statAverage') }} <b>{{ formatMs(summary.avgMs) }}</b></span>
       </div>
 
       <p v-if="summary.truncated" class="truncated">
-        这次运行的结果太大，请求 / 响应的明细没有存进记录（只留了每一步的结论）。
+        {{ t('suite.truncatedNote') }}
       </p>
       <p v-if="summary.message" class="truncated">{{ summary.message }}</p>
     </div>
@@ -93,9 +109,9 @@ function headerText(headers) {
       <div v-for="(item, index) in iterations" :key="index" class="iteration">
         <button class="iter-head" @click="toggle(index)">
           <n-icon size="14" :component="isExpanded(index) ? ChevronDown : ChevronRight" />
-          <span class="iter-title">第 {{ index + 1 }} 轮</span>
+          <span class="iter-title">{{ t('suite.roundN', { n: index + 1 }) }}</span>
           <span v-if="item.data" class="iter-data">{{ dataSummary(item.data) }}</span>
-          <span v-if="(item.steps || []).some((s) => s.ok === false)" class="bad-dot">有失败</span>
+          <span v-if="(item.steps || []).some((s) => s.ok === false)" class="bad-dot">{{ t('suite.hasFailure') }}</span>
         </button>
 
         <div v-if="isExpanded(index)" class="steps">
@@ -110,7 +126,7 @@ function headerText(headers) {
               <span class="idx">{{ stepIndex + 1 }}</span>
               <span class="method">{{ step.method }}</span>
               <span class="name">{{ step.name }}</span>
-              <n-tag v-if="step.skipped" size="tiny" :bordered="false">跳过</n-tag>
+              <n-tag v-if="step.skipped" size="tiny" :bordered="false">{{ t('suite.statusSkipped') }}</n-tag>
               <span class="spacer" />
               <span class="meta">
                 {{ step.status ? 'HTTP ' + step.status : '' }}
@@ -122,7 +138,7 @@ function headerText(headers) {
                 class="detail-toggle"
                 @click="toggleDetail(index + '-' + stepIndex)"
               >
-                {{ detailOpen[index + '-' + stepIndex] ? '收起' : '看请求 / 响应' }}
+                {{ detailOpen[index + '-' + stepIndex] ? t('suite.collapse') : t('suite.viewRequestResponse') }}
               </button>
             </div>
 
@@ -131,20 +147,20 @@ function headerText(headers) {
             <ul v-if="(step.tests || []).length" class="tests">
               <li v-for="(test, testIndex) in step.tests" :key="testIndex" :class="test.passed ? 'ok' : 'bad'">
                 {{ test.passed ? '✓' : '✗' }} {{ test.name }}
-                <span v-if="test.message" class="msg">：{{ test.message }}</span>
+                <span v-if="test.message" class="msg">{{ t('suite.testMessagePrefix') }}{{ test.message }}</span>
               </li>
             </ul>
 
             <div v-if="detailOpen[index + '-' + stepIndex]" class="payload">
               <template v-if="step.request">
-                <p class="k">实际发出的请求</p>
+                <p class="k">{{ t('suite.actualRequest') }}</p>
                 <pre>{{ step.request.method }} {{ step.request.url }}
 {{ headerText(step.request.headers) }}
 
 {{ step.request.bodyPreview }}</pre>
               </template>
               <template v-if="step.response">
-                <p class="k">响应（HTTP {{ step.response.status }}）</p>
+                <p class="k">{{ t('suite.responseWithStatus', { status: step.response.status }) }}</p>
                 <pre>{{ headerText(step.response.headers) }}
 
 {{ step.response.body }}</pre>
@@ -154,7 +170,7 @@ function headerText(headers) {
         </div>
       </div>
 
-      <p v-if="!iterations.length" class="empty">这次运行没有步骤（或者明细被截断了）。</p>
+      <p v-if="!iterations.length" class="empty">{{ t('suite.noStepsInRun') }}</p>
     </div>
   </div>
 </template>

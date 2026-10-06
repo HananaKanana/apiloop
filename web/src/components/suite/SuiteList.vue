@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NIcon, NInput, NPopconfirm, NTooltip, useMessage } from 'naive-ui';
 import { Copy, Pencil, Plus, Trash } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -19,6 +20,7 @@ const suites = useSuitesStore();
 const runs = useSuiteRunStore();
 const tabs = useTabsStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const canEdit = computed(function () { return projects.canEdit; });
 
@@ -58,7 +60,7 @@ async function create() {
   if (creating.value) return;
   creating.value = true;
   try {
-    const data = await suitesApi.createSuite(projects.currentId, { name: '新建测试集' });
+    const data = await suitesApi.createSuite(projects.currentId, { name: t('suite.newSuite') });
     suites.put(data.suite);
     open(data.suite);
     startRename(data.suite);
@@ -91,7 +93,7 @@ async function copy(suite) {
   try {
     const data = await suitesApi.copySuite(suite.id);
     suites.put(data.suite);
-    message.success('已复制');
+    message.success(t('app.copied'));
   } catch (err) {
     message.error(err.message);
   }
@@ -102,7 +104,7 @@ async function remove(suite) {
     await suitesApi.removeSuite(suite.id);
     suites.drop(suite.id);
     tabs.closeSuite(suite.id);
-    message.success('已删除');
+    message.success(t('suite.deleted'));
   } catch (err) {
     message.error(err.message);
   }
@@ -152,19 +154,19 @@ async function onDrop() {
 <template>
   <div class="suite-list">
     <div class="head">
-      <span class="title">测试集</span>
+      <span class="title">{{ t('suite.title') }}</span>
       <n-tooltip v-if="canEdit" trigger="hover">
         <template #trigger>
           <n-button size="tiny" quaternary :loading="creating" @click="create">
             <template #icon><n-icon :component="Plus" /></template>
           </n-button>
         </template>
-        新建测试集
+        {{ t('suite.newSuite') }}
       </n-tooltip>
     </div>
 
     <p v-if="!suites.suites.length" class="empty">
-      还没有测试集。点上面的 + 建一个，或者从「批量运行」里「存为测试集」。
+      {{ t('suite.emptyList') }}
     </p>
 
     <div
@@ -196,19 +198,19 @@ async function onDrop() {
       <span class="count">{{ suite.stepCount }}</span>
 
       <span v-if="canEdit" class="actions" @click.stop>
-        <button class="act" title="改名" @click="startRename(suite)">
+        <button class="act" :title="t('suite.rename')" @click="startRename(suite)">
           <n-icon size="13" :component="Pencil" />
         </button>
-        <button class="act" title="复制" @click="copy(suite)">
+        <button class="act" :title="t('suite.copy')" @click="copy(suite)">
           <n-icon size="13" :component="Copy" />
         </button>
         <n-popconfirm @positive-click="remove(suite)">
           <template #trigger>
-            <button class="act danger" title="删除">
+            <button class="act danger" :title="t('app.delete')">
               <n-icon size="13" :component="Trash" />
             </button>
           </template>
-          删除「{{ suite.name }}」？运行记录也会一起删掉（不可撤销）。
+          {{ t('suite.deleteConfirm', { name: suite.name }) }}
         </n-popconfirm>
       </span>
     </div>

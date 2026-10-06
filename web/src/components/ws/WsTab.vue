@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -61,6 +62,7 @@ const ui = useUiStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const paneTabsTheme = usePaneTabsTheme();
+const { t } = useI18n();
 
 /** 这个接口和云端对不上：顶部一条红提示 + 「处理」入口（设计稿第 7 节，审阅第 11 轮 N6） */
 const conflicted = computed(function () {
@@ -105,14 +107,16 @@ const EMPTY_STATE = {
   lastSeq: 0
 };
 
-const STATUS_TEXT = {
-  idle: '未连接',
-  connecting: '连接中…',
-  open: '已连接',
-  closed: '已断开',
-  ended: '会话已结束',
-  error: '出错'
-};
+const STATUS_TEXT = computed(function () {
+  return {
+    idle: t('ws.statusIdle'),
+    connecting: t('ws.statusConnecting'),
+    open: t('ws.statusOpen'),
+    closed: t('ws.statusClosed'),
+    ended: t('ws.statusEnded'),
+    error: t('ws.statusError')
+  };
+});
 
 /** 状态标签只在「需要有人管」的时候上色，其余保持中性 */
 const STATUS_TYPE = {
@@ -161,7 +165,7 @@ const connectBlocked = computed(function () {
 });
 
 const statusText = computed(function () {
-  return STATUS_TEXT[state.value.status] || state.value.status;
+  return STATUS_TEXT.value[state.value.status] || state.value.status;
 });
 
 const statusType = computed(function () {
@@ -173,8 +177,8 @@ const statusType = computed(function () {
  * 但事件流还在（还能看到 close 事件），反过来也一样。
  */
 const channelHint = computed(function () {
-  if (state.value.channel === 'retrying') return '事件流断了，正在重连…';
-  if (state.value.channel === 'ended') return '会话已被服务端回收';
+  if (state.value.channel === 'retrying') return t('ws.channelRetrying');
+  if (state.value.channel === 'ended') return t('ws.channelEnded');
   return '';
 });
 
@@ -258,7 +262,7 @@ function setOption(key, value) {
 async function onConnect() {
   // 网页版、云端不替网页建连接：按钮已经灰了，但地址栏回车也会走到这里，兜一次
   if (connectBlocked.value) {
-    message.warning('网页版不能连接，请在客户端里使用');
+    message.warning(t('ws.connectBlocked'));
     return;
   }
 
@@ -267,17 +271,17 @@ async function onConnect() {
 
   const url = String(props.tab.spec.url || '').trim();
   if (!url) {
-    message.warning('请先填写 WebSocket 地址');
+    message.warning(t('ws.urlRequired'));
     return;
   }
   // 地址以 {{变量}} 开头时（比如 {{baseUrl}}/socket）本机判不了，交给服务端在
   // 变量替换之后再判，它返回的是同一个中文错误
   if (url.indexOf('{{') !== 0 && !/^wss?:\/\//i.test(url)) {
-    message.warning('地址必须以 ws:// 或 wss:// 开头');
+    message.warning(t('ws.schemeRequired'));
     return;
   }
   if (!projects.currentId) {
-    message.warning('还没有选中项目');
+    message.warning(t('ws.noProject'));
     return;
   }
 
@@ -340,7 +344,7 @@ async function save() {
       auth: props.tab.spec.auth
     });
     tabs.markSaved(props.tab, data.api);
-    message.success('已保存');
+    message.success(t('ws.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -351,7 +355,7 @@ async function save() {
 /* ---------------- 保存到目录（临时标签页） ---------------- */
 
 function folderOptions() {
-  const list = [{ label: '（根目录）', value: null }];
+  const list = [{ label: t('ws.rootFolder'), value: null }];
   (function walk(nodes, depth) {
     (nodes || []).forEach(function (node) {
       if (node.kind !== 'folder') return;
@@ -387,7 +391,7 @@ async function renameTitle(name) {
   try {
     await tree.renameApi(props.tab.apiId, name);
     tabs.applyRename('api', props.tab.apiId, name);
-    message.success('已重命名');
+    message.success(t('ws.renamed'));
   } catch (err) {
     message.error(err.message);
   }
@@ -405,7 +409,7 @@ function openSaveDialog() {
 
 async function confirmSaveToFolder() {
   if (!String(saveForm.value.name || '').trim()) {
-    message.warning('请填写接口名称');
+    message.warning(t('ws.apiNameRequired'));
     return;
   }
 
@@ -423,7 +427,7 @@ async function confirmSaveToFolder() {
     tabs.markSaved(props.tab, data.api);
     showSaveDialog.value = false;
     await tree.refresh();
-    message.success('已保存到目录');
+    message.success(t('ws.savedToFolder'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -453,7 +457,7 @@ async function confirmScenario() {
   savingScenario.value = true;
   try {
     const data = await apisApi.createExample(props.tab.apiId, {
-      name: 'WS 录制于 ' + stamp(),
+      name: t('ws.wsRecordedName', { time: stamp() }),
       // WS 的握手是 101，示例上存这个值只是表明它是个 WebSocket 场景
       status: 101,
       headers: [],
@@ -467,7 +471,7 @@ async function confirmScenario() {
     props.tab.focusExampleId = data.example.id;
     showScenario.value = false;
     activePane.value = 'mock';
-    message.success('已存为 WebSocket 示例');
+    message.success(t('ws.savedWsExample'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -490,7 +494,7 @@ function onKeydown(event) {
   event.preventDefault();
 
   if (!canEdit.value) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('ws.readonlyCannotSave'));
     return;
   }
   if (bound.value) save();
@@ -523,8 +527,8 @@ watch(
   <div class="ws-tab">
     <!-- 这个接口和云端对不上：顶部一条红提示 + 处理入口 -->
     <div v-if="conflicted" class="conflict-bar">
-      <span class="conflict-text">这个接口和云端有冲突</span>
-      <n-button size="tiny" type="error" ghost @click="openConflict">处理</n-button>
+      <span class="conflict-text">{{ t('ws.conflictText') }}</span>
+      <n-button size="tiny" type="error" ghost @click="openConflict">{{ t('ws.resolve') }}</n-button>
     </div>
 
     <!-- 面包屑：项目 › 目录… › 名字（最后一级双击改名） -->
@@ -543,7 +547,7 @@ watch(
         class="url"
         :model-value="spec.url"
         :scope="scope"
-        placeholder="wss://echo.example.com/socket，支持 {{变量}}"
+        :placeholder="t('ws.urlPlaceholder')"
         @update:model-value="(v) => { spec.url = v; }"
         @enter="onConnect"
       />
@@ -554,33 +558,33 @@ watch(
         :options="recentOptions"
         @select="onPickRecent"
       >
-        <n-button size="small" quaternary>最近</n-button>
+        <n-button size="small" quaternary>{{ t('ws.recent') }}</n-button>
       </n-dropdown>
 
       <n-tag size="small" :bordered="false" :type="statusType">{{ statusText }}</n-tag>
       <span v-if="channelHint" class="channel-hint">{{ channelHint }}</span>
 
       <n-button v-if="connected" size="small" type="warning" secondary @click="onDisconnect">
-        断开
+        {{ t('ws.disconnect') }}
       </n-button>
       <!-- 网页版、云端不替网页建连接：灰掉并说明原因（禁用的按钮不派发鼠标事件，提示挂在外层 span 上） -->
       <n-tooltip v-else-if="connectBlocked" trigger="hover">
         <template #trigger>
           <span class="connect-wrap">
-            <n-button size="small" type="primary" disabled>连接</n-button>
+            <n-button size="small" type="primary" disabled>{{ t('ws.connect') }}</n-button>
           </span>
         </template>
-        网页版不能连接，请在客户端里使用（或让管理员在云端开启发送）
+        {{ t('ws.connectBlockedTooltip') }}
       </n-tooltip>
       <n-button v-else size="small" type="primary" :loading="busy" @click="onConnect">
-        连接
+        {{ t('ws.connect') }}
       </n-button>
 
       <n-button v-if="canEdit && bound" size="small" :loading="saving" @click="save">
-        保存
+        {{ t('ws.save') }}
       </n-button>
       <n-button v-if="canEdit && !bound" size="small" @click="openSaveDialog">
-        保存到目录
+        {{ t('ws.saveToFolder') }}
       </n-button>
     </div>
 
@@ -607,11 +611,11 @@ watch(
               :scope="scope"
               kind="ws-headers"
               :key-suggestions="HEADER_NAMES"
-              key-placeholder="请求头"
-              value-placeholder="值"
+              :key-placeholder="t('ws.headerPlaceholder')"
+              :value-placeholder="t('ws.valuePlaceholder')"
             />
             <p class="hint">
-              Sec-WebSocket-Protocol 会作为子协议协商，不会当成普通请求头发出去。
+              {{ t('ws.protocolHint') }}
             </p>
           </div>
         </n-tab-pane>
@@ -622,8 +626,8 @@ watch(
               v-model="spec.params.query"
               :scope="scope"
               kind="ws-query"
-              key-placeholder="参数名"
-              value-placeholder="值"
+              :key-placeholder="t('ws.paramName')"
+              :value-placeholder="t('ws.valuePlaceholder')"
             />
           </div>
         </n-tab-pane>
@@ -634,7 +638,7 @@ watch(
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="settings" tab="设置">
+        <n-tab-pane name="settings" :tab="t('ws.tabSettings')">
           <div class="pane narrow">
             <div class="option-row">
               <n-switch
@@ -643,10 +647,9 @@ watch(
                 @update:value="(v) => setOption('cookies', v)"
               />
               <div class="option-text">
-                <span class="option-title">自动带 Cookie</span>
+                <span class="option-title">{{ t('ws.cookieOptionTitle') }}</span>
                 <span class="option-desc">
-                  连接时按目标地址从 Cookie 库里取匹配的 cookie。握手响应里的 Set-Cookie
-                  拿不到，不会写回。
+                  {{ t('ws.cookieOptionDesc') }}
                 </span>
               </div>
             </div>
@@ -663,18 +666,18 @@ watch(
 
     <template v-if="activePane !== 'mock'">
       <div class="log-head">
-        <span class="label">消息日志</span>
+        <span class="label">{{ t('ws.messageLog') }}</span>
         <n-button
           v-if="canSaveScenario"
           size="tiny"
           quaternary
           type="primary"
-          title="按消息日志生成回放场景，存成 ws 类型的示例"
+          :title="t('ws.saveScenarioTitle')"
           @click="openScenario"
         >
-          保存为 mock
+          {{ t('ws.saveAsMock') }}
         </n-button>
-        <n-button size="tiny" quaternary @click="onClearLog">清空日志</n-button>
+        <n-button size="tiny" quaternary @click="onClearLog">{{ t('ws.clearLog') }}</n-button>
       </div>
 
       <div class="log">
@@ -687,7 +690,7 @@ watch(
           type="textarea"
           size="small"
           :autosize="{ minRows: 2, maxRows: 6 }"
-          placeholder="要发送的内容，Ctrl+Enter 发送"
+          :placeholder="t('ws.composerPlaceholder')"
           @keydown="onComposerKeydown"
         />
         <n-button
@@ -698,7 +701,7 @@ watch(
           :loading="sending"
           @click="onSend"
         >
-          发送
+          {{ t('ws.send') }}
         </n-button>
       </div>
     </template>
@@ -706,22 +709,22 @@ watch(
     <n-modal
       v-model:show="showSaveDialog"
       preset="card"
-      title="保存到目录"
+      :title="t('ws.saveToFolder')"
       style="width: 460px; max-width: 92vw"
     >
       <n-form>
-        <n-form-item label="名称">
-          <n-input v-model:value="saveForm.name" placeholder="接口名称" />
+        <n-form-item :label="t('ws.nameLabel')">
+          <n-input v-model:value="saveForm.name" :placeholder="t('ws.apiNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="目录">
+        <n-form-item :label="t('ws.folderLabel')">
           <n-select v-model:value="saveForm.folderId" :options="folderOptions()" />
         </n-form-item>
       </n-form>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showSaveDialog = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="confirmSaveToFolder">保存</n-button>
+          <n-button @click="showSaveDialog = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" :loading="saving" @click="confirmSaveToFolder">{{ t('ws.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>

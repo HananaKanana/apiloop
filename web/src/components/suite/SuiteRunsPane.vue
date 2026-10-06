@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NEmpty, NIcon, NTag, useMessage } from 'naive-ui';
 import { Refresh, Trash } from '@vicons/tabler';
 import { useGatewayStore } from '@/stores/gateway';
@@ -22,6 +23,7 @@ const emit = defineEmits(['open']);
 const gateway = useGatewayStore();
 const projects = useProjectStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const runs = ref([]);
 const loading = ref(false);
@@ -29,7 +31,15 @@ const error = ref('');
 
 const canEdit = computed(function () { return projects.canEdit; });
 
-const STATUS_LABEL = { passed: '通过', failed: '失败', stopped: '停止', error: '出错' };
+/** 状态文案依赖语言，必须用 computed，切语言才会变 */
+const STATUS_LABEL = computed(function () {
+  return {
+    passed: t('suite.statusPassed'),
+    failed: t('suite.statusFailed'),
+    stopped: t('suite.statusStopped'),
+    error: t('suite.statusError')
+  };
+});
 const STATUS_TYPE = { passed: 'success', failed: 'error', stopped: 'warning', error: 'error' };
 
 function load() {
@@ -60,7 +70,7 @@ async function remove(run) {
   try {
     await suitesApi.removeRun(run.id);
     runs.value = runs.value.filter(function (item) { return item.id !== run.id; });
-    message.success('已删除');
+    message.success(t('suite.deleted'));
   } catch (err) {
     message.error(err.message);
   }
@@ -75,21 +85,21 @@ function totals(run) {
 <template>
   <div class="pane">
     <div class="toolbar">
-      <span class="hint">每个测试集只留最近 100 条。</span>
+      <span class="hint">{{ t('suite.runsKeepHint') }}</span>
       <span class="spacer" />
       <n-button size="small" quaternary :loading="loading" @click="load">
         <template #icon><n-icon :component="Refresh" /></template>
-        刷新
+        {{ t('suite.refresh') }}
       </n-button>
     </div>
 
     <p v-if="!gateway.cloudFeaturesAvailable" class="note">
-      登录后运行记录会保存到云端，同事也能看到。现在运行照样能跑，只是不留记录。
+      {{ t('suite.runsCloudHint') }}
     </p>
 
     <n-empty v-else-if="error" class="empty" size="small" :description="error" />
 
-    <p v-else-if="!runs.length" class="note">还没有运行记录。</p>
+    <p v-else-if="!runs.length" class="note">{{ t('suite.noRuns') }}</p>
 
     <div v-else class="list">
       <div v-for="run in runs" :key="run.id" class="row" @click="emit('open', run.id)">
@@ -97,7 +107,7 @@ function totals(run) {
         <n-tag size="tiny" :bordered="false" :type="STATUS_TYPE[run.status] || 'default'">
           {{ STATUS_LABEL[run.status] || run.status }}
         </n-tag>
-        <span class="source">{{ run.source === 'cli' ? '命令行' : '客户端' }}</span>
+        <span class="source">{{ run.source === 'cli' ? t('suite.sourceCli') : t('suite.sourceApp') }}</span>
         <span class="env">{{ run.environmentName || '—' }}</span>
         <span v-if="run.label" class="label">{{ run.label }}</span>
         <span class="spacer" />
@@ -107,7 +117,7 @@ function totals(run) {
           v-if="canEdit"
           size="tiny"
           quaternary
-          title="删除这条记录"
+          :title="t('suite.removeRun')"
           @click.stop="remove(run)"
         >
           <template #icon><n-icon :component="Trash" /></template>
