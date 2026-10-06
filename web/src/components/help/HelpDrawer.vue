@@ -23,13 +23,18 @@ const SECTIONS = [
   { id: 'scripts', titleKey: 'help.secScripts' },
   { id: 'examples', titleKey: 'help.secExamples' },
   { id: 'mock', titleKey: 'help.secMock' },
+  { id: 'record', titleKey: 'help.secRecord' },
   { id: 'import', titleKey: 'help.secImport' },
   { id: 'export-doc', titleKey: 'help.secExportDoc' },
+  { id: 'backup', titleKey: 'help.secBackup' },
   { id: 'suite', titleKey: 'help.secSuite' },
   { id: 'load', titleKey: 'help.secLoad' },
   { id: 'db', titleKey: 'help.secDb' },
   { id: 'sio', titleKey: 'help.secSio' },
+  { id: 'grpc', titleKey: 'help.secGrpc' },
+  { id: 'mqtt', titleKey: 'help.secMqtt' },
   { id: 'preflight', titleKey: 'help.secPreflight' },
+  { id: 'language', titleKey: 'help.secLanguage' },
   { id: 'shortcuts', titleKey: 'help.secShortcuts' }
 ];
 
@@ -420,6 +425,33 @@ const examples = computed(function () {
             <p class="note">{{ t('help.mockNote') }}</p>
           </section>
 
+          <!-- ============================================================ Mock 录制 -->
+          <section id="help-record">
+            <h2>{{ t('help.secRecord') }}</h2>
+            <p>{{ t('help.recordIntro') }}</p>
+            <ol>
+              <i18n-t keypath="help.recordLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.recordLi1B') }}</b></template>
+                <template #var><code v-pre>{{变量}}</code></template>
+                <template #prefix><code>/api</code></template>
+              </i18n-t>
+              <i18n-t keypath="help.recordLi2" tag="li" scope="global">
+                <template #b><b>{{ t('help.recordLi2B') }}</b></template>
+              </i18n-t>
+              <li>{{ t('help.recordLi3') }}</li>
+              <i18n-t keypath="help.recordLi4" tag="li" scope="global">
+                <template #b1><b>{{ t('help.recordLi4B1') }}</b></template>
+                <template #b2><b>{{ t('help.recordLi4B2') }}</b></template>
+                <template #c1><code>/orders/1001</code></template>
+                <template #c2><code>/orders/:id</code></template>
+              </i18n-t>
+            </ol>
+            <p>{{ t('help.recordLan') }}</p>
+            <i18n-t keypath="help.recordLocalOnly" tag="p" scope="global">
+              <template #b><b>{{ t('help.recordLocalOnlyB') }}</b></template>
+            </i18n-t>
+          </section>
+
           <!-- ============================================================ 导入导出 -->
           <section id="help-import">
             <h2>{{ t('help.secImport') }}</h2>
@@ -474,6 +506,34 @@ const examples = computed(function () {
             <i18n-t keypath="help.exportDocNote" tag="p" class="note" scope="global">
               <template #b><b>{{ t('help.exportDocNoteB') }}</b></template>
             </i18n-t>
+          </section>
+
+          <!-- ============================================================ 备份与恢复 -->
+          <section id="help-backup">
+            <h2>{{ t('help.secBackup') }}</h2>
+            <p>{{ t('help.backupIntro') }}</p>
+
+            <h3>{{ t('help.backupDownloadTitle') }}</h3>
+            <i18n-t keypath="help.backupDownload" tag="p" scope="global">
+              <template #b><b>{{ t('help.backupDownloadB') }}</b></template>
+            </i18n-t>
+
+            <h3>{{ t('help.backupRestoreTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.backupRestoreLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.backupRestoreLi1B') }}</b></template>
+              </i18n-t>
+              <i18n-t keypath="help.backupRestoreLi2" tag="li" scope="global">
+                <template #b1><b>{{ t('help.backupRestoreLi2B1') }}</b></template>
+                <template #b2><b>{{ t('help.backupRestoreLi2B2') }}</b></template>
+                <template #b3><b>{{ t('help.backupRestoreLi2B3') }}</b></template>
+                <template #b4><b>{{ t('help.backupRestoreLi2B4') }}</b></template>
+              </i18n-t>
+              <li>{{ t('help.backupRestoreLi3') }}</li>
+            </ul>
+
+            <h3>{{ t('help.backupAutoTitle') }}</h3>
+            <p>{{ t('help.backupAuto') }}</p>
           </section>
 
           <!-- ============================================================ 测试集 -->
@@ -668,6 +728,103 @@ const examples = computed(function () {
             </ul>
           </section>
 
+          <!-- ============================================================ gRPC -->
+          <section id="help-grpc">
+            <h2>{{ t('help.secGrpc') }}</h2>
+            <i18n-t keypath="help.grpcIntro" tag="p" scope="global">
+              <template #b><b>{{ t('help.grpcIntroB') }}</b></template>
+              <template #code><code>host:port</code></template>
+            </i18n-t>
+
+            <h3>{{ t('help.grpcDefineTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.grpcDefineLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.grpcDefineLi1B') }}</b></template>
+                <template #code><code>import</code></template>
+              </i18n-t>
+              <i18n-t keypath="help.grpcDefineLi2" tag="li" scope="global">
+                <template #b><b>{{ t('help.grpcDefineLi2B') }}</b></template>
+              </i18n-t>
+            </ul>
+            <p>{{ t('help.grpcDefineNote') }}</p>
+
+            <h3>{{ t('help.grpcCallTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.grpcCallLi1') }}</li>
+              <li>{{ t('help.grpcCallLi2') }}</li>
+              <i18n-t keypath="help.grpcCallLi3" tag="li" scope="global">
+                <template #b1><b>{{ t('help.grpcCallLi3B1') }}</b></template>
+                <template #b2><b>{{ t('help.grpcCallLi3B2') }}</b></template>
+              </i18n-t>
+            </ul>
+            <p>{{ t('help.grpcCallNote') }}</p>
+
+            <h3>{{ t('help.grpcAssertTitle') }}</h3>
+            <p>{{ t('help.grpcAssertIntro') }}</p>
+            <ul>
+              <i18n-t keypath="help.grpcAssertLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.grpcAssertLi1B') }}</b></template>
+              </i18n-t>
+              <li>{{ t('help.grpcAssertLi2') }}</li>
+              <i18n-t keypath="help.grpcAssertLi3" tag="li" scope="global">
+                <template #c1><code>count</code></template>
+                <template #c2><code>[0].count</code></template>
+              </i18n-t>
+              <li>{{ t('help.grpcAssertLi4') }}</li>
+            </ul>
+            <i18n-t keypath="help.grpcLocalOnly" tag="p" scope="global">
+              <template #b><b>{{ t('help.grpcLocalOnlyB') }}</b></template>
+            </i18n-t>
+          </section>
+
+          <!-- ============================================================ MQTT -->
+          <section id="help-mqtt">
+            <h2>{{ t('help.secMqtt') }}</h2>
+            <i18n-t keypath="help.mqttIntro" tag="p" scope="global">
+              <template #b><b>{{ t('help.mqttIntroB') }}</b></template>
+            </i18n-t>
+
+            <h3>{{ t('help.mqttConnTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.mqttConnLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.mqttConnLi1B') }}</b></template>
+              </i18n-t>
+              <i18n-t keypath="help.mqttConnLi2" tag="li" scope="global">
+                <template #b><b>{{ t('help.mqttConnLi2B') }}</b></template>
+              </i18n-t>
+              <i18n-t keypath="help.mqttConnLi3" tag="li" scope="global">
+                <template #b><b>{{ t('help.mqttConnLi3B') }}</b></template>
+              </i18n-t>
+              <i18n-t keypath="help.mqttConnLi4" tag="li" scope="global">
+                <template #b1><b>{{ t('help.mqttConnLi4B1') }}</b></template>
+                <template #b2><b>{{ t('help.mqttConnLi4B2') }}</b></template>
+              </i18n-t>
+              <i18n-t keypath="help.mqttConnLi5" tag="li" scope="global">
+                <template #b><b>{{ t('help.mqttConnLi5B') }}</b></template>
+              </i18n-t>
+            </ul>
+
+            <h3>{{ t('help.mqttSubTitle') }}</h3>
+            <i18n-t keypath="help.mqttSub" tag="p" scope="global">
+              <template #c1><code>+</code></template>
+              <template #c2><code>#</code></template>
+              <template #c3><code>devices/+/status</code></template>
+              <template #b><b>{{ t('help.mqttSubB') }}</b></template>
+            </i18n-t>
+
+            <h3>{{ t('help.mqttPubTitle') }}</h3>
+            <i18n-t keypath="help.mqttPub" tag="p" scope="global">
+              <template #c1><code>+</code></template>
+              <template #c2><code>#</code></template>
+            </i18n-t>
+
+            <h3>{{ t('help.mqttLogTitle') }}</h3>
+            <p>{{ t('help.mqttLog') }}</p>
+            <i18n-t keypath="help.mqttLocalOnly" tag="p" scope="global">
+              <template #b><b>{{ t('help.mqttLocalOnlyB') }}</b></template>
+            </i18n-t>
+          </section>
+
           <!-- ============================================================ 前置接口 -->
           <section id="help-preflight">
             <h2>{{ t('help.secPreflight') }}</h2>
@@ -708,6 +865,16 @@ const examples = computed(function () {
                 <template #b><b>{{ t('help.pfNotAffectB') }}</b></template>
               </i18n-t>
             </ul>
+          </section>
+
+          <!-- ============================================================ 界面语言 -->
+          <section id="help-language">
+            <h2>{{ t('help.secLanguage') }}</h2>
+            <i18n-t keypath="help.langIntro" tag="p" scope="global">
+              <template #b><b>{{ t('help.langIntroB') }}</b></template>
+            </i18n-t>
+            <p>{{ t('help.langDetect') }}</p>
+            <p class="note">{{ t('help.langBackendNote') }}</p>
           </section>
 
           <!-- ============================================================ 快捷键 -->
