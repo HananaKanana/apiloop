@@ -13,11 +13,12 @@ import {
   useMessage
 } from 'naive-ui';
 import * as settingsApi from '@/api/settings';
+import AutoBackupSettings from '@/components/backup/AutoBackupSettings.vue';
 
 /**
- * 系统设置（目前只有代理）。**只有 admin 能进来**：路由上挂了 `meta.admin`，
+ * 系统设置（代理 + 自动备份）。**只有 admin 能进来**：路由上挂了 `meta.admin`，
  * 菜单入口也只对 admin 显示。代理是全局的 —— 改它等于把所有人的请求都指到另一个
- * 地址去，所以不该是随便谁都能动。
+ * 地址去，所以不该是随便谁都能动；自动备份也是全云端一份设置。
  *
  * 密码的约定：服务端返回的一律是 `***`，**不修改就原样提交回去**，服务端据此
  * 保留原来的密码（见 lib/proxy-settings.js 的 restorePassword）。
@@ -104,6 +105,10 @@ onMounted(load);
         {{ errorText }}
       </n-alert>
 
+      <!--
+        两节各自读、各自存：页头那个「保存」只管代理（代理有密码回填那套约定），
+        自动备份那一节的保存按钮在卡片里。
+      -->
       <n-card v-else :bordered="false" size="small" title="代理">
         <p class="tip">
           代理是这台机器上的全局设置，所有项目共用。只支持 <code>http://</code> 形式的代理：
@@ -145,6 +150,9 @@ onMounted(load);
           地址里的密码只显示为 <code>***</code>；不修改就原样保存，服务端会保留原来的密码。
         </p>
       </n-card>
+
+      <!-- 自动备份（第十四轮第 2 节）：开关 / 每天几点 / 保留天数 -->
+      <auto-backup-settings v-if="!errorText" class="card" />
     </div>
   </div>
 </template>
@@ -184,6 +192,11 @@ onMounted(load);
 
 .alert {
   margin-bottom: 12px;
+}
+
+/* 第二张卡片（自动备份）和第一张之间留一道空 */
+.card {
+  margin-top: 12px;
 }
 
 .tip {

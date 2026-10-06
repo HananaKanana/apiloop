@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -26,6 +27,7 @@ import ShareLinksPanel from '@/components/share/ShareLinksPanel.vue';
 import MockFaultPanel from '@/components/mock/MockFaultPanel.vue';
 import DatabasePanel from '@/components/db/DatabasePanel.vue';
 import PreflightPanel from '@/components/preflight/PreflightPanel.vue';
+import ProjectBackupPanel from '@/components/backup/ProjectBackupPanel.vue';
 
 /**
  * 项目设置。按角色收口：
@@ -42,6 +44,7 @@ const gateway = useGatewayStore();
 const tree = useTreeStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 /**
  * 成员管理和分享链接的数据都在云端（不同步到本机），没登录就没有这两个页签。
@@ -61,7 +64,7 @@ const errorText = ref('');
  * 页签按用途分（2026-10-04 用户：基本信息里东西太多，不好看）：基本信息只放名称和说明，
  * 发送相关的放「请求设置」，脚本、Mock、数据库各一页。右上角「保存」一次存所有页签的改动。
  */
-const LOCAL_TABS = ['basic', 'request', 'scripts', 'mock', 'database'];
+const LOCAL_TABS = ['basic', 'request', 'scripts', 'mock', 'database', 'backup'];
 const CLOUD_TABS = ['members', 'shares'];
 const activeTab = ref((function () {
   const wanted = String(route.query.tab || '');
@@ -345,6 +348,14 @@ watch(function () { return route.params.pid; }, load);
           </n-card>
 
 
+        </n-tab-pane>
+
+        <!--
+          备份（第十四轮第 2 节）：下载 / 从文件恢复（覆盖）/ 云端自动备份列表。
+          整块（含角色判断）都在 ProjectBackupPanel 里，页签只是入口。
+        -->
+        <n-tab-pane name="backup" :tab="t('backup.title')">
+          <project-backup-panel v-if="projectId" :pid="projectId" />
         </n-tab-pane>
 
         <n-tab-pane v-if="showCloudTabs" name="members" tab="成员">

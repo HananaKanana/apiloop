@@ -27,6 +27,7 @@ import * as copyApi from '@/api/copy';
 import * as projectsApi from '@/api/projects';
 import { useEnvStore } from '@/stores/env';
 import { mockOrigin } from '@/utils/mock';
+import RestoreDialog from '@/components/backup/RestoreDialog.vue';
 
 const emit = defineEmits(['change']);
 
@@ -317,6 +318,24 @@ async function createDemo() {
   }
 }
 
+/* ---------------- 从备份恢复成新项目（第十四轮第 2 节） ---------------- */
+
+const showRestore = ref(false);
+
+/**
+ * 恢复完直接切过去（和「复制为新项目」一样：点这个菜单多半就是为了在新项目里接着看）。
+ * 恢复出来的是一个**新项目**，目录树 / 环境 / 标签页都要换成它的。
+ */
+async function onRestored(data) {
+  const project = data && data.project;
+  await projects.load();
+  if (!project) return;
+
+  tabs.closeAll();
+  projects.setCurrent(project.id);
+  emit('change', project.id);
+}
+
 /* ---------------- 管理分组 ---------------- */
 
 const showGroups = ref(false);
@@ -522,6 +541,10 @@ async function assign(projectId, groupId) {
         <div class="row action" @click="run(openDuplicate)">
           <span class="row-name">{{ t('layout.duplicateAsNew') }}</span>
         </div>
+        <!-- 从备份恢复成新项目（第十四轮第 2 节）：拿之前下载的备份文件建一个新项目 -->
+        <div class="row action" @click="run(function () { showRestore = true; })">
+          <span class="row-name">{{ t('backup.restoreFromFileMenu') }}</span>
+        </div>
         <div class="row action" @click="run(openCreate)">
           <span class="row-name">{{ t('layout.newProject') }}</span>
         </div>
@@ -658,6 +681,15 @@ async function assign(projectId, groupId) {
       </n-space>
     </template>
   </n-modal>
+
+  <!-- 从备份恢复成新项目（第十四轮第 2 节）：预览 + 可改名，恢复完切过去 -->
+  <restore-dialog
+    v-model:show="showRestore"
+    mode="new"
+    :pid="projects.currentId"
+    :project-name="projects.current ? projects.current.name : ''"
+    @restored="onRestored"
+  />
 </template>
 
 <style scoped>
