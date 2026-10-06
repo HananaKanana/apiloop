@@ -71,78 +71,85 @@ function placeholderText(item) {
   return item.example || ('{{@' + item.name + '}}');
 }
 
-const EXAMPLES = [
-  {
-    titleKey: 'help.ex1Title',
-    whereKey: 'help.ex1Where',
-    code: [
-      'const data = pm.response.json();',
-      "pm.environment.set('token', data.data.token);",
-      '',
-      '// 其他接口：Auth 选 Bearer Token，值填 {{token}}',
-      '// 或者在 Headers 里加 Authorization: Bearer {{token}}'
-    ].join('\n')
-  },
-  {
-    titleKey: 'help.ex2Title',
-    whereKey: 'help.ex2Where',
-    code: [
-      "pm.test('状态码是 200', function () {",
-      '  pm.response.to.have.status(200);',
-      '});',
-      '',
-      "pm.test('业务码为 0，并且返回了列表', function () {",
-      '  const body = pm.response.json();',
-      '  pm.expect(body.code).to.equal(0);',
-      "  pm.expect(body.data).to.have.property('list');",
-      '  pm.expect(body.data.list).to.be.an(\'array\');',
-      '});',
-      '',
-      "pm.test('500ms 内返回', function () {",
-      '  pm.expect(pm.response.responseTime).to.be.below(500);',
-      '});'
-    ].join('\n')
-  },
-  {
-    titleKey: 'help.ex3Title',
-    whereKey: 'help.ex3Where',
-    code: [
-      'const ts = String(Date.now());',
-      "pm.variables.set('ts', ts);",
-      '',
-      "pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
-      "pm.request.headers.upsert({ key: 'X-Request-Id', value: '{{$guid}}' });"
-    ].join('\n')
-  },
-  {
-    titleKey: 'help.ex4Title',
-    whereKey: 'help.ex4Where',
-    code: [
-      'pm.sendRequest({',
-      "  url: pm.environment.get('host') + '/login',",
-      "  method: 'POST',",
-      "  header: [{ key: 'Content-Type', value: 'application/json' }],",
-      "  body: { mode: 'raw', raw: JSON.stringify({ username: 'test', password: '123456' }) }",
-      '}, function (err, res) {',
-      '  if (err) return console.error(err);',
-      "  pm.environment.set('token', res.json().data.token);",
-      '});'
-    ].join('\n')
-  },
-  {
-    titleKey: 'help.ex5Title',
-    whereKey: 'help.ex5Where',
-    code: [
-      'const template = `',
-      '  <table border="1" cellpadding="6">',
-      '    <tr><th>ID</th><th>名字</th></tr>',
-      '    {{#each list}}<tr><td>{{id}}</td><td>{{name}}</td></tr>{{/each}}',
-      '  </table>`;',
-      '',
-      'pm.visualizer.set(template, { list: pm.response.json().data.list });'
-    ].join('\n')
-  }
-];
+/**
+ * 脚本示例。**代码本身不翻译**（`pm.*` 的 API 名、变量名、`{{token}}`、JSON 结构），
+ * 但里面**给人看的文字**（注释、`pm.test` 的测试名、可视化模板里的表头）跟着语言走 ——
+ * 所以整份是 `computed`，切换语言时示例里那几行会跟着变。
+ */
+const examples = computed(function () {
+  return [
+    {
+      titleKey: 'help.ex1Title',
+      whereKey: 'help.ex1Where',
+      code: [
+        'const data = pm.response.json();',
+        "pm.environment.set('token', data.data.token);",
+        '',
+        t('help.ex1Comment1'),
+        t('help.ex1Comment2')
+      ].join('\n')
+    },
+    {
+      titleKey: 'help.ex2Title',
+      whereKey: 'help.ex2Where',
+      code: [
+        "pm.test('" + t('help.ex2TestStatus') + "', function () {",
+        '  pm.response.to.have.status(200);',
+        '});',
+        '',
+        "pm.test('" + t('help.ex2TestBizCode') + "', function () {",
+        '  const body = pm.response.json();',
+        '  pm.expect(body.code).to.equal(0);',
+        "  pm.expect(body.data).to.have.property('list');",
+        '  pm.expect(body.data.list).to.be.an(\'array\');',
+        '});',
+        '',
+        "pm.test('" + t('help.ex2TestTime') + "', function () {",
+        '  pm.expect(pm.response.responseTime).to.be.below(500);',
+        '});'
+      ].join('\n')
+    },
+    {
+      titleKey: 'help.ex3Title',
+      whereKey: 'help.ex3Where',
+      code: [
+        'const ts = String(Date.now());',
+        "pm.variables.set('ts', ts);",
+        '',
+        "pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
+        "pm.request.headers.upsert({ key: 'X-Request-Id', value: '{{$guid}}' });"
+      ].join('\n')
+    },
+    {
+      titleKey: 'help.ex4Title',
+      whereKey: 'help.ex4Where',
+      code: [
+        'pm.sendRequest({',
+        "  url: pm.environment.get('host') + '/login',",
+        "  method: 'POST',",
+        "  header: [{ key: 'Content-Type', value: 'application/json' }],",
+        "  body: { mode: 'raw', raw: JSON.stringify({ username: 'test', password: '123456' }) }",
+        '}, function (err, res) {',
+        '  if (err) return console.error(err);',
+        "  pm.environment.set('token', res.json().data.token);",
+        '});'
+      ].join('\n')
+    },
+    {
+      titleKey: 'help.ex5Title',
+      whereKey: 'help.ex5Where',
+      code: [
+        'const template = `',
+        '  <table border="1" cellpadding="6">',
+        '    <tr><th>ID</th><th>' + t('help.ex5TableName') + '</th></tr>',
+        '    {{#each list}}<tr><td>{{id}}</td><td>{{name}}</td></tr>{{/each}}',
+        '  </table>`;',
+        '',
+        'pm.visualizer.set(template, { list: pm.response.json().data.list });'
+      ].join('\n')
+    }
+  ];
+});
 </script>
 
 <template>
@@ -361,7 +368,7 @@ const EXAMPLES = [
           <!-- ============================================================ 用例 -->
           <section id="help-examples">
             <h2>{{ t('help.secExamples') }}</h2>
-            <div v-for="example in EXAMPLES" :key="example.titleKey" class="example">
+            <div v-for="example in examples" :key="example.titleKey" class="example">
               <h3>{{ t(example.titleKey) }}</h3>
               <i18n-t keypath="help.exampleWhere" tag="p" class="where" scope="global">
                 <template #where>{{ t(example.whereKey) }}</template>

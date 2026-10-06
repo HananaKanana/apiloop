@@ -151,6 +151,15 @@ export default {
   ex5Title: '把列表画成表格（可视化页签）',
   ex5Where: '列表接口 →「响应后」',
   examplesNote: '脚本编辑器右上角的「常用片段」可以一键插入常见写法。',
+  // 示例代码里**给人看的文字**（注释、pm.test 的测试名、可视化模板的表头）跟着语言走；
+  // 代码本身（pm.* 的 API 名、变量名、{{token}} 写法、JSON 结构）不翻译。
+  // 注释里那个 {{token}} 是 vue-i18n 的字面量转义写法（直接写会报 Not allowed nest placeholder）。
+  ex1Comment1: "// 其他接口：Auth 选 Bearer Token，值填 {'{'}{'{'}token{'}'}{'}'}",
+  ex1Comment2: "// 或者在 Headers 里加 Authorization: Bearer {'{'}{'{'}token{'}'}{'}'}",
+  ex2TestStatus: '状态码是 200',
+  ex2TestBizCode: '业务码为 0，并且返回了列表',
+  ex2TestTime: '500ms 内返回',
+  ex5TableName: '名字',
 
   /* ---------------- Mock ---------------- */
   mockIntro: '后端还没好的时候，先让接口返回假数据，前端照常联调。',

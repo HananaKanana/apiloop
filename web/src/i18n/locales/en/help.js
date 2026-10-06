@@ -154,6 +154,15 @@ export default {
   ex5Title: 'Render a list as a table (Visualizer tab)',
   ex5Where: 'A list API → "Response"',
   examplesNote: 'Use "Common snippets" in the top-right of the script editor to insert common patterns with one click.',
+  // The human-readable parts inside the example code (comments, pm.test names, the visualizer
+  // table header) follow the language; the code itself (pm.* API names, variable names,
+  // {{token}} syntax, JSON shape) is never translated.
+  ex1Comment1: "// Other APIs: pick Bearer Token in Auth and set the value to {'{'}{'{'}token{'}'}{'}'}",
+  ex1Comment2: "// Or add Authorization: Bearer {'{'}{'{'}token{'}'}{'}'} in Headers",
+  ex2TestStatus: 'status code is 200',
+  ex2TestBizCode: 'business code is 0 and a list is returned',
+  ex2TestTime: 'responds within 500ms',
+  ex5TableName: 'Name',
 
   /* ---------------- Mock ---------------- */
   mockIntro: 'When the backend is not ready, have the API return fake data so the frontend can keep integrating as usual.',
