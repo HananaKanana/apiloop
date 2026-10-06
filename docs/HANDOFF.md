@@ -124,13 +124,16 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 
 测一键更新时，云端版本要比已装的高。
 
-## 5. 现在的状态（2026-10-04）
+## 5. 现在的状态（2026-10-05）
 
-- 版本 **2.1.1**（tag `v2.1.1`）。安装包在 `agent-installer/dist/leonaz.top/`（arm64 / x64 两个 pkg + win-x64 exe）。
-- 2.1.0 只打过内部测试包、没正式发布，2.1.1 包含它的全部内容（第 7～10 轮：测试集、压测、YApi / Apifox 导入、
-  导出文档、数据库操作、Socket.IO、代码片段、中文随机数据、前置接口、样例项目等），见 `CHANGELOG.md`。
-- 用户的客户端装的是 2.1.0 测试包，云端版本高于它，所以这次可以测一键更新（包括 Windows 的 EBUSY 修复）。
-- 云端默认 `SERVER_SEND=0`：网页版不发请求，数据库、压测、Socket.IO、测试集运行只在客户端里。
+- 已发布 **2.1.1**（tag `v2.1.1`）。之后做了第十一到十五轮，记在 `CHANGELOG.md` 的「2.2.0（未发布）」里，**还没打包**：
+  gRPC 调试（含反射、断言提取、客户端流 / 双向流）、MQTT 调试、Mock 录制、项目备份与恢复、英文界面。
+  计划在 `docs/plans/2026-10-05-round11.md` … `round15.md`，验收清单 `docs/plans/acceptance-2.2.0.md`。
+- 这几轮用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。
+  ateam 的 worker **不提交 `lib/web`**：主会话每通过一个前端任务，要在一份干净的 git worktree（HEAD）里
+  `npm run build:web`，把产物拷回 `lib/web` 提交 —— 直接在工作区构建会把别的 worker 没改完的代码打进去。
+- 国际化：`web/src/i18n/`（用法和术语表见里面的 README）。后端返回的提示还是中文，前端请求已经带 `Accept-Language`，下一阶段做。
+- 依赖新增：`@grpc/grpc-js`、`@grpc/proto-loader`、`protobufjs`、`mqtt`、`vue-i18n`（都是纯 JS）。
 
 ## 6. 改名为 apiloop 要处理的地方
 
