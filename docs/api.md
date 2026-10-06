@@ -298,6 +298,70 @@ apiloop 的管理台前端用的就是这些接口，也可以直接调。**除�
 | `POST /sio/:id/send` | `{ event, args, ack }`（会话创建者；没连上 409） |
 | `DELETE /sio/:id` | 断开并销毁 |
 
+## gRPC 调试（只在客户端）
+
+接口 `method` 为 `GRPC`，`url` 是 `host:port`（`grpcs://` 开头等于开 TLS）。DTO 顶层 `grpc: { source: 'proto' | 'reflection', protoFiles: [{ name, content }], reflection: { descriptorSet, fetchedAt } | null, service, method, tls, metadata: [{ key, value, enabled }], message, deadlineMs, savedMessages: [{ name, message }] }`。
+断言、提取变量用接口上的 `assertions` / `extracts`（和 HTTP 接口同一份）。只在本机网关上有这些路由。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/grpc/parse` | `{ protoFiles }` 或 `{ descriptorSet }` → `{ services: [{ name, methods: [{ name, path, requestType, responseType, clientStreaming, serverStreaming, example }] }] }`；语法错误 400，带文件名和行号（viewer） |
+| `POST /projects/:pid/grpc/reflect` | `{ url, tls, metadata, environmentId, apiId }` 问服务端反射（先 v1 后 v1alpha），→ `{ services, descriptorSet, fetchedAt, tooLarge }`；服务端没开反射 400（viewer） |
+| `POST /projects/:pid/grpc/call` | 一元调用 / 服务端流。`{ url, tls, protoFiles \| descriptorSet, service, method, metadata, message, deadlineMs, assertions, extracts, environmentId, apiId }`，NDJSON：`start { target, tls, missing, note }` → `metadata` → `message { data, at }`（每条一行）→ `end { status: { code, name, details }, trailers, durationMs, tests, extracted, warnings }`；准备阶段出错是一行 `error`（viewer） |
+| `POST /projects/:pid/grpc/streams` | 客户端流 / 双向流建会话（请求体同 `call`，不带 `message`）→ `{ id }`；其他方法 400 |
+| `GET /grpc/streams/:id/events?after=` | NDJSON：`start` / `metadata` / `sent` / `message` / `end` / `error`，断线带 `after` 补发（会话创建者） |
+| `POST /grpc/streams/:id/send` | `{ message }`（可带 `{{变量}}`）；结束后 409 |
+| `POST /grpc/streams/:id/end` | 结束发送（half-close），服务端还能继续回 |
+| `DELETE /grpc/streams/:id` | 取消并删除会话 |
+
+int64 按字符串收发、枚举按名字。断言里的「响应体」：一元调用和客户端流是那一条消息，服务端流和双向流是全部消息组成的数组；「状态码」是 gRPC 状态码（OK 是 0）；「响应头」是 metadata + trailers。会话空闲 60 秒回收，每人最多 10 个。
+
+## MQTT 调试（只在客户端）
+
+接口 `method` 为 `MQTT`，`url` 是 broker 地址（`mqtt://`、`mqtts://`、`ws://`、`wss://`）。DTO 顶层 `mqtt: { clientId, username, password, protocolVersion: 3 | 4 | 5, clean, keepalive, connectTimeoutMs, will: { topic, payload, qos, retain }, subscriptions: [{ topic, qos, enabled }], saved: [{ name, topic, payload, qos, retain }] }`。只在本机网关上有这些路由。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/mqtt` | 建会话并连接（请求体是上面那些字段 + `url`、`environmentId`、`apiId`，变量按环境替换）→ `{ id, missing }`（viewer） |
+| `GET /mqtt/:id/events?after=` | NDJSON：`connecting` / `connected` / `subscribed { topic, qos, granted, error }` / `unsubscribed` / `message { topic, payload \| payloadBase64, qos, retain, properties, at }` / `published` / `reconnecting` / `closed { reason }` / `error`（会话创建者） |
+| `POST /mqtt/:id/subscribe` | `{ topic, qos }` |
+| `POST /mqtt/:id/unsubscribe` | `{ topic }` |
+| `POST /mqtt/:id/publish` | `{ topic, payload, qos, retain }`；主题带 `+` / `#` 400；QoS 1 / 2 在 broker 确认后才出 `published` |
+| `DELETE /mqtt/:id` | 断开并删除会话 |
+
+## Mock 录制（只在客户端）
+
+客户端开一个本机代理，把请求原样转发到 `target` 并记下请求和响应，可以挑着存成接口示例。整个网关同时只录一个项目，记录只在内存里（每个项目最近 500 条，body 各最多 1 MB）。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /projects/:pid/record/start` | `{ target, environmentId, port (0 = 从 47400 起找空闲), lan, pathPrefix, skipStatic }` → `{ recording: { localUrl, lanUrls, port, … } }`；已经在录 409（editor） |
+| `POST /projects/:pid/record/stop` | 停止，记录保留；不是这个项目在录 409（editor） |
+| `GET /projects/:pid/record?after=` | `{ recording, busy, lastSeq, entries: [{ seq, id, at, method, path, query, status, durationMs, error, request, response, match }] }`；`match` 是返回时重新匹配的对应接口；别的项目在录时 `recording` 为 null、`busy` 给出那个项目（viewer） |
+| `DELETE /projects/:pid/record/entries` | 清空这个项目的记录（editor） |
+| `POST /projects/:pid/record/save` | `{ items: [{ entryId, apiId?, folderId?, name? }], paramize, setMock, environmentId }`：对上接口的加示例，没对上的按「方法 + 路径 + 目录」分组、每组建一个接口 → `{ created: { apis, examples }, results }`（editor） |
+
+代理带 `Origin` 时回 CORS 头、预检直接回 204；`Set-Cookie` 去掉 `Domain`；gzip / br / deflate 记录时解压；SSE 和 WebSocket 原样转发、不记内容。
+
+## 项目备份与恢复
+
+备份是一个 JSON 文件：`{ format: 'apiloop-backup', version: 1, exportedAt, appVersion, project, folders, apis, examples, expectations, environments, suites }`。保密变量的值不进备份；不含成员、分享、评论、历史、回收站、运行记录。
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /projects/:pid/backup` | 下载备份文件（editor） |
+| `POST /backup/restore` | 请求体最大 50 MB。`{ backup, mode: 'new', name? }` 恢复成新项目（任何登录用户，自己是 owner）→ `{ project, warnings }`；`{ backup, mode: 'overwrite', projectId }` 覆盖（owner / 管理员）：原目录、接口、环境进回收站，测试集删除 → `{ project, trashed, deletedSuites, warnings }`。不是备份文件 / 版本更新 400 |
+| `GET` / `PUT /settings/backup` | 云端自动备份设置 `{ backup: { enabled, hour (0–23), keepDays (1–90) } }`（PUT 仅管理员） |
+| `GET /projects/:pid/backups` | 云端自动备份列表 `{ items: [{ id, at, size }] }`（owner / 管理员） |
+| `GET /projects/:pid/backups/:id` | 下载那一份（`id` 形如 `20261005-030000`） |
+| `POST /projects/:pid/backups/:id/restore` | `{ mode: 'new' \| 'overwrite' }`，同 `/backup/restore` |
+
+自动备份只在云端跑：每天到点给每个项目写一份到数据目录的 `backups/<projectId>/`，内容没变不写，超过保留天数删掉。网关上 `/settings/backup` 和 `/projects/:pid/backups*` 转发给云端（没登录 409）。
+
+## 界面语言
+
+前端每个请求都带 `Accept-Language`（`zh-CN` / `en`）。后端返回的提示目前仍是中文。
+
 ## 集合 / 环境 JSON 导入导出（契约第 6 节）
 
 格式是 Collection v2.0 / v2.1、Environment、Globals 的 JSON，以及 **YApi**（「数据导出 → json」）和 **Apifox**（`.apifox.json`）的导出文件 ——
