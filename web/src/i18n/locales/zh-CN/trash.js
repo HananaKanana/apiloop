@@ -11,7 +11,7 @@ export default {
   clearBody: '回收站里的 {n} 项将被永久删除，不能再恢复。确定吗？',
   cleared: '回收站已清空',
   restore: '恢复',
-  restoredTo: '已恢复到{where}',
+  restoredTo: '已恢复到 {where}',
   originalLocation: '原位置',
   deleteForever: '彻底删除',
   deleteForeverBody: '「{name}」将被永久删除，不能再恢复。确定吗？',

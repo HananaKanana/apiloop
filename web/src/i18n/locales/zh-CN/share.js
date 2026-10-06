@@ -13,10 +13,10 @@ export default {
   generate: '生成链接',
   copy: '复制',
   linkCopied: '链接已复制',
-  linkActiveLead: '这条链接已经生效。所有分享过的链接都在',
+  linkActiveLead: '这条链接已经生效。所有分享过的链接都在 ',
   manageLinkText: '项目设置 → 分享链接',
-  linkActiveTail: '里，可以再复制或撤销。',
-  tip: '打开链接的人不用登录就能看到这些接口的地址、参数和示例。保密变量和鉴权信息不会出现。分享的是云端的数据，本机还没同步上去的改动看不到。',
+  linkActiveTail: ' 里，可以再复制或撤销。',
+  tip: '打开链接的人不用登录就能看到这些接口的地址、参数和示例。保密变量和鉴权信息不会出现。 分享的是云端的数据，本机还没同步上去的改动看不到。',
 
   /* ---------------- 分享链接面板 ---------------- */
   panelTip: '分享出去的是云端的接口文档，打开链接的人不用登录就能看。撤销之后链接立刻失效。',
@@ -29,6 +29,7 @@ export default {
   projectScope: '整个项目',
   colScope: '范围',
   colCreatedBy: '谁建的',
+  colCreator: '创建人',
   colCreatedAt: '创建时间',
   colExpiresAt: '有效期至',
   colActions: '操作',

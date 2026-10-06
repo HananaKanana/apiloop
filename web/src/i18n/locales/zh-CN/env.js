@@ -41,8 +41,8 @@ export default {
   restoreAction: '还原',
   defaultRestored: '已还原默认值',
   mockIntroLead: '选中这个环境，请求地址写成 ',
-  mockIntroMid: ' 就会打到这个项目的 Mock 上。默认 host 是 ',
-  mockIntroMid2: '；接口都带统一前缀时可以直接改，比如在后面加上 ',
+  mockIntroMid: ' 就会打到这个项目的 Mock 上。 默认 host 是 ',
+  mockIntroMid2: '；接口都带统一前缀时可以直接改， 比如在后面加上 ',
   mockIntroTail: '。',
 
   /* ---------------- 环境对比 ---------------- */

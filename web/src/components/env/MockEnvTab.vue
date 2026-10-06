@@ -147,9 +147,7 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
     </div>
 
     <p class="intro">
-      {{ t('env.mockIntroLead') }}<code v-pre>{{host}}/路径</code>{{ t('env.mockIntroMid') }}
-      <code>{{ mockBaseUrl(project) }}</code>{{ t('env.mockIntroMid2') }}
-      <code>/api</code>{{ t('env.mockIntroTail') }}
+      {{ t('env.mockIntroLead') }}<code v-pre>{{host}}/路径</code>{{ t('env.mockIntroMid') }}<code>{{ mockBaseUrl(project) }}</code>{{ t('env.mockIntroMid2') }}<code>/api</code>{{ t('env.mockIntroTail') }}
     </p>
 
     <div class="toolbar">

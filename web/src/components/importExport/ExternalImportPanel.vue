@@ -159,12 +159,10 @@ async function runImport() {
 
     <template v-if="preview">
       <n-alert type="info" :show-icon="false" class="notice">
-        <div>{{ t('importExport.detected') }} {{ FORMAT_LABELS[preview.format] || preview.format }}</div>
-        <div>{{ t('importExport.nameLabel') }} {{ preview.name }}</div>
+        <div>{{ t('importExport.detectedLine', { format: FORMAT_LABELS[preview.format] || preview.format }) }}</div>
+        <div>{{ t('importExport.nameLine', { name: preview.name }) }}</div>
         <div v-if="preview.stats">
-          {{ t('importExport.stats', { folders: preview.stats.folders, apis: preview.stats.apis, examples: preview.stats.examples }) }}
-          <template v-if="preview.stats.scripts">{{ t('importExport.statsScripts', { n: preview.stats.scripts }) }}</template>
-          <template v-if="preview.stats.environments">{{ t('importExport.statsEnvs', { n: preview.stats.environments }) }}</template>
+          {{ t('importExport.stats', { folders: preview.stats.folders, apis: preview.stats.apis, examples: preview.stats.examples }) }}<template v-if="preview.stats.scripts">{{ t('importExport.statsScripts', { n: preview.stats.scripts }) }}</template><template v-if="preview.stats.environments">{{ t('importExport.statsEnvs', { n: preview.stats.environments }) }}</template>
         </div>
       </n-alert>
 

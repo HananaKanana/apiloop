@@ -104,7 +104,7 @@ const columns = computed(function () {
       render: function (row) { return shareScopeText(row); }
     },
     {
-      title: t('share.colCreatedBy'),
+      title: t('share.colCreator'),
       key: 'createdBy',
       width: 110,
       render: function (row) {

@@ -27,6 +27,6 @@ export default {
   me: '我',
   disabled: '已禁用',
   empty: '还没有成员',
-  rolesTip: '角色：viewer 只能查看和发请求；editor 还能增删改接口、示例、期望与环境；owner 还能改项目名称和标识、管理成员、删除项目。系统管理员对任何项目都等同于 owner。',
+  rolesTip: '角色：viewer 只能查看和发请求；editor 还能增删改接口、示例、期望与环境； owner 还能改项目名称和标识、管理成员、删除项目。系统管理员对任何项目都等同于 owner。',
   keepOwnerTip: '项目至少要保留一个 owner，最后一个 owner 不能降级或退出。'
 };

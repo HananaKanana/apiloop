@@ -58,7 +58,7 @@ export default {
   noExpectations: '还没有规则，所有请求都返回默认示例',
   conditionsSection: '按条件返回（高级）',
   rulesIntro:
-    '按请求里的参数返回不同的示例，比如「参数 id=1 时返回示例 A，其他情况返回默认示例」。从上到下检查，第一条满足的生效。',
+    '按请求里的参数返回不同的示例，比如「参数 id=1 时返回示例 A，其他情况返回默认示例」。 从上到下检查，第一条满足的生效。',
 
   /* ---------------- 故障模拟 ---------------- */
   faultError: '返回错误',
@@ -76,7 +76,7 @@ export default {
   faultRulesActive: '{n} 条规则生效中',
   faultWarnLead: '开启后，这个项目的 Mock 会按下面的比例故意出错，',
   faultWarnStrong: '所有调这个项目 Mock 的人都会受影响',
-  faultWarnTail: '。不用了记得关掉。',
+  faultWarnTail: '。 不用了记得关掉。',
   faultScope: '作用范围',
   scopeAll: '整个项目',
   scopeFolders: '选几个目录',
@@ -98,8 +98,8 @@ export default {
   noRules: '还没有规则。可以点下面的「+ 添加规则」，或者用快速预设。',
   addRule: '添加规则',
   presetsLabel: '快速预设：',
-  faultTipLead: '只对普通 HTTP 响应生效（SSE 和 WebSocket 的 Mock 不注入故障）。自己调试时想临时关掉：请求里带上请求头 ',
-  faultTipTail: ' 就跳过所有故障规则。被故障命中的请求在「Mock 日志」里会带一个橙色标签。',
+  faultTipLead: '只对普通 HTTP 响应生效（SSE 和 WebSocket 的 Mock 不注入故障）。 自己调试时想临时关掉：请求里带上请求头 ',
+  faultTipTail: ' 就跳过所有故障规则。 被故障命中的请求在「Mock 日志」里会带一个橙色标签。',
 
   /* ---------------- Mock 日志 ---------------- */
   logTitle: 'Mock 日志',

@@ -525,13 +525,13 @@ function routeLabel(route) {
 
           <template v-if="postmanPreview">
             <n-alert type="info" :show-icon="false" class="notice">
-              <div>{{ t('importExport.typeLabel') }} {{ postmanPreview.kind }}</div>
+              <div>{{ t('importExport.typeLine', { type: postmanPreview.kind }) }}</div>
               <!-- 认出来的是哪种文件（第九轮第 1 节）：YApi / Apifox 的文件贴到这一页也能导，
                    这里要如实说一句，免得用户以为认错了 -->
               <div v-if="postmanPreview.format && postmanPreview.format !== 'postman'">
-                {{ t('importExport.detected') }} {{ postmanPreview.format === 'yapi' ? 'YApi' : 'Apifox' }}
+                {{ t('importExport.detectedLine', { format: postmanPreview.format === 'yapi' ? 'YApi' : 'Apifox' }) }}
               </div>
-              <div>{{ t('importExport.nameLabel') }} {{ postmanPreview.name }}</div>
+              <div>{{ t('importExport.nameLine', { name: postmanPreview.name }) }}</div>
               <div v-if="postmanPreview.stats">
                 {{ t('importExport.stats', { folders: postmanPreview.stats.folders, apis: postmanPreview.stats.apis, examples: postmanPreview.stats.examples }) }}{{ t('importExport.statsScripts', { n: postmanPreview.stats.scripts }) }}
               </div>
@@ -671,7 +671,7 @@ function routeLabel(route) {
             <n-button size="small" secondary :loading="openapiBusy" @click="parseOpenapi">
               {{ openapiUrl.trim() ? t('importExport.fetchAndParse') : t('importExport.parse') }}
             </n-button>
-            <span v-if="tree.selectedFolderId" class="hint">{{ t('importExport.intoSelected') }}</span>
+            <span v-if="tree.selectedFolderId" class="hint">{{ t('importExport.intoSelectedImport') }}</span>
             <span v-else class="hint">{{ t('importExport.intoByGroup') }}</span>
           </n-space>
 
@@ -733,8 +733,8 @@ function routeLabel(route) {
 
           <template v-if="harPreview">
             <n-alert type="info" :show-icon="false" class="notice">
-              <div>{{ t('importExport.typeLabel') }} HAR</div>
-              <div>{{ t('importExport.nameLabel') }} {{ harPreview.name }}</div>
+              <div>{{ t('importExport.typeLine', { type: 'HAR' }) }}</div>
+              <div>{{ t('importExport.nameLine', { name: harPreview.name }) }}</div>
               <div v-if="harPreview.stats">
                 {{ t('importExport.harStats', { hosts: harPreview.stats.hosts, apis: harPreview.stats.apis, examples: harPreview.stats.examples }) }}
               </div>

@@ -30,6 +30,7 @@ export default {
   projectScope: 'the whole project',
   colScope: 'Scope',
   colCreatedBy: 'Created by',
+  colCreator: 'Created by',
   colCreatedAt: 'Created at',
   colExpiresAt: 'Expires at',
   colActions: 'Actions',

@@ -132,9 +132,7 @@ function close() {
         <n-button size="small" type="primary" @click="copy">{{ t('share.copy') }}</n-button>
       </div>
       <p class="hint">
-        {{ t('share.linkActiveLead') }}
-        <a class="manage-link" href="javascript:void(0)" @click="manageLinks">{{ t('share.manageLinkText') }}</a>
-        {{ t('share.linkActiveTail') }}
+        {{ t('share.linkActiveLead') }}<a class="manage-link" href="javascript:void(0)" @click="manageLinks">{{ t('share.manageLinkText') }}</a>{{ t('share.linkActiveTail') }}
       </p>
     </div>
 
