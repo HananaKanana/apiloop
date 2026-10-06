@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NEmpty, NModal, NSelect, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
 import * as copyApi from '@/api/copy';
 import * as treeApi from '@/api/tree';
@@ -29,6 +30,7 @@ const emit = defineEmits(['update:show', 'done']);
 
 const projects = useProjectStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const show = computed({
   get: function () { return props.show; },
@@ -53,8 +55,9 @@ const projectOptions = computed(function () {
 });
 
 const title = computed(function () {
-  return (props.move ? '移动' : '复制') +
-    (props.kind === 'folder' ? '目录' : '接口') + '到其他项目';
+  return t(props.move
+    ? (props.kind === 'folder' ? 'tree.moveTitleFolder' : 'tree.moveTitleApi')
+    : (props.kind === 'folder' ? 'tree.copyTitleFolder' : 'tree.copyTitleApi'));
 });
 
 const selectedKeys = computed(function () {
@@ -103,7 +106,7 @@ function onSelectFolder(keys) {
 async function submit() {
   if (!props.nodeId) return;
   if (!targetProjectId.value) {
-    message.warning('先选一个目标项目');
+    message.warning(t('tree.pickTargetProject'));
     return;
   }
 
@@ -134,30 +137,30 @@ async function submit() {
   >
     <div class="form">
       <div class="field">
-        <span class="label">要{{ move ? '移动' : '复制' }}的</span>
-        <span class="value">{{ nodeName || (kind === 'folder' ? '这个目录' : '这个接口') }}</span>
+        <span class="label">{{ move ? t('tree.targetNodeMove') : t('tree.targetNodeCopy') }}</span>
+        <span class="value">{{ nodeName || (kind === 'folder' ? t('tree.thisFolder') : t('tree.thisApi')) }}</span>
       </div>
 
       <div class="field">
-        <span class="label">目标项目</span>
+        <span class="label">{{ t('tree.targetProject') }}</span>
         <n-select
           v-model:value="targetProjectId"
           size="small"
           :options="projectOptions"
-          placeholder="选一个项目"
+          :placeholder="t('tree.pickProjectPlaceholder')"
           style="width: 260px"
         />
       </div>
 
       <div class="field block">
-        <span class="label">目标目录</span>
+        <span class="label">{{ t('tree.targetFolder') }}</span>
         <div class="folders">
           <button
             class="root-item"
             :class="{ active: !targetFolderId }"
             @click="targetFolderId = ''"
           >
-            项目根目录
+            {{ t('tree.projectRoot') }}
           </button>
 
           <n-spin :show="loadingTree">
@@ -171,31 +174,30 @@ async function submit() {
               @update:selected-keys="onSelectFolder"
             />
             <div v-else-if="!loadingTree" class="empty">
-              {{ targetProjectId ? '这个项目还没有目录' : '先选一个目标项目' }}
+              {{ targetProjectId ? t('tree.noFoldersInTarget') : t('tree.pickTargetProject') }}
             </div>
           </n-spin>
         </div>
       </div>
 
       <p v-if="move" class="warn">
-        移动后，原项目里的这些{{ kind === 'folder' ? '目录和接口' : '接口' }}会放进回收站
-        （30 天内可以恢复）。评论不会跟着移动。
+        {{ kind === 'folder' ? t('tree.moveWarnFolder') : t('tree.moveWarnApi') }}
       </p>
       <p v-else class="tip">
-        复制出来的是新的一份（新 id），原项目里的东西不动。
+        {{ t('tree.copyTip') }}
       </p>
 
       <n-empty
         v-if="!projectOptions.length"
         class="no-target"
         size="small"
-        description="没有别的项目可以放（只列你在里面是 editor 及以上的项目）"
+        :description="t('tree.noTargetProject')"
       />
     </div>
 
     <template #footer>
       <n-space justify="end">
-        <n-button size="small" @click="show = false">取消</n-button>
+        <n-button size="small" @click="show = false">{{ t('app.cancel') }}</n-button>
         <n-button
           size="small"
           type="primary"
@@ -203,7 +205,7 @@ async function submit() {
           :disabled="!projectOptions.length || !targetProjectId"
           @click="submit"
         >
-          {{ move ? '移动' : '复制' }}
+          {{ move ? t('tree.moveAction') : t('tree.copyAction') }}
         </n-button>
       </n-space>
     </template>

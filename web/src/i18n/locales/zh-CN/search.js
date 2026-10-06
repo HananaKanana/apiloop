@@ -1,0 +1,38 @@
+/**
+ * search 区域：全局查找替换（`components/search/`）。
+ */
+export default {
+  title: '查找替换',
+  findPlaceholder: '查找',
+  replacePlaceholder: '替换为（留空就是只查找）',
+  caseSensitive: '区分大小写',
+  wholeWord: '全字匹配',
+  regex: '正则',
+  scopeTitle: '搜索范围',
+  wholeProject: '整个项目',
+  fieldsLabel: '范围',
+  fieldUrl: '地址',
+  fieldHeaders: '请求头',
+  fieldParams: 'Query / Path 参数',
+  fieldParamsShort: '参数',
+  fieldBody: '请求体',
+  fieldScripts: '脚本',
+  fieldName: '名称',
+  fieldDescription: '说明',
+  noMatches: '没有匹配的内容',
+  typeToFind: '输入要查找的内容',
+  summary: '共 {total} 处匹配，{apis} 个接口',
+  truncated: '（只列出前 500 处）',
+  openApi: '打开这个接口',
+  countLabel: '{n} 处',
+  replaceTitle: '替换',
+  replaceAction: '替换',
+  replaceBody: '将修改 {apis} 个接口里的 {count} 处。',
+  replaceWarn: '替换会直接保存，不能撤销，确定吗？',
+  replaceSkipped: '另外这些接口有未保存的修改，不会替换：{list}。',
+  replaceSelected: '替换所选（{n} 处）',
+  replaced: '已修改 {n} 个接口',
+  replacedSkipped: '这些接口有未保存的修改，没有替换：{list}',
+  footerWarn: '替换会直接保存，不能撤销。',
+  footerReadonly: '当前角色是只读，只能查找。'
+};

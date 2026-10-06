@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDropdown, NIcon, NInput, NTag, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { Dots } from '@vicons/tabler';
@@ -24,6 +25,7 @@ const envs = useEnvStore();
 const projects = useProjectStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const saving = ref(false);
 const keyword = ref('');
@@ -82,7 +84,7 @@ async function save() {
 
   const name = draftName.value.trim();
   if (!name) {
-    message.warning('环境名不能为空');
+    message.warning(t('env.nameRequired'));
     return;
   }
 
@@ -91,7 +93,7 @@ async function save() {
     const updated = await envs.update(saved.id, { name: name, variables: draftVariables.value });
     // 用服务端返回的那份重建草稿（它会丢掉没填名字的空行），「未保存」随之消失
     envs.drafts[props.envId] = freshDraft(updated);
-    message.success('已保存');
+    message.success(t('mock.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -105,7 +107,7 @@ function onKeydown(event) {
   event.preventDefault();
 
   if (!canEdit.value) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('env.readonly'));
     return;
   }
   save();
@@ -123,7 +125,7 @@ onBeforeUnmount(function () {
 
 function setCurrent() {
   envs.select(props.envId);
-  message.success('已设为当前环境');
+  message.success(t('env.setCurrentDone'));
 }
 
 async function duplicate() {
@@ -132,11 +134,11 @@ async function duplicate() {
 
   try {
     const created = await envs.create({
-      name: draftName.value.trim() + ' 副本',
+      name: draftName.value.trim() + t('env.copySuffix'),
       variables: draftVariables.value
     });
     envs.edit(created.id);
-    message.success('已复制');
+    message.success(t('app.copied'));
   } catch (err) {
     message.error(err.message);
   }
@@ -149,7 +151,7 @@ async function exportEnv() {
   try {
     const data = await importExportApi.exportEnvironment(saved.id);
     downloadJson(data.filename, data.json);
-    message.success('已导出');
+    message.success(t('env.exported'));
   } catch (err) {
     message.error(err.message);
   }
@@ -160,14 +162,14 @@ function removeEnv() {
   if (!saved) return;
 
   dialog.error({
-    title: '删除环境',
-    content: '确定删除「' + saved.name + '」吗？用了它里面变量的请求会变成未定义。删除后可以在回收站里恢复（保留 30 天）。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('env.deleteTitle'),
+    content: t('env.deleteBody', { name: saved.name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await envs.remove(saved.id);
-        message.success('已删除');
+        message.success(t('mock.deleted'));
       } catch (err) {
         message.error(err.message);
       }
@@ -176,15 +178,15 @@ function removeEnv() {
 }
 
 const menuOptions = computed(function () {
-  const exportItem = { label: '导出为 JSON', key: 'export' };
+  const exportItem = { label: t('env.exportJson'), key: 'export' };
   // viewer 只读，但导出是看数据、不改数据 —— 原来那个弹窗里 viewer 也是能导出的
   if (!canEdit.value) return [exportItem];
 
   return [
-    { label: '复制环境', key: 'duplicate' },
+    { label: t('env.duplicateEnv'), key: 'duplicate' },
     exportItem,
     { type: 'divider', key: 'd1' },
-    { label: '删除环境', key: 'delete', props: { style: 'color: #eb2013' } }
+    { label: t('env.deleteTitle'), key: 'delete', props: { style: 'color: #eb2013' } }
   ];
 });
 
@@ -203,13 +205,15 @@ function onMenuSelect(key) {
         size="small"
         :value="draftName"
         :readonly="!canEdit"
-        placeholder="环境名"
+        :placeholder="t('env.namePlaceholder')"
         @update:value="(v) => { draftName = v; }"
       />
-      <span v-if="dirty" class="dirty-dot" title="有没保存的修改，⌘S 保存" />
+      <span v-if="dirty" class="dirty-dot" :title="t('env.dirtyTitle')" />
 
-      <n-tag v-if="isCurrent" size="small" :bordered="false">当前</n-tag>
-      <n-button v-else-if="canEdit" size="small" quaternary @click="setCurrent">设为当前</n-button>
+      <n-tag v-if="isCurrent" size="small" :bordered="false">{{ t('env.current') }}</n-tag>
+      <n-button v-else-if="canEdit" size="small" quaternary @click="setCurrent">
+        {{ t('env.setCurrent') }}
+      </n-button>
 
       <span class="spacer" />
 
@@ -220,11 +224,11 @@ function onMenuSelect(key) {
         :loading="saving"
         @click="save"
       >
-        保存
+        {{ t('mock.save') }}
       </n-button>
 
       <n-dropdown trigger="click" :options="menuOptions" @select="onMenuSelect">
-        <n-button size="small" quaternary title="更多">
+        <n-button size="small" quaternary :title="t('env.more')">
           <template #icon>
             <n-icon :component="Dots" />
           </template>
@@ -238,9 +242,9 @@ function onMenuSelect(key) {
         class="filter"
         size="small"
         clearable
-        placeholder="过滤变量"
+        :placeholder="t('env.filterPlaceholder')"
       />
-      <span class="count">共 {{ count }} 个变量</span>
+      <span class="count">{{ t('env.countLabel', { n: count }) }}</span>
     </div>
 
     <div class="body">
@@ -250,7 +254,7 @@ function onMenuSelect(key) {
         :disabled="!canEdit"
         :filter="keyword"
       />
-      <p v-else class="gone">这个环境已经被删掉了。</p>
+      <p v-else class="gone">{{ t('env.gone') }}</p>
     </div>
   </div>
 </template>

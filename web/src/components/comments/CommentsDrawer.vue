@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDrawer, NDrawerContent, NEmpty, NInput, NSpin, useMessage } from 'naive-ui';
 import * as commentsApi from '@/api/comments';
 import { useDialog } from '@/utils/dialog';
@@ -39,6 +40,7 @@ const emit = defineEmits(['update:show', 'count']);
 const session = useSessionStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const rootRef = ref(null);
 const inputRef = ref(null);
@@ -236,7 +238,7 @@ function cancelEdit() {
 async function saveEdit(item) {
   const text = editingBody.value.trim();
   if (!text) {
-    message.warning('评论内容不能为空');
+    message.warning(t('comments.emptyBody'));
     return;
   }
 
@@ -258,10 +260,10 @@ async function saveEdit(item) {
 
 function askDelete(item) {
   dialog.error({
-    title: '删除评论',
-    content: '删除后这一楼会显示「这条评论已删除」，内容不再显示。确定吗？',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('comments.deleteTitle'),
+    content: t('comments.deleteBody'),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         const data = await commentsApi.removeComment(item.id);
@@ -292,12 +294,12 @@ function isEdited(item) {
     placement="right"
     @update:show="(value) => emit('update:show', value)"
   >
-    <n-drawer-content :title="'评论 · ' + (apiName || '接口')" closable>
+    <n-drawer-content :title="t('comments.title', { api: apiName || t('comments.apiFallback') })" closable>
       <div ref="rootRef" class="panel">
-        <p class="tip">评论只在云端保存，所有项目成员都能看到。</p>
+        <p class="tip">{{ t('comments.tip') }}</p>
 
         <div v-if="notSynced" class="notice">
-          这个接口还没同步到云端，同步后才能评论。
+          {{ t('comments.notSynced') }}
         </div>
         <div v-else-if="errorText" class="notice error">{{ errorText }}</div>
 
@@ -307,7 +309,7 @@ function isEdited(item) {
               v-if="!loading && !comments.length && !notSynced"
               class="empty"
               size="small"
-              description="还没有评论，说点什么吧"
+              :description="t('comments.empty')"
             />
 
             <div
@@ -325,13 +327,13 @@ function isEdited(item) {
                   <span class="time" :title="formatFullTime(item.createdAt)">
                     {{ formatRelativeTime(item.createdAt) }}
                   </span>
-                  <span v-if="isEdited(item)" class="edited">已编辑</span>
+                  <span v-if="isEdited(item)" class="edited">{{ t('comments.edited') }}</span>
                   <span class="spacer" />
-                  <button v-if="canEdit(item)" class="link" @click="startEdit(item)">编辑</button>
-                  <button v-if="canDelete(item)" class="link danger" @click="askDelete(item)">删除</button>
+                  <button v-if="canEdit(item)" class="link" @click="startEdit(item)">{{ t('comments.edit') }}</button>
+                  <button v-if="canDelete(item)" class="link danger" @click="askDelete(item)">{{ t('app.delete') }}</button>
                 </div>
 
-                <div v-if="item.deleted" class="body gone">这条评论已删除</div>
+                <div v-if="item.deleted" class="body gone">{{ t('comments.deletedBody') }}</div>
 
                 <template v-else-if="editingId === item.id">
                   <n-input
@@ -341,9 +343,9 @@ function isEdited(item) {
                     :autosize="{ minRows: 2, maxRows: 8 }"
                   />
                   <div class="edit-actions">
-                    <n-button size="tiny" @click="cancelEdit">取消</n-button>
+                    <n-button size="tiny" @click="cancelEdit">{{ t('app.cancel') }}</n-button>
                     <n-button size="tiny" type="primary" :loading="savingEdit" @click="saveEdit(item)">
-                      保存
+                      {{ t('mock.save') }}
                     </n-button>
                   </div>
                 </template>
@@ -384,13 +386,13 @@ function isEdited(item) {
             type="textarea"
             size="small"
             :autosize="{ minRows: 2, maxRows: 6 }"
-            placeholder="写点什么…输入 @ 可以提到项目成员"
+            :placeholder="t('comments.composerPlaceholder')"
             @input="onBodyInput"
             @keydown="onKeydown"
           />
 
           <div class="composer-foot">
-            <span class="hint">⌘/Ctrl + Enter 发送</span>
+            <span class="hint">{{ t('comments.sendHint') }}</span>
             <n-button
               size="small"
               type="primary"
@@ -398,7 +400,7 @@ function isEdited(item) {
               :disabled="!body.trim()"
               @click="send"
             >
-              发送
+              {{ t('comments.send') }}
             </n-button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -39,16 +40,22 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const message = useMessage();
+const { t } = useI18n();
 
-const RULE_TYPES = [
-  { label: '返回错误', value: 'error' },
-  { label: '随机延迟', value: 'delay' },
-  { label: '超时', value: 'timeout' },
-  { label: '断开连接', value: 'disconnect' },
-  { label: '限流', value: 'throttle' }
-];
+/** 故障类型。用 computed 包住，切语言后选项跟着变 */
+const RULE_TYPES = computed(function () {
+  return [
+    { label: t('mock.faultError'), value: 'error' },
+    { label: t('mock.faultDelay'), value: 'delay' },
+    { label: t('mock.faultTimeout'), value: 'timeout' },
+    { label: t('mock.faultDisconnect'), value: 'disconnect' },
+    { label: t('mock.faultThrottle'), value: 'throttle' }
+  ];
+});
 
-const DEFAULT_BODY = '{"code":500,"message":"模拟的服务器错误"}';
+const DEFAULT_BODY = computed(function () {
+  return t('mock.faultDefaultBody');
+});
 
 function emptyFaults() {
   return { enabled: false, scope: { type: 'all', ids: [] }, rules: [] };
@@ -71,7 +78,7 @@ function newRuleId() {
 function defaultRule(type) {
   const base = { id: newRuleId(), enabled: true, type: type, percent: 100 };
 
-  if (type === 'error') return Object.assign(base, { status: 500, body: DEFAULT_BODY });
+  if (type === 'error') return Object.assign(base, { status: 500, body: DEFAULT_BODY.value });
   if (type === 'delay') return Object.assign(base, { minMs: 1000, maxMs: 3000 });
   if (type === 'timeout') return Object.assign(base, { timeoutMs: 30000 });
   if (type === 'throttle') return Object.assign(base, { retryAfter: 1 });
@@ -107,23 +114,25 @@ function removeRule(index) {
 
 /* ---------------- 快速预设 ---------------- */
 
-const PRESETS = [
-  {
-    key: 'slow',
-    label: '弱网（50% 延迟 1–3 秒）',
-    rules: [{ type: 'delay', percent: 50, minMs: 1000, maxMs: 3000 }]
-  },
-  {
-    key: 'flaky',
-    label: '不稳定（10% 返回 500）',
-    rules: [{ type: 'error', percent: 10, status: 500, body: DEFAULT_BODY }]
-  },
-  {
-    key: 'down',
-    label: '全部失败（100% 返回 500）',
-    rules: [{ type: 'error', percent: 100, status: 500, body: DEFAULT_BODY }]
-  }
-];
+const PRESETS = computed(function () {
+  return [
+    {
+      key: 'slow',
+      label: t('mock.presetSlow'),
+      rules: [{ type: 'delay', percent: 50, minMs: 1000, maxMs: 3000 }]
+    },
+    {
+      key: 'flaky',
+      label: t('mock.presetFlaky'),
+      rules: [{ type: 'error', percent: 10, status: 500, body: DEFAULT_BODY.value }]
+    },
+    {
+      key: 'down',
+      label: t('mock.presetDown'),
+      rules: [{ type: 'error', percent: 100, status: 500, body: DEFAULT_BODY.value }]
+    }
+  ];
+});
 
 /** 预设是**填进规则表**（整份换掉），不是另外存一份；填完还是未保存状态 */
 function applyPreset(preset) {
@@ -134,7 +143,7 @@ function applyPreset(preset) {
       return Object.assign(defaultRule(rule.type), rule, { id: newRuleId() });
     })
   });
-  message.success('已填进规则表，记得保存');
+  message.success(t('mock.presetApplied'));
 }
 
 /* ---------------- 作用范围 ---------------- */
@@ -217,29 +226,28 @@ const enabledRuleCount = computed(function () {
         size="small"
         @update:value="(value) => patchFaults({ enabled: value })"
       />
-      <span class="head-label">开启故障模拟</span>
+      <span class="head-label">{{ t('mock.faultEnable') }}</span>
       <span v-if="faults.enabled" class="head-count">
-        {{ enabledRuleCount }} 条规则生效中
+        {{ t('mock.faultRulesActive', { n: enabledRuleCount }) }}
       </span>
     </div>
 
     <n-alert v-if="faults.enabled" type="warning" :show-icon="false" class="warn">
-      开启后，这个项目的 Mock 会按下面的比例故意出错，<strong>所有调这个项目 Mock 的人都会受影响</strong>。
-      不用了记得关掉。
+      {{ t('mock.faultWarnLead') }}<strong>{{ t('mock.faultWarnStrong') }}</strong>{{ t('mock.faultWarnTail') }}
     </n-alert>
 
     <!-- 作用范围 -->
     <div class="block">
-      <div class="block-title">作用范围</div>
+      <div class="block-title">{{ t('mock.faultScope') }}</div>
       <n-radio-group
         :value="scopeType"
         size="small"
         :disabled="disabled"
         @update:value="changeScope"
       >
-        <n-radio-button value="all">整个项目</n-radio-button>
-        <n-radio-button value="folders">选几个目录</n-radio-button>
-        <n-radio-button value="apis">选几个接口</n-radio-button>
+        <n-radio-button value="all">{{ t('mock.scopeAll') }}</n-radio-button>
+        <n-radio-button value="folders">{{ t('mock.scopeFolders') }}</n-radio-button>
+        <n-radio-button value="apis">{{ t('mock.scopeApis') }}</n-radio-button>
       </n-radio-group>
 
       <div v-if="scopeType === 'folders'" class="scope-picker">
@@ -251,7 +259,7 @@ const enabledRuleCount = computed(function () {
           :loading="loadingTree"
           :options="folderOptions"
           :value="scopeIds()"
-          placeholder="选目录（连同子目录一起生效）"
+          :placeholder="t('mock.scopeFoldersPlaceholder')"
           @update:value="changeScopeIds"
         />
       </div>
@@ -265,7 +273,7 @@ const enabledRuleCount = computed(function () {
           :loading="loadingTree"
           :options="apiOptions"
           :value="scopeIds()"
-          placeholder="选接口"
+          :placeholder="t('mock.scopeApisPlaceholder')"
           @update:value="changeScopeIds"
         />
       </div>
@@ -274,16 +282,16 @@ const enabledRuleCount = computed(function () {
     <!-- 规则表 -->
     <div class="block">
       <div class="block-title">
-        规则
-        <span class="block-note">每条各自按比例掷一次；同时命中时按「断开 &gt; 超时 &gt; 限流 &gt; 返回错误」生效，延迟会叠加在结果之前</span>
+        {{ t('mock.faultRulesTitle') }}
+        <span class="block-note">{{ t('mock.rulesNote') }}</span>
       </div>
 
       <div v-if="faults.rules.length" class="grid">
         <div class="grid-head">
-          <span class="col-enabled">启用</span>
-          <span class="col-type">故障类型</span>
-          <span class="col-percent">比例</span>
-          <span class="col-params">参数</span>
+          <span class="col-enabled">{{ t('mock.colEnabled') }}</span>
+          <span class="col-type">{{ t('mock.colFaultType') }}</span>
+          <span class="col-percent">{{ t('mock.colPercent') }}</span>
+          <span class="col-params">{{ t('mock.colParams') }}</span>
           <span class="col-actions" />
         </div>
 
@@ -335,7 +343,7 @@ const enabledRuleCount = computed(function () {
                 size="tiny"
                 :disabled="disabled"
                 :value="rule.body"
-                placeholder="响应体（留空用默认那句）"
+                :placeholder="t('mock.faultBodyPlaceholder')"
                 @update:value="(value) => updateRule(index, { body: value })"
               />
             </template>
@@ -358,7 +366,7 @@ const enabledRuleCount = computed(function () {
                 :value="rule.maxMs"
                 @update:value="(value) => updateRule(index, { maxMs: value === null ? 0 : value })"
               />
-              <span class="unit">毫秒（在原延迟之上再加）</span>
+              <span class="unit">{{ t('mock.unitDelay') }}</span>
             </template>
 
             <template v-else-if="rule.type === 'timeout'">
@@ -370,7 +378,7 @@ const enabledRuleCount = computed(function () {
                 :value="rule.timeoutMs"
                 @update:value="(value) => updateRule(index, { timeoutMs: value === null ? 0 : value })"
               />
-              <span class="unit">毫秒后直接断开</span>
+              <span class="unit">{{ t('mock.unitTimeout') }}</span>
             </template>
 
             <template v-else-if="rule.type === 'throttle'">
@@ -382,14 +390,20 @@ const enabledRuleCount = computed(function () {
                 :value="rule.retryAfter"
                 @update:value="(value) => updateRule(index, { retryAfter: value === null ? 0 : value })"
               />
-              <span class="unit">秒（Retry-After）</span>
+              <span class="unit">{{ t('mock.unitThrottle') }}</span>
             </template>
 
-            <span v-else class="unit">收到请求就立刻断开，客户端看到网络错误</span>
+            <span v-else class="unit">{{ t('mock.disconnectNote') }}</span>
           </span>
 
           <span class="col-actions">
-            <n-button size="tiny" quaternary :disabled="disabled" title="删除这条" @click="removeRule(index)">
+            <n-button
+              size="tiny"
+              quaternary
+              :disabled="disabled"
+              :title="t('mock.removeRule')"
+              @click="removeRule(index)"
+            >
               <template #icon>
                 <n-icon :component="Trash" />
               </template>
@@ -398,16 +412,16 @@ const enabledRuleCount = computed(function () {
         </div>
       </div>
 
-      <p v-else class="empty">还没有规则。可以点下面的「+ 添加规则」，或者用快速预设。</p>
+      <p v-else class="empty">{{ t('mock.noRules') }}</p>
 
       <n-space align="center" :size="8" class="add-row">
         <n-button size="small" :disabled="disabled" @click="addRule('error')">
           <template #icon>
             <n-icon :component="Plus" />
           </template>
-          添加规则
+          {{ t('mock.addRule') }}
         </n-button>
-        <span class="block-note">快速预设：</span>
+        <span class="block-note">{{ t('mock.presetsLabel') }}</span>
         <n-button
           v-for="preset in PRESETS"
           :key="preset.key"
@@ -422,9 +436,7 @@ const enabledRuleCount = computed(function () {
     </div>
 
     <p class="tip">
-      只对普通 HTTP 响应生效（SSE 和 WebSocket 的 Mock 不注入故障）。
-      自己调试时想临时关掉：请求里带上请求头 <code>X-Apiloop-Fault: off</code> 就跳过所有故障规则。
-      被故障命中的请求在「Mock 日志」里会带一个橙色标签。
+      {{ t('mock.faultTipLead') }}<code>X-Apiloop-Fault: off</code>{{ t('mock.faultTipTail') }}
     </p>
   </div>
 </template>

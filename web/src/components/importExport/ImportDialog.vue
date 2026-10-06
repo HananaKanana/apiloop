@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -35,6 +36,7 @@ const tree = useTreeStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
+const { t } = useI18n();
 
 /** 往当前项目里写数据要 editor 及以上；只读角色只剩「新建项目」这一条路 */
 const canEdit = computed(function () {
@@ -104,7 +106,7 @@ function clearPostmanFile() {
 
 async function parsePostman() {
   if (!postmanPayload().trim()) {
-    message.warning('请粘贴 JSON，或者选择一个文件');
+    message.warning(t('importExport.pasteOrPickJson'));
     return;
   }
 
@@ -136,7 +138,7 @@ async function runPostmanImport() {
       await tree.refresh();
     }
 
-    message.success('导入完成');
+    message.success(t('importExport.done'));
     visible.value = false;
     clearPostmanFile();
     postmanText.value = '';
@@ -159,13 +161,16 @@ const curlOpening = ref(false);
 
 let curlTimer = null;
 
-const BODY_LABELS = {
-  none: '无',
-  urlencoded: '表单',
-  formdata: '表单',
-  binary: '文件',
-  graphql: 'GraphQL'
-};
+/** cURL 解析结果里「请求体 / 鉴权」那两行的取值。用 computed 包住，切语言后跟着变 */
+const BODY_LABELS = computed(function () {
+  return {
+    none: t('importExport.none'),
+    urlencoded: t('importExport.form'),
+    formdata: t('importExport.form'),
+    binary: t('importExport.file'),
+    graphql: 'GraphQL'
+  };
+});
 
 const curlBodyLabel = computed(function () {
   const result = curlResult.value;
@@ -175,14 +180,14 @@ const curlBodyLabel = computed(function () {
   if (body.mode === 'raw') {
     if (body.language === 'json') return 'JSON';
     if (body.language === 'xml') return 'XML';
-    return '文本';
+    return t('importExport.text');
   }
-  return BODY_LABELS[body.mode] || '无';
+  return BODY_LABELS.value[body.mode] || t('importExport.none');
 });
 
 const curlAuthLabel = computed(function () {
   const result = curlResult.value;
-  if (!result || !result.auth) return '无';
+  if (!result || !result.auth) return t('importExport.none');
   return result.auth.type === 'basic' ? 'Basic' : String(result.auth.type);
 });
 
@@ -242,7 +247,7 @@ async function importCurlToFolder() {
   const result = curlResult.value;
   if (!result) return;
   if (!projects.currentId) {
-    message.warning('先选一个项目');
+    message.warning(t('importExport.pickProjectFirst'));
     return;
   }
 
@@ -256,7 +261,7 @@ async function importCurlToFolder() {
     visible.value = false;
     resetCurl();
     await tabs.openApi(api.id);
-    message.success('已导入到' + (tree.selectedFolderId ? '选中的目录' : '根目录'));
+    message.success(t('importExport.importedInto', { where: t(tree.selectedFolderId ? 'importExport.selectedFolder' : 'importExport.rootFolder') }));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -306,11 +311,11 @@ async function parseOpenapi() {
   // 网页版而且云端不替人拉地址：地址输入框本来就不渲染，这里再兜一次
   // （探测回来之前先填了地址的话，输入框会被藏起来，但值还在）
   if (url && urlFetchBlocked.value) {
-    message.warning('网页版不能填地址拉取，请在客户端里导入');
+    message.warning(t('importExport.urlBlockedShort'));
     return;
   }
   if (!url && !openapiText.value.trim()) {
-    message.warning('填一个地址、选一个文件，或者把内容粘进来');
+    message.warning(t('importExport.urlOrFileOrPaste'));
     return;
   }
   openapiBusy.value = true;
@@ -327,7 +332,7 @@ async function parseOpenapi() {
 
 async function importParsed(routes) {
   if (!projects.currentId) {
-    message.warning('先选一个项目');
+    message.warning(t('importExport.pickProjectFirst'));
     return;
   }
 
@@ -340,11 +345,7 @@ async function importParsed(routes) {
     await tree.refresh();
     // 这段提示只服务 OpenAPI 页签（importParsed 只有它在调）：导入之后最常问的就是
     // 「后端改了接口怎么办」，顺手把「从 OpenAPI 同步更新」这条路指出来
-    message.success(
-      '已导入 ' + ((data.apis && data.apis.length) || 0) + ' 个接口。' +
-      '以后后端改了接口，可以在目录树右键「从 OpenAPI 同步更新」',
-      { duration: 8000 }
-    );
+    message.success(t('importExport.importedApis', { n: (data.apis && data.apis.length) || 0 }), { duration: 8000 });
     visible.value = false;
     openapiRoutes.value = null;
     openapiText.value = '';
@@ -399,7 +400,7 @@ async function onHarFile(event) {
 
   if (file.size > HAR_MAX_BYTES) {
     harFileInfo.value = '';
-    message.error('这个 HAR 有 ' + formatBytes(file.size) + '，超过了 50MB 的上限');
+    message.error(t('importExport.harTooBig', { size: formatBytes(file.size) }));
     return;
   }
 
@@ -423,7 +424,7 @@ function clearHarFile() {
 
 async function parseHar() {
   if (!harPayload().trim()) {
-    message.warning('请粘贴 HAR 内容，或者选择一个文件');
+    message.warning(t('importExport.pasteOrPickHar'));
     return;
   }
 
@@ -465,7 +466,7 @@ async function runHarImport() {
       await tree.refresh();
     }
 
-    message.success('导入完成');
+    message.success(t('importExport.done'));
     visible.value = false;
     resetHar();
   } catch (err) {
@@ -489,19 +490,19 @@ function routeLabel(route) {
   <n-modal
     v-model:show="visible"
     preset="card"
-    title="导入"
+    :title="t('importExport.importAction')"
     style="width: 820px; max-width: 94vw"
   >
     <n-tabs v-model:value="activeTab" type="line" size="small" animated>
-      <n-tab-pane name="postman" tab="JSON 文件">
+      <n-tab-pane name="postman" :tab="t('importExport.jsonFileTab')">
         <div class="pane">
           <n-space align="center" :size="8">
-            <n-button size="small" @click="pickPostmanFile">选择文件…</n-button>
+            <n-button size="small" @click="pickPostmanFile">{{ t('importExport.pickFile') }}</n-button>
             <template v-if="postmanFileInfo">
               <span class="hint">{{ postmanFileInfo }}</span>
-              <n-button size="small" quaternary @click="clearPostmanFile">清除</n-button>
+              <n-button size="small" quaternary @click="clearPostmanFile">{{ t('importExport.clear') }}</n-button>
             </template>
-            <span v-else class="hint">或者直接把 JSON 粘在下面</span>
+            <span v-else class="hint">{{ t('importExport.orPasteJson') }}</span>
           </n-space>
 
           <!-- 选了文件就不再渲染文本框：整段文件内容塞进带 autosize 的 textarea 时，
@@ -512,28 +513,27 @@ function routeLabel(route) {
             v-model:value="postmanText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="粘贴集合、环境或全局变量的 JSON（Collection v2.1 格式）"
+            :placeholder="t('importExport.collectionPlaceholder')"
             @update:value="postmanPreview = null"
           />
 
           <n-space align="center" :size="8">
             <n-button size="small" secondary :loading="postmanBusy" @click="parsePostman">
-              解析预览
+              {{ t('importExport.preview') }}
             </n-button>
           </n-space>
 
           <template v-if="postmanPreview">
             <n-alert type="info" :show-icon="false" class="notice">
-              <div>类型：{{ postmanPreview.kind }}</div>
+              <div>{{ t('importExport.typeLabel') }} {{ postmanPreview.kind }}</div>
               <!-- 认出来的是哪种文件（第九轮第 1 节）：YApi / Apifox 的文件贴到这一页也能导，
                    这里要如实说一句，免得用户以为认错了 -->
               <div v-if="postmanPreview.format && postmanPreview.format !== 'postman'">
-                识别为：{{ postmanPreview.format === 'yapi' ? 'YApi' : 'Apifox' }}
+                {{ t('importExport.detected') }} {{ postmanPreview.format === 'yapi' ? 'YApi' : 'Apifox' }}
               </div>
-              <div>名称：{{ postmanPreview.name }}</div>
+              <div>{{ t('importExport.nameLabel') }} {{ postmanPreview.name }}</div>
               <div v-if="postmanPreview.stats">
-                目录 {{ postmanPreview.stats.folders }} 个、接口 {{ postmanPreview.stats.apis }} 个、
-                示例 {{ postmanPreview.stats.examples }} 个、脚本 {{ postmanPreview.stats.scripts }} 个
+                {{ t('importExport.stats', { folders: postmanPreview.stats.folders, apis: postmanPreview.stats.apis, examples: postmanPreview.stats.examples }) }}{{ t('importExport.statsScripts', { n: postmanPreview.stats.scripts }) }}
               </div>
             </n-alert>
 
@@ -552,16 +552,16 @@ function routeLabel(route) {
               v-model:value="postmanMode"
             >
               <n-space vertical size="small">
-                <n-radio-button value="new">新建项目（名字取集合名）</n-radio-button>
+                <n-radio-button value="new">{{ t('importExport.newProjectFromCollection') }}</n-radio-button>
                 <n-radio-button value="into">
-                  导入到当前项目{{ projects.current ? '「' + projects.current.name + '」' : '' }}
+                  {{ t('importExport.intoCurrent') }}{{ projects.current ? t('importExport.quoted', { name: projects.current.name }) : '' }}
                 </n-radio-button>
               </n-space>
             </n-radio-group>
             <p v-else-if="postmanPreview.kind === 'collection'" class="hint">
-              当前角色是只读，只能导入成新项目（导入后你就是它的 owner）。
+              {{ t('importExport.readonlyHint') }}
             </p>
-            <p v-else class="hint">环境与 Globals 会导入到当前项目。</p>
+            <p v-else class="hint">{{ t('importExport.globalsHint') }}</p>
 
             <n-space justify="end" align="center">
               <n-button
@@ -571,9 +571,9 @@ function routeLabel(route) {
                 :loading="postmanBusy"
                 @click="runPostmanImport"
               >
-                导入
+                {{ t('importExport.importAction') }}
               </n-button>
-              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
+              <span v-else class="hint">{{ t('importExport.needEditor') }}</span>
             </n-space>
           </template>
         </div>
@@ -598,7 +598,7 @@ function routeLabel(route) {
             v-model:value="curlText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="把浏览器的 Copy as cURL 粘到这里，粘完自动解析"
+            :placeholder="t('importExport.curlPlaceholder')"
           />
 
           <!-- 解析失败只在这里说一句，不弹全局报错：用户可能还在打字 -->
@@ -613,10 +613,7 @@ function routeLabel(route) {
             </div>
 
             <p class="hint">
-              请求头 {{ curlResult.params.headers.length }} 个 ·
-              查询参数 {{ curlResult.params.query.length }} 个 ·
-              请求体：{{ curlBodyLabel }} ·
-              鉴权：{{ curlAuthLabel }}
+              {{ t('importExport.curlStats', { headers: curlResult.params.headers.length, query: curlResult.params.query.length, body: curlBodyLabel, auth: curlAuthLabel }) }}
             </p>
 
             <div v-if="curlResult.warnings.length" class="warnings">
@@ -625,9 +622,9 @@ function routeLabel(route) {
 
             <n-space justify="end" align="center">
               <span class="hint">
-                {{ tree.selectedFolderId ? '会落到目录树里选中的目录' : '没有选中目录，会落到根目录' }}
+                {{ tree.selectedFolderId ? t('importExport.intoSelected') : t('importExport.intoRoot') }}
               </span>
-              <n-button size="small" @click="openCurlInTab">在新标签页打开</n-button>
+              <n-button size="small" @click="openCurlInTab">{{ t('importExport.openInNewTab') }}</n-button>
               <n-button
                 v-if="canEdit"
                 size="small"
@@ -635,7 +632,7 @@ function routeLabel(route) {
                 :loading="curlOpening"
                 @click="importCurlToFolder"
               >
-                导入到当前目录
+                {{ t('importExport.intoCurrentFolder') }}
               </n-button>
             </n-space>
           </template>
@@ -645,42 +642,42 @@ function routeLabel(route) {
       <n-tab-pane name="openapi" tab="OpenAPI">
         <div class="pane">
           <p v-if="urlFetchBlocked" class="url-blocked">
-            网页版不能填地址拉取（云端访问不到内网），请选文件或粘贴内容；要填地址请在 apiloop 客户端里导入。
+            {{ t('importExport.urlBlockedHint') }}
           </p>
           <n-input
             v-else
             v-model:value="openapiUrl"
             size="small"
             clearable
-            placeholder="接口文档地址，比如 http://内网地址/v3/api-docs 或 /swagger.json（不填就用下面的文件或粘贴内容）"
+            :placeholder="t('importExport.openapiUrlPlaceholder')"
             @update:value="openapiRoutes = null"
             @keyup.enter="parseOpenapi"
           />
 
           <n-space align="center" :size="8">
-            <n-button size="small" @click="pickOpenapiFile">选择文件…</n-button>
-            <span class="hint">{{ openapiFileName ? '已读入 ' + openapiFileName : '支持 .json / .yaml / .yml，或者直接把内容粘在下面' }}</span>
+            <n-button size="small" @click="pickOpenapiFile">{{ t('importExport.pickFile') }}</n-button>
+            <span class="hint">{{ openapiFileName ? t('importExport.loaded', { name: openapiFileName }) : t('importExport.openapiFileHint') }}</span>
           </n-space>
 
           <n-input
             v-model:value="openapiText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="粘贴 OpenAPI / Swagger 定义（JSON 或 YAML）"
+            :placeholder="t('importExport.openapiPastePlaceholder')"
             @update:value="openapiRoutes = null; openapiFileName = ''"
           />
 
           <n-space align="center" :size="8">
             <n-button size="small" secondary :loading="openapiBusy" @click="parseOpenapi">
-              {{ openapiUrl.trim() ? '拉取并解析' : '解析' }}
+              {{ openapiUrl.trim() ? t('importExport.fetchAndParse') : t('importExport.parse') }}
             </n-button>
-            <span v-if="tree.selectedFolderId" class="hint">会导入到目录树里选中的目录</span>
-            <span v-else class="hint">没有选中目录，会按分组建顶层目录</span>
+            <span v-if="tree.selectedFolderId" class="hint">{{ t('importExport.intoSelected') }}</span>
+            <span v-else class="hint">{{ t('importExport.intoByGroup') }}</span>
           </n-space>
 
           <template v-if="openapiRoutes">
             <n-alert type="info" :show-icon="false" class="notice">
-              解析出 {{ openapiRoutes.length }} 个接口
+              {{ t('importExport.parsedCount', { n: openapiRoutes.length }) }}
             </n-alert>
             <div class="routes">
               <div v-for="(route, index) in openapiRoutes" :key="index" class="route">
@@ -694,9 +691,9 @@ function routeLabel(route) {
                 type="primary"
                 @click="importParsed(openapiRoutes)"
               >
-                导入
+                {{ t('importExport.importAction') }}
               </n-button>
-              <span v-else class="hint">导入到当前项目需要 editor 及以上权限。</span>
+              <span v-else class="hint">{{ t('importExport.needEditor') }}</span>
             </n-space>
           </template>
         </div>
@@ -704,12 +701,12 @@ function routeLabel(route) {
       <n-tab-pane name="har" tab="HAR">
         <div class="pane">
           <n-space align="center" :size="8">
-            <n-button size="small" @click="pickHarFile">选择文件…</n-button>
+            <n-button size="small" @click="pickHarFile">{{ t('importExport.pickFile') }}</n-button>
             <template v-if="harFileInfo">
               <span class="hint">{{ harFileInfo }}</span>
-              <n-button size="small" quaternary @click="clearHarFile">清除</n-button>
+              <n-button size="small" quaternary @click="clearHarFile">{{ t('importExport.clear') }}</n-button>
             </template>
-            <span v-else class="hint">或者直接把 JSON 粘在下面（50MB 以内）</span>
+            <span v-else class="hint">{{ t('importExport.orPasteHar') }}</span>
           </n-space>
 
           <!-- 选了文件就不再渲染文本框，理由同 Postman 页签：HAR 常有几十 MB，
@@ -719,28 +716,27 @@ function routeLabel(route) {
             v-model:value="harText"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="浏览器开发者工具 Network 面板 → 右键 Save all as HAR with content"
+            :placeholder="t('importExport.harPlaceholder')"
             @update:value="harPreview = null"
           />
 
           <n-space align="center" :size="8">
-            <n-checkbox v-model:checked="harKeepCredentials">保留凭据</n-checkbox>
+            <n-checkbox v-model:checked="harKeepCredentials">{{ t('importExport.keepCredentials') }}</n-checkbox>
             <span v-if="harKeepCredentials" class="danger">
-              Cookie、Authorization 会原样写进项目，项目里的所有成员都能看到
+              {{ t('importExport.keepCredentialsWarn') }}
             </span>
           </n-space>
 
           <n-space align="center" :size="8">
-            <n-button size="small" secondary :loading="harBusy" @click="parseHar">解析预览</n-button>
+            <n-button size="small" secondary :loading="harBusy" @click="parseHar">{{ t('importExport.preview') }}</n-button>
           </n-space>
 
           <template v-if="harPreview">
             <n-alert type="info" :show-icon="false" class="notice">
-              <div>类型：HAR</div>
-              <div>名称：{{ harPreview.name }}</div>
+              <div>{{ t('importExport.typeLabel') }} HAR</div>
+              <div>{{ t('importExport.nameLabel') }} {{ harPreview.name }}</div>
               <div v-if="harPreview.stats">
-                主机 {{ harPreview.stats.hosts }} 个、接口 {{ harPreview.stats.apis }} 个、
-                示例 {{ harPreview.stats.examples }} 个
+                {{ t('importExport.harStats', { hosts: harPreview.stats.hosts, apis: harPreview.stats.apis, examples: harPreview.stats.examples }) }}
               </div>
             </n-alert>
 
@@ -756,19 +752,19 @@ function routeLabel(route) {
 
             <n-radio-group v-if="canEdit" v-model:value="harMode">
               <n-space vertical size="small">
-                <n-radio-button value="new">新建项目（名字取 HAR 里的页面标题）</n-radio-button>
+                <n-radio-button value="new">{{ t('importExport.newProjectFromHar') }}</n-radio-button>
                 <n-radio-button value="into">
-                  导入到当前项目{{ projects.current ? '「' + projects.current.name + '」' : '' }}
+                  {{ t('importExport.intoCurrent') }}{{ projects.current ? t('importExport.quoted', { name: projects.current.name }) : '' }}
                 </n-radio-button>
               </n-space>
             </n-radio-group>
             <p v-else class="hint">
-              当前角色是只读，只能导入成新项目（导入后你就是它的 owner）。
+              {{ t('importExport.readonlyHint') }}
             </p>
 
             <n-space justify="end">
               <n-button size="small" type="primary" :loading="harBusy" @click="runHarImport">
-                导入
+                {{ t('importExport.importAction') }}
               </n-button>
             </n-space>
           </template>

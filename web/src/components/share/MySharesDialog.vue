@@ -1,5 +1,6 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDataTable, NEmpty, NModal, NSpace, useMessage } from 'naive-ui';
 import * as sharesApi from '@/api/shares';
 import { useDialog } from '@/utils/dialog';
@@ -26,6 +27,7 @@ const emit = defineEmits(['update:show']);
 
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const loading = ref(false);
 const errorText = ref('');
@@ -58,7 +60,7 @@ watch(
 async function copy(row) {
   try {
     await copyText(shareUrl(row.id));
-    message.success('链接已复制');
+    message.success(t('share.linkCopied'));
   } catch (err) {
     message.error(err.message);
   }
@@ -66,15 +68,17 @@ async function copy(row) {
 
 function revoke(row) {
   dialog.error({
-    title: '撤销分享链接',
-    content: '撤销后这个链接立刻失效，「' + (row.projectName || '这个项目') + '」的' +
-      (row.folderName ? '目录「' + row.folderName + '」' : '整个项目') + '就打不开了。确定吗？',
-    positiveText: '撤销',
-    negativeText: '取消',
+    title: t('share.revokeTitle'),
+    content: t('share.revokeBodyMine', {
+      project: t('share.quotedName', { name: row.projectName || t('share.thisProject') }),
+      scope: row.folderName ? t('share.folderScope', { name: row.folderName }) : t('share.wholeProjectScope')
+    }),
+    positiveText: t('share.revokeAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await sharesApi.revokeShare(row.id);
-        message.success('已撤销');
+        message.success(t('share.revoked'));
         await load();
       } catch (err) {
         message.error(err.message);
@@ -86,21 +90,21 @@ function revoke(row) {
 const columns = computed(function () {
   return [
     {
-      title: '项目',
+      title: t('share.colProject'),
       key: 'projectName',
       minWidth: 120,
       ellipsis: { tooltip: true },
       render: function (row) { return row.projectName || '—'; }
     },
     {
-      title: '范围',
+      title: t('share.colScope'),
       key: 'scope',
       minWidth: 120,
       ellipsis: { tooltip: true },
       render: function (row) { return shareScopeText(row); }
     },
     {
-      title: '创建人',
+      title: t('share.colCreatedBy'),
       key: 'createdBy',
       width: 110,
       render: function (row) {
@@ -108,19 +112,19 @@ const columns = computed(function () {
       }
     },
     {
-      title: '创建时间',
+      title: t('share.colCreatedAt'),
       key: 'createdAt',
       width: 140,
       render: function (row) { return formatShareTime(row.createdAt); }
     },
     {
-      title: '有效期至',
+      title: t('share.colExpiresAt'),
       key: 'expiresAt',
       width: 100,
       render: function (row) { return shareExpiresCell(row); }
     },
     {
-      title: '操作',
+      title: t('share.colActions'),
       key: 'actions',
       width: 116,
       render: function (row) {
@@ -129,7 +133,7 @@ const columns = computed(function () {
             size: 'tiny',
             quaternary: true,
             onClick: function () { copy(row); }
-          }, { default: function () { return '复制'; } })
+          }, { default: function () { return t('share.copy'); } })
         ];
 
         // 没有撤销权限的那一行不显示按钮（服务端在 DELETE /shares/:id 上也会拦一次）
@@ -138,7 +142,7 @@ const columns = computed(function () {
             size: 'tiny',
             quaternary: true,
             onClick: function () { revoke(row); }
-          }, { default: function () { return '撤销'; } }));
+          }, { default: function () { return t('share.revokeAction'); } }));
         }
 
         return h(NSpace, { size: 4, align: 'center' }, { default: function () { return buttons; } });
@@ -152,10 +156,10 @@ const columns = computed(function () {
   <n-modal
     v-model:show="show"
     preset="card"
-    title="分享链接"
+    :title="t('share.mySharesTitle')"
     style="width: 780px; max-width: 94vw"
   >
-    <p class="tip">这些链接不用登录就能打开。不再需要的请及时撤销。</p>
+    <p class="tip">{{ t('share.mySharesTip') }}</p>
 
     <div v-if="errorText" class="error">{{ errorText }}</div>
 
@@ -173,7 +177,7 @@ const columns = computed(function () {
       v-if="!loading && !errorText && !shares.length"
       class="empty"
       size="small"
-      description="还没有分享过接口文档。在目录树上右键目录，选「分享文档」。"
+      :description="t('share.mySharesEmpty')"
     />
   </n-modal>
 </template>

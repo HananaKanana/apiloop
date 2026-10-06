@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NForm, NFormItem, NModal, NRadio, NRadioGroup, NSpace, useMessage } from 'naive-ui';
 import * as importExportApi from '@/api/importExport';
 import { downloadText } from '@/utils/download';
@@ -20,6 +21,7 @@ const props = defineProps({
 const emit = defineEmits(['update:show']);
 
 const message = useMessage();
+const { t } = useI18n();
 const format = ref('yaml');
 const exporting = ref(false);
 
@@ -32,10 +34,16 @@ const show = computed({
  * 提示文案放在 script 里：模板的 `{{ }}` 插值里不能出现 `}}`，
  * 而这句话里正好要写一个 `{{host}}`。
  */
-const HINT = '变量（{{host}} 这类）原样保留；鉴权只导出类型，不导出值。';
+// 整句里有 {{host}}，不能直接写成一条消息（vue-i18n 会把 {{ 当成嵌套插值直接抛错），
+// 所以拆成两半，{{host}} 本身留在组件里。
+const HINT = computed(function () {
+  return t('importExport.openapiHintLead') + '{{host}}' + t('importExport.openapiHintTail');
+});
 
 const title = computed(function () {
-  return props.scopeName ? '导出为 OpenAPI：' + props.scopeName : '导出为 OpenAPI';
+  return props.scopeName
+    ? t('importExport.exportOpenapiFor', { name: props.scopeName })
+    : t('importExport.exportOpenapi');
 });
 
 // 每次打开都回到默认的 YAML
@@ -54,7 +62,7 @@ async function confirm() {
     });
     // YAML 的 mime 用 text/yaml；浏览器对扩展名更敏感，mime 只是个提示
     downloadText(data.filename, data.text, format.value === 'json' ? 'application/json' : 'text/yaml');
-    message.success('已导出');
+    message.success(t('importExport.exported'));
     show.value = false;
   } catch (err) {
     message.error(err.message);
@@ -72,7 +80,7 @@ async function confirm() {
     style="width: 460px; max-width: 92vw"
   >
     <n-form>
-      <n-form-item label="格式">
+      <n-form-item :label="t('importExport.format')">
         <n-radio-group v-model:value="format">
           <n-space>
             <n-radio value="yaml">YAML</n-radio>
@@ -86,8 +94,8 @@ async function confirm() {
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="show = false">取消</n-button>
-        <n-button type="primary" :loading="exporting" @click="confirm">导出</n-button>
+        <n-button @click="show = false">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="exporting" @click="confirm">{{ t('importExport.exportAction') }}</n-button>
       </n-space>
     </template>
   </n-modal>

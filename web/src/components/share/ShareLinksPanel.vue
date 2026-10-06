@@ -1,5 +1,6 @@
 <script setup>
 import { computed, h, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDataTable, NEmpty, NSpace, useMessage } from 'naive-ui';
 import * as sharesApi from '@/api/shares';
 import { useProjectStore } from '@/stores/project';
@@ -23,6 +24,7 @@ const props = defineProps({
 const projects = useProjectStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const loading = ref(false);
 const errorText = ref('');
@@ -47,23 +49,25 @@ async function load() {
 async function copy(row) {
   try {
     await copyText(shareUrl(row.id));
-    message.success('链接已复制');
+    message.success(t('share.linkCopied'));
   } catch (err) {
     message.error(err.message);
   }
 }
 
 function revoke(row) {
-  const scope = row.folderName ? '目录「' + row.folderName + '」' : '整个项目';
+  const scope = row.folderName
+    ? t('share.folderScope', { name: row.folderName })
+    : t('share.projectScope');
   dialog.error({
-    title: '撤销分享链接',
-    content: '撤销后这个链接立刻失效，' + scope + '的文档就打不开了。确定吗？',
-    positiveText: '撤销',
-    negativeText: '取消',
+    title: t('share.revokeTitle'),
+    content: t('share.revokeBody', { scope: scope }),
+    positiveText: t('share.revokeAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await sharesApi.revokeShare(row.id);
-        message.success('已撤销');
+        message.success(t('share.revoked'));
         await load();
       } catch (err) {
         message.error(err.message);
@@ -75,12 +79,12 @@ function revoke(row) {
 const columns = computed(function () {
   const list = [
     {
-      title: '范围',
+      title: t('share.colScope'),
       key: 'scope',
       render: function (row) { return shareScopeText(row); }
     },
     {
-      title: '谁建的',
+      title: t('share.colCreatedBy'),
       key: 'createdBy',
       width: 110,
       render: function (row) {
@@ -88,19 +92,19 @@ const columns = computed(function () {
       }
     },
     {
-      title: '创建时间',
+      title: t('share.colCreatedAt'),
       key: 'createdAt',
       width: 140,
       render: function (row) { return formatShareTime(row.createdAt); }
     },
     {
-      title: '有效期至',
+      title: t('share.colExpiresAt'),
       key: 'expiresAt',
       width: 160,
       render: function (row) { return shareExpiresCell(row); }
     },
     {
-      title: '操作',
+      title: t('share.colActions'),
       key: 'actions',
       width: 120,
       render: function (row) {
@@ -109,7 +113,7 @@ const columns = computed(function () {
             size: 'tiny',
             quaternary: true,
             onClick: function () { copy(row); }
-          }, { default: function () { return '复制'; } })
+          }, { default: function () { return t('share.copy'); } })
         ];
 
         if (canEdit.value) {
@@ -117,7 +121,7 @@ const columns = computed(function () {
             size: 'tiny',
             quaternary: true,
             onClick: function () { revoke(row); }
-          }, { default: function () { return '撤销'; } }));
+          }, { default: function () { return t('share.revokeAction'); } }));
         }
 
         return h(NSpace, { size: 4, align: 'center' }, { default: function () { return buttons; } });
@@ -135,7 +139,7 @@ watch(function () { return props.pid; }, load);
 <template>
   <div class="panel">
     <p class="tip">
-      分享出去的是云端的接口文档，打开链接的人不用登录就能看。撤销之后链接立刻失效。
+      {{ t('share.panelTip') }}
     </p>
 
     <div v-if="errorText" class="error">{{ errorText }}</div>
@@ -154,7 +158,7 @@ watch(function () { return props.pid; }, load);
       v-if="!loading && !errorText && !shares.length"
       class="empty"
       size="small"
-      description="还没有生成过分享链接。在目录树上右键「分享文档」就能生成一条。"
+      :description="t('share.noShares')"
     />
   </div>
 </template>

@@ -1,0 +1,38 @@
+/**
+ * search region: find and replace across the project (`components/search/`).
+ */
+export default {
+  title: 'Find and replace',
+  findPlaceholder: 'Find',
+  replacePlaceholder: 'Replace with (empty means find only)',
+  caseSensitive: 'Match case',
+  wholeWord: 'Whole word',
+  regex: 'Regular expression',
+  scopeTitle: 'Search scope',
+  wholeProject: 'The whole project',
+  fieldsLabel: 'Fields',
+  fieldUrl: 'URL',
+  fieldHeaders: 'Headers',
+  fieldParams: 'Query / path parameters',
+  fieldParamsShort: 'Parameters',
+  fieldBody: 'Body',
+  fieldScripts: 'Scripts',
+  fieldName: 'Name',
+  fieldDescription: 'Description',
+  noMatches: 'Nothing matched',
+  typeToFind: 'Type what you want to find',
+  summary: '{total} match(es) in {apis} API(s)',
+  truncated: ' (only the first 500 are listed)',
+  openApi: 'Open this API',
+  countLabel: '{n}',
+  replaceTitle: 'Replace',
+  replaceAction: 'Replace',
+  replaceBody: 'This changes {count} occurrence(s) in {apis} API(s).',
+  replaceWarn: 'Replacing saves immediately and cannot be undone. Continue?',
+  replaceSkipped: ' These APIs have unsaved changes and are skipped: {list}.',
+  replaceSelected: 'Replace selected ({n})',
+  replaced: 'Changed {n} API(s)',
+  replacedSkipped: 'These APIs have unsaved changes and were not replaced: {list}',
+  footerWarn: 'Replacing saves immediately and cannot be undone.',
+  footerReadonly: 'Your role is read-only, so you can only search.'
+};

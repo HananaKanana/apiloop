@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NCheckbox, NForm, NFormItem, NModal, NRadio, NRadioGroup, NSpace, useMessage } from 'naive-ui';
 import * as exportDocApi from '@/api/exportDoc';
 import { downloadBlob } from '@/utils/download';
@@ -29,6 +30,7 @@ const emit = defineEmits(['update:show']);
 const envs = useEnvStore();
 const projects = useProjectStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const format = ref('md');
 const scope = ref('project');
@@ -46,7 +48,7 @@ const show = computed({
 const hasFolder = computed(function () { return Boolean(props.folderId); });
 
 const title = computed(function () {
-  return props.scopeName ? '导出文档：' + props.scopeName : '导出文档';
+  return props.scopeName ? t('importExport.exportDocFor', { name: props.scopeName }) : t('importExport.exportDoc');
 });
 
 // 每次打开回到默认：整个项目（没从目录进来时没有第二个选项）、带示例响应
@@ -77,7 +79,7 @@ async function confirm() {
     });
 
     downloadBlob(data.filename, data.blob);
-    message.success('已导出');
+    message.success(t('importExport.exported'));
     show.value = false;
   } catch (err) {
     message.error(err.message);
@@ -95,40 +97,40 @@ async function confirm() {
     style="width: 480px; max-width: 92vw"
   >
     <n-form label-placement="left" label-width="60">
-      <n-form-item label="格式">
+      <n-form-item :label="t('importExport.format')">
         <n-radio-group v-model:value="format">
           <n-space vertical size="small">
             <n-radio value="md">Markdown（.md）</n-radio>
-            <n-radio value="html">HTML（单个文件，左边目录可点）</n-radio>
+            <n-radio value="html">{{ t('importExport.formatHtml') }}</n-radio>
             <n-radio value="docx">Word（.docx）</n-radio>
           </n-space>
         </n-radio-group>
       </n-form-item>
 
-      <n-form-item v-if="hasFolder" label="范围">
+      <n-form-item v-if="hasFolder" :label="t('importExport.scope')">
         <n-radio-group v-model:value="scope">
           <n-space vertical size="small">
-            <n-radio value="folder">这个目录（含子目录）：{{ scopeName }}</n-radio>
-            <n-radio value="project">整个项目</n-radio>
+            <n-radio value="folder">{{ t('importExport.thisFolder', { name: scopeName }) }}</n-radio>
+            <n-radio value="project">{{ t('importExport.wholeProject') }}</n-radio>
           </n-space>
         </n-radio-group>
       </n-form-item>
 
-      <n-form-item label="选项">
+      <n-form-item :label="t('importExport.options')">
         <n-space vertical size="small">
-          <n-checkbox v-model:checked="examples">包含示例响应</n-checkbox>
-          <n-checkbox v-model:checked="mock">包含 Mock 地址</n-checkbox>
-          <n-checkbox v-model:checked="doneOnly">只导出已完成的接口</n-checkbox>
+          <n-checkbox v-model:checked="examples">{{ t('importExport.withExamples') }}</n-checkbox>
+          <n-checkbox v-model:checked="mock">{{ t('importExport.withMockUrl') }}</n-checkbox>
+          <n-checkbox v-model:checked="doneOnly">{{ t('importExport.doneOnly') }}</n-checkbox>
         </n-space>
       </n-form-item>
     </n-form>
 
-    <p class="hint">密码、token 这类值会自动遮住；环境变量的值、脚本不会导出。</p>
+    <p class="hint">{{ t('importExport.exportDocHint') }}</p>
 
     <template #footer>
       <n-space justify="end">
-        <n-button @click="show = false">取消</n-button>
-        <n-button type="primary" :loading="exporting" @click="confirm">导出</n-button>
+        <n-button @click="show = false">{{ t('app.cancel') }}</n-button>
+        <n-button type="primary" :loading="exporting" @click="confirm">{{ t('importExport.exportAction') }}</n-button>
       </n-space>
     </template>
   </n-modal>

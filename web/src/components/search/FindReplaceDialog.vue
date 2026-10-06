@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NCheckbox,
@@ -45,26 +46,32 @@ const tabs = useTabsStore();
 const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
-const FIELD_OPTIONS = [
-  { label: '地址', value: 'url' },
-  { label: '请求头', value: 'headers' },
-  { label: 'Query / Path 参数', value: 'params' },
-  { label: '请求体', value: 'body' },
-  { label: '脚本', value: 'scripts' },
-  { label: '名称', value: 'name' },
-  { label: '说明', value: 'description' }
-];
+/** 可搜的字段：勾选框上的名字和结果里那一列的名字。用 computed 包住，切语言后跟着变 */
+const FIELD_OPTIONS = computed(function () {
+  return [
+    { label: t('search.fieldUrl'), value: 'url' },
+    { label: t('search.fieldHeaders'), value: 'headers' },
+    { label: t('search.fieldParams'), value: 'params' },
+    { label: t('search.fieldBody'), value: 'body' },
+    { label: t('search.fieldScripts'), value: 'scripts' },
+    { label: t('search.fieldName'), value: 'name' },
+    { label: t('search.fieldDescription'), value: 'description' }
+  ];
+});
 
-const FIELD_LABELS = {
-  url: '地址',
-  headers: '请求头',
-  params: '参数',
-  body: '请求体',
-  scripts: '脚本',
-  name: '名称',
-  description: '说明'
-};
+const FIELD_LABELS = computed(function () {
+  return {
+    url: t('search.fieldUrl'),
+    headers: t('search.fieldHeaders'),
+    params: t('search.fieldParamsShort'),
+    body: t('search.fieldBody'),
+    scripts: t('search.fieldScripts'),
+    name: t('search.fieldName'),
+    description: t('search.fieldDescription')
+  };
+});
 
 /** 默认范围：地址 + 请求头 + 参数 + 请求体（计划里给的默认值） */
 const DEFAULT_FIELDS = ['url', 'headers', 'params', 'body'];
@@ -156,7 +163,7 @@ const skippedNames = computed(function () {
 });
 
 const folderOptions = computed(function () {
-  const options = [{ label: '整个项目', value: null }];
+  const options = [{ label: t('search.wholeProject'), value: null }];
 
   (function walk(nodes, depth) {
     (nodes || []).forEach(function (node) {
@@ -259,12 +266,12 @@ function runReplace() {
   const count = targets.value.length;
 
   dialog.warning({
-    title: '替换',
-    content: '将修改 ' + (apiIds.length - skipApiIds.length) + ' 个接口里的 ' + count + ' 处。' +
-      '替换会直接保存，不能撤销，确定吗？' +
-      (skipped.length ? '另外这些接口有未保存的修改，不会替换：' + skipped.join('、') + '。' : ''),
-    positiveText: '替换',
-    negativeText: '取消',
+    title: t('search.replaceTitle'),
+    content: t('search.replaceBody', { apis: apiIds.length - skipApiIds.length, count: count }) +
+      t('search.replaceWarn') +
+      (skipped.length ? t('search.replaceSkipped', { list: skipped.join('、') }) : ''),
+    positiveText: t('search.replaceAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: function () { return doReplace(skipApiIds, skipped); }
   });
 }
@@ -287,9 +294,9 @@ async function doReplace(skipApiIds, skipped) {
     await tree.refresh();
     await tabs.reloadApis(targets.value.map(function (target) { return target.apiId; }));
 
-    message.success('已修改 ' + result.changedApis + ' 个接口');
+    message.success(t('search.replaced', { n: result.changedApis }));
     if (skipped.length) {
-      message.warning('这些接口有未保存的修改，没有替换：' + skipped.join('、'));
+      message.warning(t('search.replacedSkipped', { list: skipped.join('、') }));
     }
 
     // 结果已经过期了，重搜一遍（用户接着看到的是替换之后的样子）
@@ -306,19 +313,19 @@ async function doReplace(skipApiIds, skipped) {
   <n-modal
     v-model:show="visible"
     preset="card"
-    title="查找替换"
+    :title="t('search.title')"
     style="width: 860px; max-width: 96vw"
   >
     <div class="box">
       <div class="inputs">
-        <n-input v-model:value="query" placeholder="查找" clearable>
+        <n-input v-model:value="query" :placeholder="t('search.findPlaceholder')" clearable>
           <template #prefix>
             <n-icon :component="Search" />
           </template>
         </n-input>
         <n-input
           v-model:value="replacement"
-          placeholder="替换为（留空就是只查找）"
+          :placeholder="t('search.replacePlaceholder')"
           :disabled="!projects.canEdit"
           clearable
         />
@@ -326,9 +333,9 @@ async function doReplace(skipApiIds, skipped) {
 
       <div class="options">
         <n-space align="center" :size="14">
-          <n-checkbox v-model:checked="caseSensitive">区分大小写</n-checkbox>
-          <n-checkbox v-model:checked="wholeWord">全字匹配</n-checkbox>
-          <n-checkbox v-model:checked="regex">正则</n-checkbox>
+          <n-checkbox v-model:checked="caseSensitive">{{ t('search.caseSensitive') }}</n-checkbox>
+          <n-checkbox v-model:checked="wholeWord">{{ t('search.wholeWord') }}</n-checkbox>
+          <n-checkbox v-model:checked="regex">{{ t('search.regex') }}</n-checkbox>
         </n-space>
 
         <n-select
@@ -336,13 +343,13 @@ async function doReplace(skipApiIds, skipped) {
           size="small"
           :value="folderId"
           :options="folderOptions"
-          title="搜索范围"
+          :title="t('search.scopeTitle')"
           @update:value="(value) => { folderId = value; }"
         />
       </div>
 
       <div class="fields">
-        <span class="fields-label">范围</span>
+        <span class="fields-label">{{ t('search.fieldsLabel') }}</span>
         <n-checkbox-group v-model:value="fields">
           <n-space :size="12">
             <n-checkbox
@@ -359,13 +366,13 @@ async function doReplace(skipApiIds, skipped) {
       <div class="results">
         <n-spin :show="loading">
           <p v-if="!matches.length && !loading && String(query).trim()" class="empty-line">
-            没有匹配的内容
+            {{ t('search.noMatches') }}
           </p>
-          <n-empty v-else-if="!String(query).trim()" size="small" description="输入要查找的内容" />
+          <n-empty v-else-if="!String(query).trim()" size="small" :description="t('search.typeToFind')" />
 
           <template v-else>
             <p class="summary">
-              共 {{ total }} 处匹配，{{ groups.length }} 个接口<span v-if="truncated">（只列出前 500 处）</span>
+              {{ t('search.summary', { total: total, apis: groups.length }) }}<span v-if="truncated">{{ t('search.truncated') }}</span>
             </p>
 
             <div v-for="group in groups" :key="group.apiId" class="group">
@@ -376,10 +383,10 @@ async function doReplace(skipApiIds, skipped) {
                   @update:checked="() => toggleApi(group)"
                 />
                 <span class="method" :style="{ color: methodColor(group.method) }">{{ group.method }}</span>
-                <span class="api-name" :title="'打开这个接口'" @click="openApi(group.items[0])">
+                <span class="api-name" :title="t('search.openApi')" @click="openApi(group.items[0])">
                   {{ group.name }}
                 </span>
-                <span class="count">{{ group.items.length }} 处</span>
+                <span class="count">{{ t('search.countLabel', { n: group.items.length }) }}</span>
               </div>
 
               <div v-for="(match, index) in group.items" :key="index" class="match">
@@ -410,11 +417,11 @@ async function doReplace(skipApiIds, skipped) {
     <template #footer>
       <n-space justify="space-between" align="center" style="width: 100%">
         <span class="hint">
-          <template v-if="projects.canEdit">替换会直接保存，不能撤销。</template>
-          <template v-else>当前角色是只读，只能查找。</template>
+          <template v-if="projects.canEdit">{{ t('search.footerWarn') }}</template>
+          <template v-else>{{ t('search.footerReadonly') }}</template>
         </span>
         <n-space :size="8">
-          <n-button @click="visible = false">关闭</n-button>
+          <n-button @click="visible = false">{{ t('app.close') }}</n-button>
           <n-button
             v-if="projects.canEdit"
             type="primary"
@@ -422,7 +429,7 @@ async function doReplace(skipApiIds, skipped) {
             :loading="loading"
             @click="runReplace"
           >
-            替换所选（{{ selected.length }} 处）
+            {{ t('search.replaceSelected', { n: selected.length }) }}
           </n-button>
         </n-space>
       </n-space>

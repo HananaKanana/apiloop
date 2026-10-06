@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NDrawer,
@@ -47,6 +48,7 @@ function showError(err) {
   else message.error(err.message);
 }
 const dialog = useDialog();
+const { t } = useI18n();
 
 /** 新的在最上面，所以内部是倒序存的 */
 const items = ref([]);
@@ -201,7 +203,7 @@ function matchLabel(item) {
   const matched = item.matched;
   if (!matched) return '';
   if (matched.via === 'expectation') {
-    return matched.apiName + ' · ' + (matched.expectationName || '期望');
+    return matched.apiName + ' · ' + (matched.expectationName || t('mock.expectationFallback'));
   }
   return matched.apiName;
 }
@@ -233,15 +235,15 @@ async function openApi(item) {
 
 function clearAll() {
   dialog.error({
-    title: '清空 Mock 日志',
-    content: '确定清空当前项目的 Mock 调用日志吗？日志只存在内存里，清掉就没了。',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('mock.clearTitle'),
+    content: t('mock.clearBody'),
+    positiveText: t('mock.clearAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await mockLogApi.clearMockLog(projects.currentId);
         reset();
-        message.success('已清空');
+        message.success(t('mock.cleared'));
       } catch (err) {
         showError(err);
       }
@@ -253,21 +255,21 @@ function clearAll() {
 <template>
   <n-drawer v-model:show="visible" :width="620" placement="right">
     <n-drawer-content closable>
-      <template #header>Mock 日志</template>
+      <template #header>{{ t('mock.logTitle') }}</template>
       <template #header-extra>
         <n-space align="center" :size="6">
           <n-button size="tiny" quaternary @click="togglePause">
-            {{ paused ? '继续' : '暂停' }}
+            {{ paused ? t('mock.resume') : t('mock.pause') }}
           </n-button>
           <n-button v-if="projects.canEdit" size="tiny" quaternary type="error" @click="clearAll">
-            清空
+            {{ t('mock.clearAction') }}
           </n-button>
         </n-space>
       </template>
 
       <div class="log-body">
         <p class="tip">
-          每 2 秒自动拉一次新记录；日志只存在服务端内存里，每个项目最多保留最近 200 条，重启即清空。
+          {{ t('mock.logTip') }}
         </p>
 
         <div class="list">
@@ -285,42 +287,42 @@ function clearAll() {
               <span v-if="item.matched" class="match" :title="matchLabel(item)">
                 {{ matchLabel(item) }}
               </span>
-              <span v-else class="match unmatched">未匹配</span>
+              <span v-else class="match unmatched">{{ t('mock.unmatched') }}</span>
 
               <n-tag size="tiny" :bordered="false" :type="statusType(item)">
                 {{ item.status || '—' }}
               </n-tag>
               <!-- Mock 故障模拟命中的那条（第七轮第 1 节）：橙色，一眼能看出这不是接口本身的行为 -->
               <n-tag v-if="item.fault" size="tiny" :bordered="false" type="warning" class="fault">
-                故障：{{ item.fault }}
+                {{ t('mock.faultPrefix', { name: item.fault }) }}
               </n-tag>
               <span class="ms">{{ formatMs(item.durationMs) }}</span>
             </div>
 
             <div v-if="expandedSeq === item.seq" class="detail">
               <div v-if="item.query && Object.keys(item.query).length" class="block">
-                <p class="label">查询串</p>
+                <p class="label">{{ t('mock.queryString') }}</p>
                 <pre class="pre">{{ JSON.stringify(item.query, null, 2) }}</pre>
               </div>
 
               <div class="block">
-                <p class="label">请求头（凭据已打码）</p>
-                <pre class="pre">{{ (item.headers || []).map((h) => h[0] + ': ' + h[1]).join('\n') || '（无）' }}</pre>
+                <p class="label">{{ t('mock.headersMasked') }}</p>
+                <pre class="pre">{{ (item.headers || []).map((h) => h[0] + ': ' + h[1]).join('\n') || t('mock.none') }}</pre>
               </div>
 
               <div class="block">
-                <p class="label">请求体</p>
-                <pre class="pre">{{ item.bodyPreview || '（空）' }}</pre>
+                <p class="label">{{ t('mock.requestBody') }}</p>
+                <pre class="pre">{{ item.bodyPreview || t('mock.emptyValue') }}</pre>
               </div>
 
               <div class="block">
-                <p class="label">响应</p>
-                <pre class="pre">{{ item.responsePreview || '（空）' }}</pre>
+                <p class="label">{{ t('mock.response') }}</p>
+                <pre class="pre">{{ item.responsePreview || t('mock.emptyValue') }}</pre>
               </div>
 
               <n-space v-if="item.matched && item.matched.apiId" justify="end">
                 <n-button size="tiny" type="primary" secondary @click="openApi(item)">
-                  打开接口
+                  {{ t('mock.openApi') }}
                 </n-button>
               </n-space>
             </div>
@@ -328,17 +330,17 @@ function clearAll() {
 
           <n-empty
             v-if="loaded && !items.length"
-            description="还没有记录"
+            :description="t('mock.noRecords')"
             class="empty"
           >
             <template #extra>
               <p class="empty-tip">
-                访问 <code>{{ mockPrefixText }}/...</code> 后，记录会出现在这里。
+                {{ t('mock.emptyTipLead') }}<code>{{ mockPrefixText }}/...</code>{{ t('mock.emptyTipTail') }}
               </p>
             </template>
           </n-empty>
 
-          <div v-if="!loaded" class="loading">加载中…</div>
+          <div v-if="!loaded" class="loading">{{ t('mock.loading') }}</div>
         </div>
       </div>
     </n-drawer-content>

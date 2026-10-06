@@ -1,5 +1,6 @@
 <script setup>
 import { computed, h } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDataTable, NModal, NSpace, useMessage } from 'naive-ui';
 import { useTrashStore } from '@/stores/trash';
 import { useProjectStore } from '@/stores/project';
@@ -20,13 +21,17 @@ const trash = useTrashStore();
 const projects = useProjectStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const show = computed({
   get: function () { return props.show; },
   set: function (value) { emit('update:show', value); }
 });
 
-const KIND_LABEL = { folder: '目录', api: '接口', environment: '环境' };
+/** 回收站三列。用 computed 包住（表头和类型名都要跟着语言变） */
+const KIND_LABEL = computed(function () {
+  return { folder: t('trash.kindFolder'), api: t('trash.kindApi'), environment: t('trash.kindEnv') };
+});
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -43,7 +48,7 @@ function formatTime(ts) {
 async function onRestore(row) {
   try {
     const data = await trash.restore(row.id);
-    message.success('已恢复到 ' + (data.restoredTo || '原位置'));
+    message.success(t('trash.restoredTo', { where: data.restoredTo || t('trash.originalLocation') }));
   } catch (err) {
     message.error(err.message);
   }
@@ -51,14 +56,14 @@ async function onRestore(row) {
 
 function onRemove(row) {
   dialog.error({
-    title: '彻底删除',
-    content: '「' + row.name + '」将被永久删除，不能再恢复。确定吗？',
-    positiveText: '彻底删除',
-    negativeText: '取消',
+    title: t('trash.deleteForever'),
+    content: t('trash.deleteForeverBody', { name: row.name }),
+    positiveText: t('trash.deleteForever'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await trash.remove(row.id);
-        message.success('已彻底删除');
+        message.success(t('trash.deletedForever'));
       } catch (err) {
         message.error(err.message);
       }
@@ -69,14 +74,14 @@ function onRemove(row) {
 function onClear() {
   if (!trash.items.length) return;
   dialog.error({
-    title: '清空回收站',
-    content: '回收站里的 ' + trash.items.length + ' 项将被永久删除，不能再恢复。确定吗？',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('trash.clearTitle'),
+    content: t('trash.clearBody', { n: trash.items.length }),
+    positiveText: t('trash.clearAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await trash.clear();
-        message.success('回收站已清空');
+        message.success(t('trash.cleared'));
       } catch (err) {
         message.error(err.message);
       }
@@ -86,22 +91,22 @@ function onClear() {
 
 const columns = computed(function () {
   const list = [
-    { title: '名称', key: 'name', ellipsis: { tooltip: true } },
+    { title: t('trash.colName'), key: 'name', ellipsis: { tooltip: true } },
     {
-      title: '类型',
+      title: t('trash.colKind'),
       key: 'kind',
       width: 68,
-      render: function (row) { return KIND_LABEL[row.kind] || row.kind; }
+      render: function (row) { return KIND_LABEL.value[row.kind] || row.kind; }
     },
-    { title: '原位置', key: 'location', width: 150, ellipsis: { tooltip: true } },
+    { title: t('trash.colLocation'), key: 'location', width: 150, ellipsis: { tooltip: true } },
     {
-      title: '删除人',
+      title: t('trash.colDeletedBy'),
       key: 'deletedBy',
       width: 96,
       render: function (row) { return (row.deletedBy && row.deletedBy.displayName) || '—'; }
     },
     {
-      title: '删除时间',
+      title: t('trash.colDeletedAt'),
       key: 'deletedAt',
       width: 132,
       render: function (row) { return formatTime(row.deletedAt); }
@@ -110,7 +115,7 @@ const columns = computed(function () {
 
   if (projects.canEdit) {
     list.push({
-      title: '操作',
+      title: t('trash.colActions'),
       key: 'actions',
       width: 150,
       align: 'right',
@@ -119,13 +124,13 @@ const columns = computed(function () {
           default: function () {
             return [
               h(NButton, { size: 'tiny', onClick: function () { onRestore(row); } },
-                { default: function () { return '恢复'; } }),
+                { default: function () { return t('trash.restore'); } }),
               h(NButton, {
                 size: 'tiny',
                 type: 'error',
                 ghost: true,
                 onClick: function () { onRemove(row); }
-              }, { default: function () { return '彻底删除'; } })
+              }, { default: function () { return t('trash.deleteForever'); } })
             ];
           }
         });
@@ -141,20 +146,20 @@ const columns = computed(function () {
   <n-modal
     v-model:show="show"
     preset="card"
-    title="回收站"
+    :title="t('trash.title')"
     style="width: 780px; max-width: 94vw"
   >
-    <p class="hint">删除的目录、接口、环境在这里保留 30 天，团队成员都能看到和恢复。</p>
+    <p class="hint">{{ t('trash.hint') }}</p>
 
     <div class="head">
-      <span class="count">{{ trash.items.length }} 项</span>
+      <span class="count">{{ t('trash.countLabel', { n: trash.items.length }) }}</span>
       <n-button
         v-if="projects.canEdit"
         size="small"
         :disabled="!trash.items.length"
         @click="onClear"
       >
-        清空回收站
+        {{ t('trash.clearTitle') }}
       </n-button>
     </div>
 

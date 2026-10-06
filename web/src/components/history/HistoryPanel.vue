@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NEmpty, NTag, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import * as historyApi from '@/api/history';
@@ -17,6 +18,7 @@ const projects = useProjectStore();
 const tabs = useTabsStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const items = ref([]);
 const nextBefore = ref(null);
@@ -60,16 +62,16 @@ async function openEntry(entry) {
 
 function clearAll() {
   dialog.error({
-    title: '清空历史',
-    content: '确定清空当前项目的全部历史记录吗？此操作不可撤销。',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('history.clearTitle'),
+    content: t('history.clearBody'),
+    positiveText: t('history.clearAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await historyApi.clearHistory(projects.currentId);
         items.value = [];
         nextBefore.value = null;
-        message.success('已清空');
+        message.success(t('history.cleared'));
       } catch (err) {
         message.error(err.message);
       }
@@ -121,14 +123,14 @@ watch(
 <template>
   <div class="history-panel">
     <div class="head">
-      <span class="group-title">历史</span>
+      <span class="group-title">{{ t('history.title') }}</span>
       <n-button
         v-if="projects.canEdit"
         size="tiny"
         quaternary
         @click="clearAll"
       >
-        清空
+        {{ t('history.clearAction') }}
       </n-button>
     </div>
 
@@ -153,9 +155,9 @@ watch(
         </div>
       </div>
 
-      <n-empty v-if="loaded && !items.length" size="small" description="还没有历史记录" />
-      <div v-if="loading" class="loading">加载中…</div>
-      <div v-else-if="loaded && !nextBefore && items.length" class="loading">没有更多了</div>
+      <n-empty v-if="loaded && !items.length" size="small" :description="t('history.empty')" />
+      <div v-if="loading" class="loading">{{ t('history.loading') }}</div>
+      <div v-else-if="loaded && !nextBefore && items.length" class="loading">{{ t('history.noMore') }}</div>
     </div>
   </div>
 </template>

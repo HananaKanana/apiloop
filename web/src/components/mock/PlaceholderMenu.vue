@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NDropdown } from 'naive-ui';
 
 /**
@@ -14,6 +15,8 @@ const props = defineProps({
 
 const emit = defineEmits(['insert']);
 
+const { t } = useI18n();
+
 function insertText(item) {
   if (item.example) return item.example;
   return '{{@' + item.name + (item.args ? '(' + item.args + ')' : '') + '}}';
@@ -23,7 +26,7 @@ const options = computed(function () {
   const groups = new Map();
 
   props.placeholders.forEach(function (item) {
-    const group = item.group || '其他';
+    const group = item.group || t('mock.otherGroup');
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push({
       key: group + '::' + item.name,

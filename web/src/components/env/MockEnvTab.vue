@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NTag, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { MOCK_ENV_ID, useEnvStore } from '@/stores/env';
@@ -21,6 +22,7 @@ const projects = useProjectStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const saving = ref(false);
 const keyword = ref('');
@@ -66,28 +68,28 @@ async function persist(value, okText) {
 
 function save() {
   if (!dirty.value) return;
-  persist(collapseMockVariables(project.value, draft.value), '已保存');
+  persist(collapseMockVariables(project.value, draft.value), t('mock.saved'));
 }
 
 function restoreDefault() {
   dialog.warning({
-    title: '还原默认值',
-    content: '变量会恢复成只有 host = ' + mockBaseUrl(project.value) + '，你改过和加的变量都会去掉。',
-    positiveText: '还原',
-    negativeText: '取消',
+    title: t('env.restoreDefaultTitle'),
+    content: t('env.restoreDefaultBody', { host: mockBaseUrl(project.value) }),
+    positiveText: t('env.restoreAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: function () {
       if (!customized.value) {
         draft.value = defaultMockVariables(project.value);
         return;
       }
-      persist(null, '已还原默认值');
+      persist(null, t('env.defaultRestored'));
     }
   });
 }
 
 function setCurrent() {
   envs.select(MOCK_ENV_ID);
-  message.success('已设为当前环境');
+  message.success(t('env.setCurrentDone'));
 }
 
 function onKeydown(event) {
@@ -95,7 +97,7 @@ function onKeydown(event) {
   if (String(event.key).toLowerCase() !== 's') return;
   event.preventDefault();
   if (!canEdit.value) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('env.readonly'));
     return;
   }
   save();
@@ -109,17 +111,17 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
   <div class="env-tab">
     <div class="head">
       <span class="title">Mock</span>
-      <n-tag size="small" :bordered="false" type="warning">内置</n-tag>
-      <span v-if="dirty" class="dirty-dot" title="有没保存的修改，⌘S 保存" />
+      <n-tag size="small" :bordered="false" type="warning">{{ t('env.builtin') }}</n-tag>
+      <span v-if="dirty" class="dirty-dot" :title="t('env.dirtyTitle')" />
 
-      <n-tag v-if="isCurrent" size="small" :bordered="false">当前</n-tag>
+      <n-tag v-if="isCurrent" size="small" :bordered="false">{{ t('env.current') }}</n-tag>
       <n-button
         v-else-if="gateway.mockAvailable"
         size="small"
         quaternary
         @click="setCurrent"
       >
-        设为当前
+        {{ t('env.setCurrent') }}
       </n-button>
 
       <span class="spacer" />
@@ -131,7 +133,7 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
         :disabled="!customized && !dirty"
         @click="restoreDefault"
       >
-        还原默认值
+        {{ t('env.restoreDefaultTitle') }}
       </n-button>
       <n-button
         v-if="canEdit"
@@ -140,18 +142,18 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
         :loading="saving"
         @click="save"
       >
-        保存
+        {{ t('mock.save') }}
       </n-button>
     </div>
 
     <p class="intro">
-      选中这个环境，请求地址写成 <code v-pre>{{host}}/路径</code> 就会打到这个项目的 Mock 上。
-      默认 host 是 <code>{{ mockBaseUrl(project) }}</code>；接口都带统一前缀时可以直接改，
-      比如在后面加上 <code>/api</code>。
+      {{ t('env.mockIntroLead') }}<code v-pre>{{host}}/路径</code>{{ t('env.mockIntroMid') }}
+      <code>{{ mockBaseUrl(project) }}</code>{{ t('env.mockIntroMid2') }}
+      <code>/api</code>{{ t('env.mockIntroTail') }}
     </p>
 
     <div class="toolbar">
-      <span class="count">共 {{ count }} 个变量</span>
+      <span class="count">{{ t('env.countLabel', { n: count }) }}</span>
     </div>
 
     <div class="body">

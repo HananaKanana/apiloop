@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NModal, NSpace, NSpin, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import * as apisApi from '@/api/apis';
@@ -24,6 +25,7 @@ const tree = useTreeStore();
 const ui = useUiStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const saving = ref(false);
 
@@ -32,14 +34,17 @@ const visible = computed({
   set: function (value) { if (!value) ui.closeConflict(); }
 });
 
-const ENTITY_LABEL = {
-  project: '项目',
-  environment: '环境',
-  folder: '目录',
-  api: '接口',
-  example: '示例',
-  expectation: '期望'
-};
+/** 冲突对象的类型名。用 computed 包住，切语言后跟着变 */
+const ENTITY_LABEL = computed(function () {
+  return {
+    project: t('sync.entityProject'),
+    environment: t('sync.entityEnv'),
+    folder: t('sync.entityFolder'),
+    api: t('sync.entityApi'),
+    example: t('sync.entityExample'),
+    expectation: t('sync.entityExpectation')
+  };
+});
 
 const target = computed(function () {
   if (!ui.conflictTarget) return null;
@@ -48,7 +53,7 @@ const target = computed(function () {
 
 const entityLabel = computed(function () {
   const entity = ui.conflictTarget && ui.conflictTarget.entity;
-  return ENTITY_LABEL[entity] || '内容';
+  return ENTITY_LABEL.value[entity] || t('sync.entityContent');
 });
 
 /** 另存为副本只有接口有意义（服务端也这么说） */
@@ -61,7 +66,7 @@ const canCopy = computed(function () {
  * 直接显示是一坨压紧的 JSON，先解析再缩进；不是 JSON 就原样显示。
  */
 function showValue(value) {
-  if (value === null || value === undefined) return '（空）';
+  if (value === null || value === undefined) return t('sync.emptyValue');
 
   const text = String(value);
   const trimmed = text.trim();
@@ -106,10 +111,10 @@ function confirmDiscard() {
 
   return new Promise(function (resolve) {
     dialog.warning({
-      title: '标签页里有没保存的修改',
-      content: '标签页里还有没保存的修改，选这一项会丢掉它们。要继续吗？',
-      positiveText: '继续',
-      negativeText: '取消',
+      title: t('sync.unsavedTitle'),
+      content: t('sync.unsavedBody'),
+      positiveText: t('sync.continueAction'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -157,9 +162,9 @@ async function resolve(choice) {
     await reloadTabs(conflict.entity, conflict.id, choice);
 
     if (choice === 'copy' && data.copyId) {
-      message.success('已经另存为副本');
+      message.success(t('sync.copiedDone'));
     } else {
-      message.success(choice === 'mine' ? '已经用你的版本' : '已经用云端的版本');
+      message.success(choice === 'mine' ? t('sync.usedMine') : t('sync.usedTheirs'));
     }
   } catch (err) {
     message.error(err.message);
@@ -173,20 +178,20 @@ async function resolve(choice) {
   <n-modal
     v-model:show="visible"
     preset="card"
-    title="处理冲突"
+    :title="t('sync.title')"
     style="width: 780px; max-width: 94vw"
   >
     <n-spin :show="saving">
       <template v-if="target">
         <p class="lead">
-          这个{{ entityLabel }}在本机和云端都改过。选一份用，另一份的改动会被覆盖。
+          {{ t('sync.lead', { entity: entityLabel }) }}
         </p>
 
         <div class="compare">
           <div class="head">
-            <span class="field">字段</span>
-            <span class="side mine">我的</span>
-            <span class="side theirs">云端的</span>
+            <span class="field">{{ t('sync.colField') }}</span>
+            <span class="side mine">{{ t('sync.colMine') }}</span>
+            <span class="side theirs">{{ t('sync.colTheirs') }}</span>
           </div>
 
           <div v-for="row in rows" :key="row.field" class="row">
@@ -197,21 +202,21 @@ async function resolve(choice) {
         </div>
       </template>
 
-      <p v-else class="lead">这条冲突已经处理过了。</p>
+      <p v-else class="lead">{{ t('sync.alreadyResolved') }}</p>
     </n-spin>
 
     <template #footer>
       <n-space justify="end">
-        <n-button :disabled="saving" @click="ui.closeConflict()">关闭</n-button>
+        <n-button :disabled="saving" @click="ui.closeConflict()">{{ t('app.close') }}</n-button>
         <n-button
           v-if="canCopy"
           :disabled="!target || saving"
           @click="resolve('copy')"
         >
-          另存为副本
+          {{ t('sync.saveAsCopy') }}
         </n-button>
-        <n-button :disabled="!target || saving" @click="resolve('theirs')">用云端的</n-button>
-        <n-button type="primary" :disabled="!target || saving" @click="resolve('mine')">用我的</n-button>
+        <n-button :disabled="!target || saving" @click="resolve('theirs')">{{ t('sync.useTheirs') }}</n-button>
+        <n-button type="primary" :disabled="!target || saving" @click="resolve('mine')">{{ t('sync.useMine') }}</n-button>
       </n-space>
     </template>
   </n-modal>

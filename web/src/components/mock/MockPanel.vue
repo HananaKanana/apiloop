@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NButton,
   NEmpty,
@@ -42,6 +43,7 @@ const gateway = useGatewayStore();
 const session = useSessionStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 const prompt = usePrompt();
 
 const selectedId = ref('');
@@ -112,13 +114,13 @@ const canGenerate = computed(function () {
 const mockStatus = computed(function () {
   if (!mock.value.enabled) {
     return examples.value.length
-      ? '未开启：请求 mock 地址会返回 404'
-      : '先完成第 ① 步，才能打开';
+      ? t('mock.status404')
+      : t('mock.statusNeedExample');
   }
-  if (!defaultExample.value) return '已开启，但还没有示例';
-  let text = '已开启：会返回示例「' + defaultExample.value.name + '」';
+  if (!defaultExample.value) return t('mock.statusNoExample');
+  let text = t('mock.statusOn', { name: defaultExample.value.name });
   if (!isWs.value && expectations.value.some(function (item) { return item.enabled; })) {
-    text += '；满足条件时按「按条件返回」里的规则';
+    text += t('mock.statusWithRules');
   }
   return text;
 });
@@ -210,7 +212,7 @@ async function patchMock(patch) {
     // 目录树右边的绿点读的是 tree store 那份：顺手改掉，不然要刷新页面才变
     const node = useTreeStore().apis.find(function (item) { return item.id === props.tab.apiId; });
     if (node && data.api && data.api.mock) node.mockEnabled = Boolean(data.api.mock.enabled);
-    message.success('已保存');
+    message.success(t('mock.saved'));
   } catch (err) {
     // 服务端的 400（比如「请先保存一个示例」）原样提示，并把界面退回真实状态
     message.error(err.message);
@@ -224,11 +226,14 @@ async function patchMock(patch) {
 
 /* ---------------- 示例 ---------------- */
 
-const SOURCE_LABELS = {
-  manual: { text: '手工', type: 'default' },
-  recorded: { text: '录制', type: 'success' },
-  imported: { text: '导入', type: 'info' }
-};
+/** 示例来源的标签。用 computed 包住，切语言后跟着变 */
+const SOURCE_LABELS = computed(function () {
+  return {
+    manual: { text: t('mock.sourceManual'), type: 'default' },
+    recorded: { text: t('mock.sourceRecorded'), type: 'success' },
+    imported: { text: t('mock.sourceImported'), type: 'info' }
+  };
+});
 
 /**
  * 切走之前问一句：示例编辑器里有没有没保存的内容。
@@ -250,10 +255,10 @@ function confirmLeaveExampleEditor() {
     }
 
     dialog.warning({
-      title: '有未保存的修改',
-      content: '示例编辑器里还有没保存的内容，切走就没了。',
-      positiveText: '放弃修改',
-      negativeText: '取消',
+      title: t('mock.unsavedTitle'),
+      content: t('mock.unsavedBody'),
+      positiveText: t('mock.discard'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { done(true); },
       onNegativeClick: function () { done(false); },
       onClose: function () { done(false); },
@@ -274,7 +279,7 @@ async function createExample() {
   // WS 接口的新示例直接给一个能用的场景骨架，省得用户对着空 JSON 发呆
   const payload = isWs.value
     ? {
-        name: '新示例',
+        name: t('mock.newExampleName'),
         status: 101,
         responseType: 'ws',
         headers: [],
@@ -286,7 +291,7 @@ async function createExample() {
         source: 'manual'
       }
     : {
-        name: '新示例',
+        name: t('mock.newExampleName'),
         status: 200,
         responseType: 'json',
         headers: [],
@@ -298,20 +303,24 @@ async function createExample() {
     const data = await apisApi.createExample(props.tab.apiId, payload);
     props.tab.api = data.api;
     await selectExample(data.example.id);
-    message.success('已新建示例');
+    message.success(t('mock.exampleCreated'));
   } catch (err) {
     message.error(err.message);
   }
 }
 
 async function renameExample(example) {
-  const name = await prompt({ title: '重命名示例', value: example.name, confirmText: '保存' });
+  const name = await prompt({
+    title: t('mock.renameExampleTitle'),
+    value: example.name,
+    confirmText: t('mock.save')
+  });
   if (name === null || !String(name).trim()) return;
 
   try {
     const data = await apisApi.updateExample(example.id, { name: String(name).trim() });
     emitSaved(data.example);
-    message.success('已重命名');
+    message.success(t('mock.renamed'));
   } catch (err) {
     message.error(err.message);
   }
@@ -319,16 +328,16 @@ async function renameExample(example) {
 
 async function removeExample(example) {
   dialog.error({
-    title: '删除示例',
-    content: '确定删除「' + example.name + '」吗？指向它的期望会一起删掉。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('mock.deleteExampleTitle'),
+    content: t('mock.deleteExampleBody', { name: example.name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         const data = await apisApi.removeExample(example.id);
         props.tab.api = data.api;
         selectedId.value = '';
-        message.success('已删除');
+        message.success(t('mock.deleted'));
       } catch (err) {
         message.error(err.message);
       }
@@ -351,9 +360,9 @@ async function useAsMock(example) {
 async function copyMockUrl() {
   try {
     await copyText(mockUrl.value);
-    message.success('已复制 mock 地址');
+    message.success(t('mock.copiedMockUrl'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 
@@ -361,7 +370,7 @@ async function copyMockUrl() {
 
 function exampleName(exampleId) {
   const found = examples.value.find(function (item) { return item.id === exampleId; });
-  return found ? found.name : '(已删除的示例)';
+  return found ? found.name : t('mock.deletedExample');
 }
 
 function mergeExpectation(expectation) {
@@ -394,20 +403,20 @@ async function selectExpectation(id) {
 
 async function createExpectation() {
   if (!examples.value.length) {
-    message.warning('先新建一个示例 —— 期望要指明返回哪一条示例');
+    message.warning(t('mock.needExampleFirst'));
     return;
   }
 
   try {
     const data = await expectationsApi.createExpectation(props.tab.apiId, {
-      name: '新期望',
+      name: t('mock.newExpectationName'),
       enabled: true,
       conditions: [],
       exampleId: mock.value.exampleId || examples.value[0].id
     });
     props.tab.api = data.api;
     selectExpectation(data.expectation.id);
-    message.success('已新建期望');
+    message.success(t('mock.expectationCreated'));
   } catch (err) {
     message.error(err.message);
   }
@@ -427,17 +436,17 @@ async function toggleExpectation(item, value) {
 
 function removeExpectation(item) {
   dialog.error({
-    title: '删除期望',
-    content: '确定删除「' + (item.name || '未命名期望') + '」吗？',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('mock.deleteExpectationTitle'),
+    content: t('mock.deleteExpectationBody', { name: item.name || t('mock.unnamedExpectation') }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         const data = await expectationsApi.removeExpectation(item.id);
         props.tab.api = data.api;
         if (selectedExpectationId.value === item.id) selectedExpectationId.value = '';
         clearExpectationError(item.id);
-        message.success('已删除');
+        message.success(t('mock.deleted'));
       } catch (err) {
         message.error(err.message);
       }
@@ -506,39 +515,41 @@ async function onDrop() {
     <n-empty
       v-if="!api"
       class="placeholder"
-      description="临时标签页要先保存成接口，才能配置 mock"
+      :description="t('mock.tempTabHint')"
     />
 
     <template v-else>
       <!-- 一句话说明：用户反馈「完全不知道 mock 页是干嘛的」（2026-10-01） -->
       <p class="intro">
-        Mock 就是「假接口」：后端还没写好时，先请求下面的 mock 地址，拿到你在这里设定的假数据。
-        <template v-if="isWs">WebSocket 接口用默认示例回放：连接后按示例里的 onOpen 推送，收到消息后按规则回复。</template>
+        {{ t('mock.intro') }}
+        <template v-if="isWs">{{ t('mock.introWs') }}</template>
       </p>
 
       <!-- 三步：每步做完换成绿色的勾 -->
       <div class="steps">
         <div class="step">
           <span class="step-no" :class="{ done: examples.length > 0 }">{{ examples.length ? '✓' : '1' }}</span>
-          <span class="step-title">准备返回的数据</span>
+          <span class="step-title">{{ t('mock.stepData') }}</span>
           <div class="step-body">
             <span v-if="examples.length" class="step-text">
-              已有 {{ examples.length }} 个示例，默认返回「{{ defaultExample && defaultExample.name }}」
+              {{ t('mock.examplesCount', { n: examples.length, name: (defaultExample && defaultExample.name) || '' }) }}
             </span>
             <template v-else>
-              <span v-if="!canEdit" class="step-text">还没有示例</span>
-              <n-button v-if="canEdit" size="tiny" type="primary" secondary @click="createExample">新建示例</n-button>
-              <n-button v-if="canGenerate" size="tiny" secondary @click="emit('save-response')">
-                用最近一次响应生成
+              <span v-if="!canEdit" class="step-text">{{ t('mock.noExamples') }}</span>
+              <n-button v-if="canEdit" size="tiny" type="primary" secondary @click="createExample">
+                {{ t('mock.newExample') }}
               </n-button>
-              <span v-else-if="canEdit && !isWs" class="step-text">也可以先发一次请求，再从响应生成</span>
+              <n-button v-if="canGenerate" size="tiny" secondary @click="emit('save-response')">
+                {{ t('mock.generateFromResponse') }}
+              </n-button>
+              <span v-else-if="canEdit && !isWs" class="step-text">{{ t('mock.generateHint') }}</span>
             </template>
           </div>
         </div>
 
         <div class="step">
           <span class="step-no" :class="{ done: mock.enabled }">{{ mock.enabled ? '✓' : '2' }}</span>
-          <span class="step-title">打开 mock</span>
+          <span class="step-title">{{ t('mock.stepEnable') }}</span>
           <div class="step-body">
             <n-switch
               size="small"
@@ -552,17 +563,17 @@ async function onDrop() {
 
         <div class="step">
           <span class="step-no">3</span>
-          <span class="step-title">调用 mock 地址</span>
+          <span class="step-title">{{ t('mock.stepCall') }}</span>
           <div class="step-body column">
             <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
-            <span v-if="!gateway.mockAvailable" class="step-text">登录后可用</span>
+            <span v-if="!gateway.mockAvailable" class="step-text">{{ t('layout.signInToUse') }}</span>
             <template v-else>
               <div class="url-row">
                 <code class="url" :title="mockUrl">{{ mockUrl }}</code>
-                <n-button size="tiny" secondary @click="copyMockUrl">复制</n-button>
+                <n-button size="tiny" secondary @click="copyMockUrl">{{ t('mock.copyAction') }}</n-button>
               </div>
               <span class="step-text">
-                或者在右上角环境里选「Mock」，直接点「{{ isWs ? '连接' : '发送' }}」
+                {{ t('mock.envHintLead') }}{{ isWs ? t('mock.connectAction') : t('mock.sendAction') }}{{ t('mock.envHintTail') }}
               </span>
             </template>
           </div>
@@ -571,10 +582,10 @@ async function onDrop() {
 
       <!-- 更多设置：默认收起，大多数人用不到 -->
       <div class="more">
-        <a class="more-toggle" @click="showMore = !showMore">{{ showMore ? '▾' : '▸' }} 更多设置</a>
+        <a class="more-toggle" @click="showMore = !showMore">{{ showMore ? '▾' : '▸' }} {{ t('mock.moreSettings') }}</a>
         <div v-if="showMore" class="more-body">
           <div class="more-row">
-            <span class="more-label">路径</span>
+            <span class="more-label">{{ t('mock.pathLabel') }}</span>
             <n-input
               size="small"
               class="more-input"
@@ -584,10 +595,10 @@ async function onDrop() {
               @update:value="(v) => { draftPath = v; }"
               @blur="canEdit && draftPath !== mock.path && patchMock({ path: draftPath })"
             />
-            <span class="more-hint">mock 地址最后那段，默认和接口路径一样</span>
+            <span class="more-hint">{{ t('mock.pathHint') }}</span>
           </div>
           <div v-if="!isWs" class="more-row">
-            <span class="more-label">延迟</span>
+            <span class="more-label">{{ t('mock.delayLabel') }}</span>
             <n-input-number
               size="small"
               class="more-number"
@@ -597,17 +608,17 @@ async function onDrop() {
               :disabled="!canEdit"
               @update:value="(v) => patchMock({ delay: v || 0 })"
             />
-            <span class="more-hint">模拟慢接口，单位毫秒</span>
+            <span class="more-hint">{{ t('mock.delayHint') }}</span>
           </div>
           <div v-if="!isWs" class="more-row">
-            <span class="more-label">跨域</span>
+            <span class="more-label">{{ t('mock.corsLabel') }}</span>
             <n-switch
               size="small"
               :value="mock.cors"
               :disabled="!canEdit"
               @update:value="(v) => patchMock({ cors: v })"
             />
-            <span class="more-hint">浏览器里的网页直接调用 mock 地址时要打开</span>
+            <span class="more-hint">{{ t('mock.corsHint') }}</span>
           </div>
         </div>
       </div>
@@ -616,7 +627,7 @@ async function onDrop() {
         <aside class="list">
           <div class="section">
             <div class="list-head">
-              <span>返回数据（示例）</span>
+              <span>{{ t('mock.returnData') }}</span>
               <n-button
                 v-if="canEdit"
                 size="tiny"
@@ -624,7 +635,7 @@ async function onDrop() {
                 type="primary"
                 @click="createExample"
               >
-                新建
+                {{ t('mock.newAction') }}
               </n-button>
             </div>
 
@@ -644,7 +655,7 @@ async function onDrop() {
                     :bordered="false"
                     type="success"
                   >
-                    mock 使用中
+                    {{ t('mock.inUse') }}
                   </n-tag>
                   <n-tag
                     size="tiny"
@@ -655,22 +666,22 @@ async function onDrop() {
                   </n-tag>
                 </div>
                 <div v-if="canEdit" class="item-actions">
-                  <n-button size="tiny" quaternary @click.stop="useAsMock(example)">设为 mock</n-button>
-                  <n-button size="tiny" quaternary @click.stop="renameExample(example)">改名</n-button>
+                  <n-button size="tiny" quaternary @click.stop="useAsMock(example)">{{ t('mock.setAsMock') }}</n-button>
+                  <n-button size="tiny" quaternary @click.stop="renameExample(example)">{{ t('mock.renameAction') }}</n-button>
                   <n-button size="tiny" quaternary type="error" @click.stop="removeExample(example)">
-                    删除
+                    {{ t('app.delete') }}
                   </n-button>
                 </div>
               </div>
 
-              <n-empty v-if="!examples.length" size="small" description="还没有示例" />
+              <n-empty v-if="!examples.length" size="small" :description="t('mock.noExamples')" />
             </div>
           </div>
 
           <div v-if="!isWs" class="section" :class="{ collapsed: !showRules }">
             <div class="list-head">
               <a class="rules-toggle" @click="showRules = !showRules">
-                {{ showRules ? '▾' : '▸' }} 按条件返回（高级）
+                {{ showRules ? '▾' : '▸' }} {{ t('mock.conditionsSection') }}
               </a>
               <n-button
                 v-if="canEdit && showRules"
@@ -679,14 +690,13 @@ async function onDrop() {
                 type="primary"
                 @click="createExpectation"
               >
-                新建
+                {{ t('mock.newAction') }}
               </n-button>
             </div>
 
             <div v-if="showRules" class="list-body">
               <p class="rules-intro">
-                按请求里的参数返回不同的示例，比如「参数 id=1 时返回示例 A，其他情况返回默认示例」。
-                从上到下检查，第一条满足的生效。
+                {{ t('mock.rulesIntro') }}
               </p>
               <div
                 v-for="(item, index) in expectations"
@@ -705,7 +715,7 @@ async function onDrop() {
                 @dragend="onDragEnd"
               >
                 <div class="exp-top">
-                  <span class="exp-name">{{ item.name || '(未命名期望)' }}</span>
+                  <span class="exp-name">{{ item.name || t('mock.unnamedExpectation') }}</span>
                   <n-switch
                     size="tiny"
                     :value="item.enabled"
@@ -728,7 +738,7 @@ async function onDrop() {
                     type="error"
                     @click.stop="removeExpectation(item)"
                   >
-                    删除
+                    {{ t('app.delete') }}
                   </n-button>
                 </div>
                 <div v-if="expectationErrors[item.id]" class="exp-error">
@@ -739,7 +749,7 @@ async function onDrop() {
               <n-empty
                 v-if="!expectations.length"
                 size="small"
-                description="还没有规则，所有请求都返回默认示例"
+                :description="t('mock.noExpectations')"
               />
             </div>
           </div>
@@ -766,7 +776,7 @@ async function onDrop() {
             :readonly="!canEdit"
             @saved="emitSaved"
           />
-          <n-empty v-else description="选一个示例来编辑，或者按上面的三步先把 mock 用起来" />
+          <n-empty v-else :description="t('mock.pickExample')" />
         </section>
       </div>
     </template>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NEmpty, NIcon, NInput, NSwitch, NTooltip, useMessage } from 'naive-ui';
 import { Eye, EyeOff } from '@vicons/tabler';
 import { useEnvStore } from '@/stores/env';
@@ -27,6 +28,7 @@ const envs = useEnvStore();
 const projects = useProjectStore();
 const tabs = useTabsStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const saving = ref(false);
 /** 只看有差异的 */
@@ -137,8 +139,8 @@ function fillMissing() {
     });
   });
 
-  if (!added) message.info('没有缺的变量');
-  else message.success('补齐了 ' + added + ' 处，填好值再保存');
+  if (!added) message.info(t('env.noMissing'));
+  else message.success(t('env.filled', { n: added }));
 }
 
 function toggleReveal(key) {
@@ -180,7 +182,7 @@ async function save() {
       });
     } catch (err) {
       failedIds.push(env.id);
-      failedText.push('「' + env.name + '」' + err.message);
+      failedText.push(t('env.failedName', { name: env.name }) + err.message);
     }
   }
 
@@ -196,8 +198,8 @@ async function save() {
   tabs.touch(props.tab);
 
   saving.value = false;
-  if (failedText.length) message.error('这些环境没保存成功：' + failedText.join('；'));
-  else message.success('已保存 ' + pending.length + ' 个环境');
+  if (failedText.length) message.error(t('env.saveFailed', { list: failedText.join('；') }));
+  else message.success(t('env.savedEnvs', { n: pending.length }));
 }
 
 /** 放弃修改：退回打开时（或上次保存时）那一份 */
@@ -210,7 +212,7 @@ function discard() {
       variables: JSON.parse(JSON.stringify(env.variables || []))
     };
   });
-  message.info('已放弃修改');
+  message.info(t('env.discarded'));
 }
 
 watch(
@@ -239,18 +241,18 @@ watch(
 <template>
   <div class="env-diff">
     <div class="head">
-      <span class="title">环境对比</span>
-      <span class="count">{{ envList.length }} 个环境 · {{ displayNames.length }} 个变量</span>
+      <span class="title">{{ t('env.diffTitle') }}</span>
+      <span class="count">{{ t('env.diffCount', { envs: envList.length, vars: displayNames.length }) }}</span>
       <span class="spacer" />
 
       <label class="switch">
         <n-switch v-model:value="onlyDiff" size="small" />
-        <span>只看有差异的</span>
+        <span>{{ t('env.onlyDiff') }}</span>
       </label>
 
-      <n-button v-if="canEdit" size="small" secondary @click="fillMissing">补齐缺少的变量</n-button>
+      <n-button v-if="canEdit" size="small" secondary @click="fillMissing">{{ t('env.fillMissing') }}</n-button>
       <n-button v-if="canEdit" size="small" :disabled="!changedEnvCount" @click="discard">
-        放弃修改
+        {{ t('env.discard') }}
       </n-button>
       <n-button
         v-if="canEdit"
@@ -260,22 +262,22 @@ watch(
         :disabled="!changedEnvCount"
         @click="save"
       >
-        保存（{{ changedEnvCount }} 处修改）
+        {{ t('env.saveWithCount', { n: changedEnvCount }) }}
       </n-button>
-      <span v-else class="hint">当前角色是只读</span>
+      <span v-else class="hint">{{ t('env.readonlyShort') }}</span>
     </div>
 
     <div class="body">
       <n-empty
         v-if="!envList.length"
         class="empty"
-        description="这个项目还没有环境。先在左侧「环境」里新建几个，再回来对比。"
+        :description="t('env.noEnvsHint')"
       />
 
       <table v-else-if="displayNames.length" class="grid">
         <thead>
           <tr>
-            <th class="name-col">变量名</th>
+            <th class="name-col">{{ t('env.variableName') }}</th>
             <th v-for="env in envList" :key="env.id">{{ env.name }}</th>
           </tr>
         </thead>
@@ -286,7 +288,7 @@ watch(
               <button
                 v-if="isSecret(key)"
                 class="eye"
-                :title="revealed.indexOf(key) > -1 ? '遮住' : '看自己的值'"
+                :title="revealed.indexOf(key) > -1 ? t('env.hide') : t('env.reveal')"
                 @click="toggleReveal(key)"
               >
                 <n-icon size="14" :component="revealed.indexOf(key) > -1 ? EyeOff : Eye" />
@@ -304,9 +306,9 @@ watch(
             >
               <n-tooltip v-if="!rowOf(env, key)" trigger="hover" :disabled="!canEdit">
                 <template #trigger>
-                  <button class="missing" @click="addVariable(env, key)">（缺少）</button>
+                  <button class="missing" @click="addVariable(env, key)">{{ t('env.missing') }}</button>
                 </template>
-                点一下给这个环境加上
+                {{ t('env.addHere') }}
               </n-tooltip>
 
               <n-input
@@ -326,7 +328,7 @@ watch(
       <n-empty
         v-else
         class="empty"
-        :description="onlyDiff ? '所有环境都一样，没有差异' : '这些环境里还没有变量'"
+        :description="onlyDiff ? t('env.allSame') : t('env.noVarsYet')"
       />
     </div>
   </div>

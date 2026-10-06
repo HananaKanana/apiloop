@@ -1,5 +1,6 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
 import { ChevronDown, ChevronRight, FileImport, Filter, Fold, FoldDown, Plus, Star } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
@@ -41,6 +42,7 @@ const session = useSessionStore();
 const message = useMessage();
 const prompt = usePrompt();
 const dialog = useDialog();
+const { t } = useI18n();
 
 /**
  * 行高 28px（计划里的全局约束）。naive-ui 的树高走 `nodeHeight` 主题变量，
@@ -55,17 +57,19 @@ const TREE_THEME = {
 /** 方法标签固定宽度，各行的接口名才能对齐 */
 const methodWidth = METHOD_LABEL_WIDTH;
 
-/** 工具条上「＋」和「…」两个菜单 */
-const newOptions = [
-  { label: '接口', key: 'api' },
-  { label: '目录', key: 'folder' },
-  { label: 'WebSocket', key: 'ws' },
-  // Socket.IO（第九轮第 4 节）：和 WebSocket 并列的调试标签页入口
-  { label: 'Socket.IO', key: 'sio' },
-  // gRPC（第十一轮第 3 节）/ MQTT（第十三轮第 4 节）：同上，各自开一个临时调试标签页
-  { label: 'gRPC', key: 'grpc' },
-  { label: 'MQTT', key: 'mqtt' }
-];
+/** 工具条上「＋」和「…」两个菜单。用 computed 包住，切语言后条目跟着变 */
+const newOptions = computed(function () {
+  return [
+    { label: t('tree.newMenuApi'), key: 'api' },
+    { label: t('tree.newMenuFolder'), key: 'folder' },
+    { label: 'WebSocket', key: 'ws' },
+    // Socket.IO（第九轮第 4 节）：和 WebSocket 并列的调试标签页入口
+    { label: 'Socket.IO', key: 'sio' },
+    // gRPC（第十一轮第 3 节）/ MQTT（第十三轮第 4 节）：同上，各自开一个临时调试标签页
+    { label: 'gRPC', key: 'grpc' },
+    { label: 'MQTT', key: 'mqtt' }
+  ];
+});
 
 function onNewSelect(key) {
   if (key === 'api') {
@@ -125,7 +129,7 @@ function openShare(folderId) {
   shareFolderId.value = folderId || null;
   const folder = folderId ? tree.folderById.get(folderId) : null;
   shareScopeName.value =
-    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+    (folder && folder.name) || (projects.current && projects.current.name) || t('tree.projectFallback');
   showShare.value = true;
 }
 
@@ -149,7 +153,7 @@ function openDocExport(folderId) {
   docFolderId.value = folderId || null;
   const folder = folderId ? tree.folderById.get(folderId) : null;
   docScopeName.value =
-    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+    (folder && folder.name) || (projects.current && projects.current.name) || t('tree.projectFallback');
   showDocExport.value = true;
 }
 
@@ -157,7 +161,7 @@ function openOpenapiExport(folderId) {
   exportFolderId.value = folderId || null;
   const folder = folderId ? tree.folderById.get(folderId) : null;
   exportScopeName.value =
-    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+    (folder && folder.name) || (projects.current && projects.current.name) || t('tree.projectFallback');
   showOpenapiExport.value = true;
 }
 
@@ -171,7 +175,7 @@ function openSync(folderId) {
   syncFolderId.value = folderId || null;
   const folder = folderId ? tree.folderById.get(folderId) : null;
   syncFolderName.value =
-    (folder && folder.name) || (projects.current && projects.current.name) || '项目';
+    (folder && folder.name) || (projects.current && projects.current.name) || t('tree.projectFallback');
   showSync.value = true;
 }
 
@@ -192,17 +196,18 @@ function openCopy(node, move) {
  * 接口 / 目录 —— 用户刚做完这件事，下一步十有八九就是去那边看一眼。
  */
 function onCopied(result) {
-  const where = '「' + result.projectName + '」' + (result.folderName ? ' / ' + result.folderName : '');
+  const where = t('tree.quotedName', { name: result.projectName }) +
+    (result.folderName ? ' / ' + result.folderName : '');
 
   message.success(
     h('span', { class: 'copy-done' }, [
-      (result.move ? '已移动 ' : '已复制 ') + result.apiCount + ' 个接口到' + where,
+      t(result.move ? 'tree.movedDone' : 'tree.copiedDone', { n: result.apiCount, where: where }),
       h(NButton, {
         size: 'tiny',
         quaternary: true,
         style: 'margin-left: 10px',
         onClick: function () { goToCopied(result); }
-      }, { default: function () { return '去看看'; } })
+      }, { default: function () { return t('tree.goLook'); } })
     ]),
     { duration: 8000 }
   );
@@ -214,10 +219,11 @@ function onCopied(result) {
 function confirmSwitchProject() {
   return new Promise(function (resolve) {
     dialog.warning({
-      title: '切换项目',
-      content: '当前有没保存的标签页，切换项目会全部关掉，未保存的修改会丢失。确定切换吗？',
-      positiveText: '切换',
-      negativeText: '取消',
+      // 和 ProjectSwitcher / QuickOpen 用的是同一句话，直接复用 layout 区域那三个键
+      title: t('layout.switchProjectTitle'),
+      content: t('layout.switchProjectBody'),
+      positiveText: t('layout.switchAction'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -269,7 +275,8 @@ const myUserId = computed(function () {
 
 const statusFilterLabel = computed(function () {
   const found = STATUS_FILTER_OPTIONS.filter(function (item) { return item.value === statusFilter.value; })[0];
-  return found ? found.label : '全部';
+  // 选项表来自 utils/apiStatus.js（不在本任务的改动范围里），它的 label 还没迁 —— 这里只是兜底
+  return found ? found.label : t('tree.filterAll');
 });
 
 async function loadProjectMembers() {
@@ -300,8 +307,8 @@ watch([searchText, statusFilter], function () {
 });
 
 const emptyDescription = computed(function () {
-  if (searchText.value.trim() || statusFilter.value !== FILTER_ALL) return '没有匹配的接口';
-  return projects.canEdit ? '还没有接口，右键目录或点右上角 ＋ 新建' : '这个项目还没有接口';
+  if (searchText.value.trim() || statusFilter.value !== FILTER_ALL) return t('tree.emptyNoMatch');
+  return projects.canEdit ? t('tree.emptyEditable') : t('tree.emptyReadonly');
 });
 
 watch(
@@ -373,7 +380,7 @@ function renderLabel(info) {
 
   const api = node.api || {};
   const method = String(api.method || 'GET').toUpperCase();
-  const name = node.name || '(未命名接口)';
+  const name = node.name || t('tree.untitledApi');
   const meta = statusMeta(api.status);
   const ownerName = api.ownerId ? (memberNames.value.get(api.ownerId) || '') : '';
   const tip = statusTooltip(api.status, ownerName);
@@ -400,7 +407,7 @@ function renderSuffix(info) {
   if (gateway.isConflicted(node.kind, node.id)) {
     marks.push(h('span', {
       class: 'sync-mark conflict',
-      title: '和云端有冲突，点这里处理',
+      title: t('tree.conflictMark'),
       onClick: function (event) {
         // 别把点击透给节点本身：否则还会顺带展开目录 / 打开接口
         event.stopPropagation();
@@ -408,11 +415,11 @@ function renderSuffix(info) {
       }
     }, '!'));
   } else if (gateway.isPending(node.kind, node.id)) {
-    marks.push(h('span', { class: 'sync-mark pending', title: '还没同步到云端' }));
+    marks.push(h('span', { class: 'sync-mark pending', title: t('tree.pendingMark') }));
   }
 
   if (node.kind === 'api' && node.api && node.api.mockEnabled) {
-    marks.push(h('span', { class: 'mock-dot', title: 'mock 已启用' }));
+    marks.push(h('span', { class: 'mock-dot', title: t('tree.mockMark') }));
   }
 
   return marks.length ? marks : null;
@@ -536,24 +543,24 @@ function openMenu(event, node) {
  */
 function openBlankMenu(event) {
   // 「运行全部」放最上面：发请求 viewer 也能做（服务端 /send 就是 viewer 权限）
-  const options = [{ label: '运行全部', key: 'blank-run' }];
+  const options = [{ label: t('tree.runAll'), key: 'blank-run' }];
 
   // 同步更新要 editor（服务端那两个接口都是 editor 权限）
   if (projects.canEdit) {
-    options.push({ label: '从 OpenAPI 同步更新', key: 'blank-sync-openapi' });
+    options.push({ label: t('tree.syncFromOpenapi'), key: 'blank-sync-openapi' });
   }
 
   if (canShare.value) {
-    options.push({ label: '分享整个项目的文档', key: 'blank-share' });
+    options.push({ label: t('tree.shareProjectDoc'), key: 'blank-share' });
   }
 
   if (projects.canEdit) {
     options.push({ type: 'divider', key: 'blank-d' });
-    options.push({ label: '新建接口', key: 'blank-new-api' });
-    options.push({ label: '新建目录', key: 'blank-new-folder' });
+    options.push({ label: t('tree.menuNewApi'), key: 'blank-new-api' });
+    options.push({ label: t('tree.menuNewFolder'), key: 'blank-new-folder' });
   }
   options.push({ type: 'divider', key: 'blank-d2' });
-  options.push({ label: anyExpanded.value ? '全部收起' : '全部展开', key: 'blank-toggle' });
+  options.push({ label: anyExpanded.value ? t('tree.collapseAll') : t('tree.expandAll'), key: 'blank-toggle' });
 
   menu.value = { show: true, x: event.clientX, y: event.clientY, node: null, options: options };
 }
@@ -563,39 +570,39 @@ function folderMenuOptions() {
   // （服务端 `/send` 和 `/export/openapi` 都是 viewer 权限）
   if (!projects.canEdit) {
     return [
-      { label: '目录设置', key: 'folder-settings' },
-      { label: '运行', key: 'run' },
-      { label: '导出为 OpenAPI', key: 'export-openapi' },
-      { label: '导出文档…', key: 'export-doc' }
+      { label: t('tree.folderSettings'), key: 'folder-settings' },
+      { label: t('tree.run'), key: 'run' },
+      { label: t('tree.exportOpenapi'), key: 'export-openapi' },
+      { label: t('tree.exportDoc'), key: 'export-doc' }
     ];
   }
 
   const options = [
-    { label: '目录设置', key: 'folder-settings' },
+    { label: t('tree.folderSettings'), key: 'folder-settings' },
     { type: 'divider', key: 'd0' },
-    { label: '运行', key: 'run' },
-    { label: '导出为 OpenAPI', key: 'export-openapi' },
-    { label: '导出文档…', key: 'export-doc' },
+    { label: t('tree.run'), key: 'run' },
+    { label: t('tree.exportOpenapi'), key: 'export-openapi' },
+    { label: t('tree.exportDoc'), key: 'export-doc' },
     // 计划里这条本来想只在「这个目录是从 OpenAPI 导入的、或者里面有从 OpenAPI 导入的
     // 接口时」显示 —— 那需要目录树接口带上 extra.openapi（dto.js 的 toApiSummary），
     // 而这一轮 dto.js / tree.js 是 session1 在改（第 1 节的 status / ownerId 就要动它）。
     // 先对所有目录都显示：点进去没东西可同步时，弹窗会说「已经是最新的」或者
     // 全列成新增，不会改坏什么。
-    { label: '从 OpenAPI 同步更新', key: 'sync-openapi' }
+    { label: t('tree.syncFromOpenapi'), key: 'sync-openapi' }
   ];
-  if (canShare.value) options.push({ label: '分享文档', key: 'share' });
+  if (canShare.value) options.push({ label: t('tree.shareDoc'), key: 'share' });
 
   return options.concat([
     { type: 'divider', key: 'd1' },
-    { label: '新建子目录', key: 'new-folder' },
-    { label: '新建接口', key: 'new-api' },
+    { label: t('tree.newSubfolder'), key: 'new-folder' },
+    { label: t('tree.menuNewApi'), key: 'new-api' },
     { type: 'divider', key: 'd2' },
     // 跨项目复制 / 移动（第六轮第 3 节）
-    { label: '复制到其他项目…', key: 'copy-to' },
-    { label: '移动到其他项目…', key: 'move-to' },
+    { label: t('tree.copyToProject'), key: 'copy-to' },
+    { label: t('tree.moveToProject'), key: 'move-to' },
     { type: 'divider', key: 'd3' },
-    { label: '重命名', key: 'rename' },
-    { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
+    { label: t('tree.rename'), key: 'rename' },
+    { label: t('tree.delete'), key: 'delete', props: { style: 'color: #d03050' } }
   ]);
 }
 
@@ -604,7 +611,10 @@ function apiMenuOptions(node) {
   // **node 必须由调用方传进来**：下面 openMenu 是先算 options 再赋值给 menu.value 的，
   // 这时候从 menu.value.node 读到的还是上一次右键的那个节点。
   const starred = Boolean(node && prefs.isApiFavorite(tree.projectId, node.id));
-  const favorite = { label: starred ? '取消收藏' : '收藏', key: 'favorite' };
+  const favorite = {
+    label: starred ? t('layout.removeFavorite') : t('layout.addFavorite'),
+    key: 'favorite'
+  };
 
   // viewer 只给这一项（其余全是写操作，服务端会 403）
   if (!projects.canEdit) return [favorite];
@@ -612,14 +622,14 @@ function apiMenuOptions(node) {
   return [
     favorite,
     { type: 'divider', key: 'd0' },
-    { label: '复制', key: 'duplicate' },
-    { label: '重命名', key: 'rename' },
+    { label: t('tree.duplicate'), key: 'duplicate' },
+    { label: t('tree.rename'), key: 'rename' },
     { type: 'divider', key: 'd2' },
     // 跨项目复制 / 移动（第六轮第 3 节）
-    { label: '复制到其他项目…', key: 'copy-to' },
-    { label: '移动到其他项目…', key: 'move-to' },
+    { label: t('tree.copyToProject'), key: 'copy-to' },
+    { label: t('tree.moveToProject'), key: 'move-to' },
     { type: 'divider', key: 'd3' },
-    { label: '删除', key: 'delete', props: { style: 'color: #d03050' } }
+    { label: t('tree.delete'), key: 'delete', props: { style: 'color: #d03050' } }
   ];
 }
 
@@ -659,7 +669,7 @@ async function onMenuSelect(key) {
     if (key === 'rename') return await rename(node);
     if (key === 'duplicate') {
       await tree.duplicateApi(node.id);
-      message.success('已复制');
+      message.success(t('app.copied'));
       return;
     }
     if (key === 'delete') {
@@ -678,17 +688,17 @@ async function onMenuSelect(key) {
 
 async function createFolder(parentId) {
   const name = await prompt({
-    title: '新建目录',
-    label: parentId ? '会建在选中的目录下面' : '会建在根目录下',
-    placeholder: '目录名称',
-    confirmText: '创建'
+    title: t('tree.newFolderTitle'),
+    label: parentId ? t('tree.newFolderUnder') : t('tree.newFolderRoot'),
+    placeholder: t('tree.folderNamePlaceholder'),
+    confirmText: t('tree.createAction')
   });
   if (name === null || !String(name).trim()) return;
 
   try {
     await tree.createFolder(String(name).trim(), parentId);
     if (parentId) expandedKeys.value = Array.from(new Set(expandedKeys.value.concat(['f:' + parentId])));
-    message.success('已创建');
+    message.success(t('tree.created'));
   } catch (err) {
     message.error(err.message);
   }
@@ -696,9 +706,9 @@ async function createFolder(parentId) {
 
 async function rename(node) {
   const name = await prompt({
-    title: node.kind === 'folder' ? '重命名目录' : '重命名接口',
+    title: node.kind === 'folder' ? t('tree.renameFolderTitle') : t('tree.renameApiTitle'),
     value: node.name,
-    confirmText: '保存'
+    confirmText: t('tree.save')
   });
   if (name === null || !String(name).trim()) return;
 
@@ -708,7 +718,7 @@ async function rename(node) {
     else await tree.renameApi(node.id, trimmed);
     // 打开着的标签页标题跟着变（只动名字，别的没保存的修改不受影响）
     tabs.applyRename(node.kind === 'folder' ? 'folder' : 'api', node.id, trimmed);
-    message.success('已重命名');
+    message.success(t('tree.renamed'));
   } catch (err) {
     message.error(err.message);
   }
@@ -739,23 +749,23 @@ async function confirmDeleteFolder(mode) {
 
   try {
     await tree.removeFolder(target.node.id, mode);
-    message.success(mode === 'delete' ? '已删除目录及其子项' : '已删除目录，子项已移到上一级');
+    message.success(mode === 'delete' ? t('tree.folderDeletedAll') : t('tree.folderDeletedKeep'));
   } catch (err) {
     message.error(err.message);
   }
 }
 
 async function removeApi(node) {
-  const name = node.name || '未命名接口';
+  const name = node.name || t('tree.untitledApi');
   dialog.error({
-    title: '删除接口',
-    content: '删除「' + name + '」后可以在回收站里恢复（保留 30 天）。确定删除吗？',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('tree.deleteApiTitle'),
+    content: t('tree.deleteApiBody', { name: name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await tree.removeApi(node.id);
-        message.success('已删除');
+        message.success(t('tree.deleted'));
       } catch (err) {
         message.error(err.message);
       }
@@ -864,7 +874,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         class="filter"
         size="small"
         clearable
-        placeholder="过滤"
+        :placeholder="t('tree.filterPlaceholder')"
       >
         <template #prefix>
           <n-icon :component="Filter" />
@@ -884,7 +894,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           size="small"
           quaternary
           :type="statusFilter === FILTER_ALL ? 'default' : 'primary'"
-          :title="'筛选：' + statusFilterLabel"
+          :title="t('tree.filterLabel') + statusFilterLabel"
         >
           <template #icon>
             <n-icon :component="Filter" />
@@ -894,14 +904,14 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
 
       <!-- 新建：接口 / 目录 / WebSocket / Socket.IO / gRPC / MQTT 都收在这一个 ＋ 里 -->
       <n-dropdown v-if="projects.canEdit" trigger="click" :options="newOptions" @select="onNewSelect">
-        <n-button size="small" quaternary title="新建">
+        <n-button size="small" quaternary :title="t('tree.newTitle')">
           <template #icon>
             <n-icon :component="Plus" />
           </template>
         </n-button>
       </n-dropdown>
 
-      <n-button size="small" quaternary title="导入" @click="emit('import')">
+      <n-button size="small" quaternary :title="t('tree.importTitle')" @click="emit('import')">
         <template #icon>
           <n-icon :component="FileImport" />
         </template>
@@ -911,7 +921,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       <n-button
         size="small"
         quaternary
-        :title="anyExpanded ? '全部收起' : '全部展开'"
+        :title="anyExpanded ? t('tree.collapseAll') : t('tree.expandAll')"
         @click="toggleExpandAll"
       >
         <template #icon>
@@ -927,7 +937,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
     <div v-if="starredApis.length" class="starred">
       <div class="starred-head" @click="starredCollapsed = !starredCollapsed">
         <n-icon size="13" :component="starredCollapsed ? ChevronRight : ChevronDown" />
-        <span class="starred-title">收藏</span>
+        <span class="starred-title">{{ t('tree.starredTitle') }}</span>
         <span class="starred-count">{{ starredApis.length }}</span>
       </div>
 
@@ -941,15 +951,15 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           @contextmenu.prevent.stop="openStarredMenu($event, api)"
         >
           <span class="starred-method" :style="{ color: methodColor(api.method) }">{{ api.method }}</span>
-          <span class="starred-name">{{ api.name || '(未命名接口)' }}</span>
-          <button class="starred-star" title="取消收藏" @click.stop="toggleStar(api)">
+          <span class="starred-name">{{ api.name || t('tree.untitledApi') }}</span>
+          <button class="starred-star" :title="t('layout.removeFavorite')" @click.stop="toggleStar(api)">
             <n-icon size="14" :component="Star" />
           </button>
         </div>
       </template>
     </div>
 
-    <div class="group-title">目录</div>
+    <div class="group-title">{{ t('tree.groupTitle') }}</div>
 
     <div class="body" @contextmenu.prevent="openBlankMenu">
       <n-spin :show="tree.loading">
@@ -992,27 +1002,30 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
     <n-modal
       v-model:show="showDelete"
       preset="card"
-      :title="deleteTarget ? '删除目录「' + deleteTarget.node.name + '」' : '删除目录'"
+      :title="deleteTarget ? t('tree.deleteFolderTitle', { name: deleteTarget.node.name }) : t('tree.deleteFolder')"
       style="width: 460px; max-width: 92vw"
     >
       <template v-if="deleteTarget">
         <p class="delete-desc">
-          该目录下有 {{ deleteTarget.counts.folders }} 个子目录、{{ deleteTarget.counts.apis }} 个接口。请选择如何处理这些子项：
+          {{ t('tree.deleteFolderCounts', {
+            folders: deleteTarget.counts.folders,
+            apis: deleteTarget.counts.apis
+          }) }}
         </p>
-        <p class="delete-desc recycle">删除后可以在回收站里恢复（保留 30 天）。</p>
+        <p class="delete-desc recycle">{{ t('tree.deleteFolderRecycle') }}</p>
         <n-space vertical size="small">
           <n-button block @click="confirmDeleteFolder('move')">
-            仅删除目录（子项移到上一级）
+            {{ t('tree.deleteFolderKeepChildren') }}
           </n-button>
           <n-button block type="error" @click="confirmDeleteFolder('delete')">
-            连同子项一起删除
+            {{ t('tree.deleteFolderWithChildren') }}
           </n-button>
         </n-space>
       </template>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showDelete = false">取消</n-button>
+          <n-button @click="showDelete = false">{{ t('app.cancel') }}</n-button>
         </n-space>
       </template>
     </n-modal>

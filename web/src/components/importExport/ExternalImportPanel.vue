@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NInput, NRadioButton, NRadioGroup, NSpace, useMessage } from 'naive-ui';
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
@@ -23,14 +24,18 @@ const props = defineProps({
 const projects = useProjectStore();
 const tree = useTreeStore();
 const message = useMessage();
+const { t } = useI18n();
 
-const LABELS = {
-  yapi: { title: 'YApi', placeholder: '粘贴 YApi 项目「数据导出 → json」下载下来的文件内容' },
-  apifox: { title: 'Apifox', placeholder: '粘贴 Apifox「导出 → Apifox 格式」下载下来的 .apifox.json 内容' }
-};
+/** 两个格式的输入框提示。用 computed 包住，切语言后跟着变 */
+const LABELS = computed(function () {
+  return {
+    yapi: { title: 'YApi', placeholder: t('importExport.yapiPlaceholder') },
+    apifox: { title: 'Apifox', placeholder: t('importExport.apifoxPlaceholder') }
+  };
+});
 
 const label = computed(function () {
-  return LABELS[props.format] || LABELS.yapi;
+  return LABELS.value[props.format] || LABELS.value.yapi;
 });
 
 const canEdit = computed(function () { return projects.canEdit; });
@@ -79,7 +84,7 @@ function clearFile() {
 
 async function runPreview() {
   if (!String(payload() || '').trim()) {
-    message.warning('请选择文件，或者把 JSON 粘在下面');
+    message.warning(t('importExport.pickOrPaste'));
     return;
   }
 
@@ -95,7 +100,10 @@ async function runPreview() {
   }
 }
 
-const FORMAT_LABELS = { postman: 'Postman 集合', yapi: 'YApi', apifox: 'Apifox' };
+/** 预览里「识别为」那一行。postman 是格式名，保留原样（见提交总结里那条提醒） */
+const FORMAT_LABELS = computed(function () {
+  return { postman: t('importExport.formatPostman'), yapi: 'YApi', apifox: 'Apifox' };
+});
 
 async function runImport() {
   busy.value = true;
@@ -113,7 +121,7 @@ async function runImport() {
       await tree.refresh();
     }
 
-    message.success('导入完成');
+    message.success(t('importExport.done'));
     clearFile();
     text.value = '';
     preview.value = null;
@@ -128,12 +136,12 @@ async function runImport() {
 <template>
   <div class="pane">
     <n-space align="center" :size="8">
-      <n-button size="small" @click="pickFile">选择文件…</n-button>
+      <n-button size="small" @click="pickFile">{{ t('importExport.pickFile') }}</n-button>
       <template v-if="fileInfo">
         <span class="hint">{{ fileInfo }}</span>
-        <n-button size="small" quaternary @click="clearFile">清除</n-button>
+        <n-button size="small" quaternary @click="clearFile">{{ t('importExport.clear') }}</n-button>
       </template>
-      <span v-else class="hint">或者直接把 JSON 粘在下面</span>
+      <span v-else class="hint">{{ t('importExport.orPaste') }}</span>
     </n-space>
 
     <n-input
@@ -146,18 +154,17 @@ async function runImport() {
     />
 
     <n-space align="center" :size="8">
-      <n-button size="small" secondary :loading="busy" @click="runPreview">解析预览</n-button>
+      <n-button size="small" secondary :loading="busy" @click="runPreview">{{ t('importExport.preview') }}</n-button>
     </n-space>
 
     <template v-if="preview">
       <n-alert type="info" :show-icon="false" class="notice">
-        <div>识别为：{{ FORMAT_LABELS[preview.format] || preview.format }}</div>
-        <div>名称：{{ preview.name }}</div>
+        <div>{{ t('importExport.detected') }} {{ FORMAT_LABELS[preview.format] || preview.format }}</div>
+        <div>{{ t('importExport.nameLabel') }} {{ preview.name }}</div>
         <div v-if="preview.stats">
-          目录 {{ preview.stats.folders }} 个、接口 {{ preview.stats.apis }} 个、
-          示例 {{ preview.stats.examples }} 个
-          <template v-if="preview.stats.scripts">、脚本 {{ preview.stats.scripts }} 个</template>
-          <template v-if="preview.stats.environments">、环境 {{ preview.stats.environments }} 个</template>
+          {{ t('importExport.stats', { folders: preview.stats.folders, apis: preview.stats.apis, examples: preview.stats.examples }) }}
+          <template v-if="preview.stats.scripts">{{ t('importExport.statsScripts', { n: preview.stats.scripts }) }}</template>
+          <template v-if="preview.stats.environments">{{ t('importExport.statsEnvs', { n: preview.stats.environments }) }}</template>
         </div>
       </n-alert>
 
@@ -173,16 +180,16 @@ async function runImport() {
 
       <n-radio-group v-if="canEdit" v-model:value="mode">
         <n-space vertical size="small">
-          <n-radio-button value="new">新建项目（名字取文件里的项目名）</n-radio-button>
+          <n-radio-button value="new">{{ t('importExport.newProject') }}</n-radio-button>
           <n-radio-button value="into">
-            导入到当前项目{{ projects.current ? '「' + projects.current.name + '」' : '' }}
+            {{ t('importExport.intoCurrent') }}{{ projects.current ? t('importExport.quoted', { name: projects.current.name }) : '' }}
           </n-radio-button>
         </n-space>
       </n-radio-group>
-      <p v-else class="hint">当前角色是只读，只能导入成新项目（导入后你就是它的 owner）。</p>
+      <p v-else class="hint">{{ t('importExport.readonlyHint') }}</p>
 
       <n-space justify="end">
-        <n-button size="small" type="primary" :loading="busy" @click="runImport">导入</n-button>
+        <n-button size="small" type="primary" :loading="busy" @click="runImport">{{ t('importExport.importAction') }}</n-button>
       </n-space>
     </template>
   </div>

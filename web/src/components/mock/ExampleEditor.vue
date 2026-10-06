@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -36,44 +37,53 @@ const props = defineProps({
 const emit = defineEmits(['saved']);
 
 const message = useMessage();
+const { t } = useI18n();
 
-const RESPONSE_TYPES = [
-  { label: 'JSON', value: 'json' },
-  { label: '文本', value: 'text' },
-  { label: 'HTML', value: 'html' },
-  { label: 'SSE', value: 'sse' },
-  { label: 'WebSocket', value: 'ws' }
-];
+/** 响应类型的选项。用 computed 包住，切语言后「文本」跟着变 */
+const RESPONSE_TYPES = computed(function () {
+  return [
+    { label: 'JSON', value: 'json' },
+    { label: t('mock.typeText'), value: 'text' },
+    { label: 'HTML', value: 'html' },
+    { label: 'SSE', value: 'sse' },
+    { label: 'WebSocket', value: 'ws' }
+  ];
+});
 
 /**
  * sse / ws 两种示例的 `body` 不是响应体，而是一段**回放场景**（契约第 17 节），
  * 所以编辑器切成 JSON 模式，并且给一行格式说明 + 一个能直接用的骨架。
  * 骨架是「插入示例结构」的内容，也是这两种类型最省事的起点。
+ *
+ * 格式说明只把**注释那一段**交给语言文件：整行里带 `{` / `}`，
+ * 直接写进消息里会被 vue-i18n 当成插值（`Invalid token in placeholder`）。
  */
-const SCENARIO = {
-  sse: {
-    title: 'SSE 回放场景',
-    hint: '{ events: [{ delay /* 毫秒，和上一条的间隔；第一条相对响应头 */, event?, data, id? }], repeat }',
-    template: {
-      events: [
-        { delay: 0, data: '第一条消息' },
-        { delay: 1000, event: 'ping', data: '{"code":0}' }
-      ],
-      repeat: false
+const SCENARIO = computed(function () {
+  return {
+    sse: {
+      title: t('mock.sseScenarioTitle'),
+      hint: '{ events: [{ delay /* ' + t('mock.sseDelayComment') + ' */, event?, data, id? }], repeat }',
+      template: {
+        events: [
+          { delay: 0, data: t('mock.sseFirstMessage') },
+          { delay: 1000, event: 'ping', data: '{"code":0}' }
+        ],
+        repeat: false
+      }
+    },
+    ws: {
+      title: t('mock.wsScenarioTitle'),
+      hint: '{ onOpen: [{ delay, send }], rules: [{ match: { type, value }, reply: [{ delay, send }] }], fallback }',
+      template: {
+        onOpen: [{ delay: 0, send: '{"type":"hello"}' }],
+        rules: [
+          { match: { type: 'equals', value: 'ping' }, reply: [{ delay: 200, send: 'pong' }] }
+        ],
+        fallback: 'echo'
+      }
     }
-  },
-  ws: {
-    title: 'WebSocket 回放场景',
-    hint: '{ onOpen: [{ delay, send }], rules: [{ match: { type, value }, reply: [{ delay, send }] }], fallback }',
-    template: {
-      onOpen: [{ delay: 0, send: '{"type":"hello"}' }],
-      rules: [
-        { match: { type: 'equals', value: 'ping' }, reply: [{ delay: 200, send: 'pong' }] }
-      ],
-      fallback: 'echo'
-    }
-  }
-};
+  };
+});
 
 const draft = ref(null);
 const editorRef = ref(null);
@@ -93,7 +103,7 @@ const isScenario = computed(function () {
 });
 
 const scenario = computed(function () {
-  return draft.value ? SCENARIO[draft.value.responseType] || null : null;
+  return draft.value ? SCENARIO.value[draft.value.responseType] || null : null;
 });
 
 /** 两种场景都是 JSON；普通响应体还是按原来的规则 */
@@ -222,7 +232,7 @@ function onTemplatizeConfirm(payload) {
     saveTimer = null;
   }
   dirty.value = true;
-  message.info('已替换内容，确认后点「保存」');
+  message.info(t('mock.templatizeDone'));
 }
 
 /**
@@ -274,7 +284,7 @@ async function runPreview() {
 <template>
   <div v-if="draft" class="example-editor">
     <div class="toolbar">
-      <n-form-item label="状态码" :show-feedback="false" class="status">
+      <n-form-item :label="t('mock.statusCode')" :show-feedback="false" class="status">
         <n-input-number
           size="small"
           :value="draft.status"
@@ -285,7 +295,7 @@ async function runPreview() {
         />
       </n-form-item>
 
-      <n-form-item label="响应类型" :show-feedback="false" class="type">
+      <n-form-item :label="t('mock.responseType')" :show-feedback="false" class="type">
         <n-select
           size="small"
           :value="draft.responseType"
@@ -298,12 +308,12 @@ async function runPreview() {
       <span class="spacer" />
 
       <template v-if="!readonly">
-        <n-tag v-if="dirty" size="tiny" :bordered="false" type="warning">未保存</n-tag>
+        <n-tag v-if="dirty" size="tiny" :bordered="false" type="warning">{{ t('mock.unsaved') }}</n-tag>
 
-        <n-button size="small" secondary :disabled="!dirty" @click="save">保存</n-button>
+        <n-button size="small" secondary :disabled="!dirty" @click="save">{{ t('mock.save') }}</n-button>
 
         <placeholder-menu :placeholders="placeholders" @insert="insertPlaceholder">
-          <n-button size="small" quaternary>插入 Mock 字段</n-button>
+          <n-button size="small" quaternary>{{ t('mock.insertPlaceholder') }}</n-button>
         </placeholder-menu>
 
         <n-dropdown
@@ -312,26 +322,26 @@ async function runPreview() {
           :options="templateOptions"
           @select="applyTemplate"
         >
-          <n-button size="small" quaternary>常用模板</n-button>
+          <n-button size="small" quaternary>{{ t('mock.commonTemplates') }}</n-button>
         </n-dropdown>
 
         <!-- 智能模板化会整段重写响应体，对「回放场景」是错的，两种场景下不出现 -->
         <n-button v-if="!isScenario" size="small" quaternary @click="openTemplatize">
-          智能模板化
+          {{ t('mock.templatize') }}
         </n-button>
       </template>
 
       <n-button size="small" secondary type="primary" :loading="previewing" @click="runPreview">
-        预览
+        {{ t('mock.preview') }}
       </n-button>
     </div>
 
     <div class="block">
-      <p class="label">响应头</p>
+      <p class="label">{{ t('mock.responseHeaders') }}</p>
       <key-value-table
         v-model="draft.headers"
-        key-placeholder="名称"
-        value-placeholder="值"
+        :key-placeholder="t('mock.headerName')"
+        :value-placeholder="t('mock.headerValue')"
         :disabled="readonly"
         @update:model-value="scheduleSave"
       />
@@ -339,26 +349,26 @@ async function runPreview() {
 
     <div class="block body-block">
       <div class="body-head">
-        <p class="label">{{ scenario ? scenario.title : '响应体' }}</p>
+        <p class="label">{{ scenario ? scenario.title : t('mock.responseBody') }}</p>
         <span class="spacer" />
         <n-button
           v-if="canFormat && !readonly"
           size="tiny"
           quaternary
-          title="⇧⌥F。带 {{变量}} 也能美化；只调整空白，数字和字符串都一字不改"
+          :title="t('mock.prettyTitleLead') + '{{变量}}' + t('mock.prettyTitleTail')"
           @click="formatBody"
         >
-          美化
+          {{ t('mock.pretty') }}
         </n-button>
         <n-button
           v-if="scenario && !readonly"
           size="tiny"
           quaternary
           type="primary"
-          title="会用骨架替换当前内容（可以撤销）"
+          :title="t('mock.skeletonTitle')"
           @click="insertScenario"
         >
-          插入示例结构
+          {{ t('mock.skeleton') }}
         </n-button>
       </div>
 
@@ -383,7 +393,7 @@ async function runPreview() {
     <n-modal
       v-model:show="showPreview"
       preset="card"
-      title="预览"
+      :title="t('mock.preview')"
       style="width: 720px; max-width: 94vw"
     >
       <template v-if="previewResult">
@@ -397,7 +407,7 @@ async function runPreview() {
         </n-alert>
 
         <n-alert v-if="!previewResult.jsonValid" type="error" :show-icon="false" class="notice">
-          JSON 不合法：{{ previewResult.jsonError }}
+          {{ t('mock.jsonInvalid', { message: previewResult.jsonError }) }}
         </n-alert>
 
         <pre class="preview-body">{{ previewResult.rendered }}</pre>

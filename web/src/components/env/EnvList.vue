@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { Check, Dots, Plus } from '@vicons/tabler';
@@ -14,6 +15,7 @@ import ContextMenu from '@/components/common/ContextMenu.vue';
  */
 const envs = useEnvStore();
 const gateway = useGatewayStore();
+const { t } = useI18n();
 
 /** 内置 Mock 环境固定排在最上面：单击编辑变量，双击设为当前（本机模式下 mock 用不了，不能设） */
 function openMock() {
@@ -23,7 +25,7 @@ function openMock() {
 function useMock() {
   if (envs.selectedId === MOCK_ENV_ID || !gateway.mockAvailable) return;
   envs.select(MOCK_ENV_ID);
-  message.success('已切换到「Mock」');
+  message.success(t('env.switchedToMock'));
 }
 const projects = useProjectStore();
 const message = useMessage();
@@ -63,14 +65,14 @@ function openEnv(env) {
 function useEnv(env) {
   if (env.id === envs.selectedId) return;
   envs.select(env.id);
-  message.success('已切换到「' + env.name + '」');
+  message.success(t('env.switchedTo', { name: env.name }));
 }
 
 async function createEnv() {
   try {
-    const env = await envs.create({ name: '新环境', variables: [] });
+    const env = await envs.create({ name: t('env.newEnvName'), variables: [] });
     envs.edit(env.id);
-    message.success('已创建');
+    message.success(t('env.created'));
   } catch (err) {
     message.error(err.message);
   }
@@ -78,11 +80,11 @@ async function createEnv() {
 
 function menuOptions(env) {
   const items = [];
-  if (env.id !== envs.selectedId) items.push({ label: '设为当前', key: 'use' });
+  if (env.id !== envs.selectedId) items.push({ label: t('env.setCurrent'), key: 'use' });
   if (canEdit.value) {
-    items.push({ label: '复制', key: 'duplicate' });
+    items.push({ label: t('env.duplicate'), key: 'duplicate' });
     items.push({ type: 'divider', key: 'd1' });
-    items.push({ label: '删除', key: 'delete', props: { style: 'color: #eb2013' } });
+    items.push({ label: t('app.delete'), key: 'delete', props: { style: 'color: #eb2013' } });
   }
   return items;
 }
@@ -92,18 +94,18 @@ async function onMenuSelect(env, key) {
 
   if (key === 'use') {
     envs.select(env.id);
-    message.success('已设为当前环境');
+    message.success(t('env.setCurrentDone'));
     return;
   }
 
   if (key === 'duplicate') {
     try {
       const created = await envs.create({
-        name: env.name + ' 副本',
+        name: env.name + t('env.copySuffix'),
         variables: env.variables || []
       });
       envs.edit(created.id);
-      message.success('已复制');
+      message.success(t('app.copied'));
     } catch (err) {
       message.error(err.message);
     }
@@ -112,14 +114,14 @@ async function onMenuSelect(env, key) {
 
   if (key === 'delete') {
     dialog.error({
-      title: '删除环境',
-      content: '确定删除「' + env.name + '」吗？用了它里面变量的请求会变成未定义。删除后可以在回收站里恢复（保留 30 天）。',
-      positiveText: '删除',
-      negativeText: '取消',
+      title: t('env.deleteTitle'),
+      content: t('env.deleteBody', { name: env.name }),
+      positiveText: t('app.delete'),
+      negativeText: t('app.cancel'),
       onPositiveClick: async function () {
         try {
           await envs.remove(env.id);
-          message.success('已删除');
+          message.success(t('mock.deleted'));
         } catch (err) {
           message.error(err.message);
         }
@@ -132,12 +134,12 @@ async function onMenuSelect(env, key) {
 <template>
   <div class="env-list">
     <div class="head">
-      <span class="group-title">环境</span>
+      <span class="group-title">{{ t('env.title') }}</span>
       <n-button v-if="canEdit" size="tiny" quaternary @click="createEnv">
         <template #icon>
           <n-icon :component="Plus" />
         </template>
-        新建环境
+        {{ t('env.newEnv') }}
       </n-button>
     </div>
 
@@ -152,7 +154,7 @@ async function onMenuSelect(env, key) {
           <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
         </span>
         <span class="name">Mock</span>
-        <span class="builtin">内置</span>
+        <span class="builtin">{{ t('env.builtin') }}</span>
       </div>
 
       <div
@@ -169,7 +171,7 @@ async function onMenuSelect(env, key) {
           <n-icon v-if="env.id === envs.selectedId" size="14" :component="Check" />
         </span>
         <span class="name">{{ env.name }}</span>
-        <span v-if="envs.isDirty(env.id)" class="dirty-dot" title="有没保存的修改" />
+        <span v-if="envs.isDirty(env.id)" class="dirty-dot" :title="t('env.dirtyTitle')" />
 
         <n-dropdown
           trigger="click"
@@ -178,7 +180,7 @@ async function onMenuSelect(env, key) {
           @update:show="(v) => { openMenuId = v ? env.id : ''; }"
           @select="(key) => onMenuSelect(env, key)"
         >
-          <button class="more" title="更多" @click.stop>
+          <button class="more" :title="t('env.more')" @click.stop>
             <n-icon size="15" :component="Dots" />
           </button>
         </n-dropdown>

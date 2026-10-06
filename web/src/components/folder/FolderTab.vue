@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useMessage } from 'naive-ui';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
@@ -33,6 +34,7 @@ const projects = useProjectStore();
 const tree = useTreeStore();
 const tabs = useTabsStore();
 const message = useMessage();
+const { t } = useI18n();
 
 const saving = ref(false);
 
@@ -62,12 +64,12 @@ const parentPath = computed(function () {
 const authLevels = computed(function () {
   const levels = folderChain(tree.folders, folder.value ? folder.value.parentId : null)
     .map(function (item) {
-      return { auth: item.auth, label: '目录「' + item.name + '」' };
+      return { auth: item.auth, label: t('folder.authLevelFolder', { name: item.name }) };
     });
 
   levels.push({
     auth: projects.current ? projects.current.auth : null,
-    label: '项目'
+    label: t('folder.authLevelProject')
   });
   return levels;
 });
@@ -87,7 +89,7 @@ async function renameTitle(name) {
   try {
     await tree.renameFolder(props.tab.folderId, name);
     tabs.applyRename('folder', props.tab.folderId, name);
-    message.success('已重命名');
+    message.success(t('tree.renamed'));
   } catch (err) {
     message.error(err.message);
   }
@@ -95,7 +97,7 @@ async function renameTitle(name) {
 
 async function save() {
   if (!String(spec.value.name || '').trim()) {
-    message.warning('请填写目录名称');
+    message.warning(t('folder.nameRequired'));
     return;
   }
 
@@ -112,7 +114,7 @@ async function save() {
       preflight: spec.value.preflight
     });
     tabs.markFolderSaved(props.tab, saved);
-    message.success('已保存');
+    message.success(t('mock.saved'));
   } catch (err) {
     message.error(err.message);
   } finally {
@@ -127,7 +129,7 @@ function onKeydown(event) {
 
   // 只读角色连快捷键也要挡住，并说清楚为什么
   if (!canEdit.value) {
-    message.warning('当前角色是只读，不能保存修改');
+    message.warning(t('env.readonly'));
     return;
   }
   save();
@@ -147,19 +149,19 @@ onBeforeUnmount(function () {
     <div class="head">
       <!-- 双击改名（参考 Postman）：立刻存，只改名字，下面表单里别的没保存的修改不受影响 -->
       <span class="title">
-        <inline-rename :value="spec.name" placeholder="目录设置" :editable="canEdit" @commit="renameTitle" />
+        <inline-rename :value="spec.name" :placeholder="t('folder.settingsTitle')" :editable="canEdit" @commit="renameTitle" />
       </span>
-      <span v-if="parentPath" class="path">位置：{{ parentPath }}</span>
+      <span v-if="parentPath" class="path">{{ t('folder.location', { path: parentPath }) }}</span>
       <span class="spacer" />
       <!-- 只读角色也能运行：发请求本来就是 viewer 要做的事 -->
       <n-button
         size="small"
         secondary
         :disabled="!folder"
-        title="按顺序运行这个目录下的接口"
+        :title="t('folder.runHint')"
         @click="emit('run', tab.folderId)"
       >
-        运行
+        {{ t('tree.run') }}
       </n-button>
       <n-button
         v-if="canEdit"
@@ -169,26 +171,26 @@ onBeforeUnmount(function () {
         :disabled="!folder"
         @click="save"
       >
-        保存
+        {{ t('mock.save') }}
       </n-button>
     </div>
 
     <div class="content">
       <n-alert v-if="!folder" type="warning" :show-icon="false" class="alert">
-        这个目录已经不在了，它可能刚被删掉。
+        {{ t('folder.gone') }}
       </n-alert>
 
       <template v-else>
         <n-alert v-if="!canEdit" type="info" :show-icon="false" class="alert">
-          当前角色是只读，只能查看目录设置。
+          {{ t('folder.readonlyHint') }}
         </n-alert>
 
-        <n-card :bordered="false" size="small" title="基本信息">
+        <n-card :bordered="false" size="small" :title="t('folder.basicTitle')">
           <n-form label-placement="top">
-            <n-form-item label="名称">
-              <n-input v-model:value="spec.name" :disabled="!canEdit" placeholder="目录名称" />
+            <n-form-item :label="t('folder.nameLabel')">
+              <n-input v-model:value="spec.name" :disabled="!canEdit" :placeholder="t('folder.namePlaceholder')" />
             </n-form-item>
-            <n-form-item label="描述">
+            <n-form-item :label="t('folder.descLabel')">
               <n-input
                 v-model:value="spec.description"
                 type="textarea"
@@ -199,18 +201,13 @@ onBeforeUnmount(function () {
           </n-form>
         </n-card>
 
-        <n-card :bordered="false" size="small" title="目录变量" class="card">
-          <p class="tip">
-            目录变量在发送时展开，优先级是「项目 &lt; 外层目录 &lt; 内层目录 &lt; 环境」，
-            后面的覆盖前面的。这个目录下的接口、子目录都能用到。
-          </p>
+        <n-card :bordered="false" size="small" :title="t('folder.varsTitle')" class="card">
+          <p class="tip">{{ t('folder.varsTip') }}</p>
           <var-table v-model="spec.variables" :disabled="!canEdit" />
         </n-card>
 
-        <n-card :bordered="false" size="small" title="目录级鉴权" class="card">
-          <p class="tip">
-            这个目录下的接口和子目录选了「继承父级」时，就沿用到这一级。
-          </p>
+        <n-card :bordered="false" size="small" :title="t('folder.authTitle')" class="card">
+          <p class="tip">{{ t('folder.authTip') }}</p>
           <auth-editor v-model="spec.auth" :disabled="!canEdit" :inherit-hint="authHint" />
         </n-card>
 
@@ -218,24 +215,19 @@ onBeforeUnmount(function () {
           公共请求头（第五轮第 1 节）：这个目录下的接口发送时都会带上。
           内层目录 / 接口自己写了同名的，以更靠近接口的那一层为准。
         -->
-        <n-card :bordered="false" size="small" title="公共请求头" class="card">
-          <p class="tip">
-            这个目录下的所有接口发送时都会带上这些请求头；接口里有同名的请求头时，用接口自己的。
-          </p>
+        <n-card :bordered="false" size="small" :title="t('folder.headersTitle')" class="card">
+          <p class="tip">{{ t('folder.headersTip') }}</p>
           <key-value-table
             v-model="spec.headers"
             :disabled="!canEdit"
             kind="common-headers"
-            key-placeholder="请求头"
-            value-placeholder="值"
+            :key-placeholder="t('folder.headerNamePlaceholder')"
+            :value-placeholder="t('folder.headerValuePlaceholder')"
           />
         </n-card>
 
-        <n-card :bordered="false" size="small" title="脚本" class="card">
-          <p class="tip">
-            这个目录下的接口发送时，会先按「项目 → 目录（从外到内）→ 接口」执行「请求前」脚本，
-            响应回来后再按同样的顺序执行「响应后」脚本。
-          </p>
+        <n-card :bordered="false" size="small" :title="t('folder.scriptsTitle')" class="card">
+          <p class="tip">{{ t('folder.scriptsTip') }}</p>
           <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="180px" />
         </n-card>
 
@@ -243,11 +235,8 @@ onBeforeUnmount(function () {
           前置接口（第十轮第 3 节）：这个目录下的接口发送前先自动调一遍它（通常是登录接口）。
           没设就是「跟着外层走」；设了「不使用」就挡住往上找。
         -->
-        <n-card :bordered="false" size="small" title="前置接口" class="card">
-          <p class="tip">
-            这个目录下的接口发送之前，先自动调一遍选中的接口（通常是登录接口），
-            把 token 拿回来。不设置就跟着外层（上级目录 → 项目）走。
-          </p>
+        <n-card :bordered="false" size="small" :title="t('folder.preflightTitle')" class="card">
+          <p class="tip">{{ t('folder.preflightTip') }}</p>
           <preflight-panel
             v-model="spec.preflight"
             :apis="tree.apis"

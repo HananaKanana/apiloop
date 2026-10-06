@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { NButton, NInput, NModal, NRadio, NRadioGroup, NSpace, useMessage } from 'naive-ui';
 import * as sharesApi from '@/api/shares';
@@ -28,6 +29,7 @@ const props = defineProps({
 const emit = defineEmits(['update:show']);
 
 const message = useMessage();
+const { t } = useI18n();
 const router = useRouter();
 
 /** 去项目设置的「分享链接」页签：所有已生成的链接都在那里复制、撤销 */
@@ -44,7 +46,9 @@ const errorText = ref('');
 const created = ref(null);
 
 const title = computed(function () {
-  return props.folderId ? '分享目录「' + props.scopeName + '」的文档' : '分享整个项目的文档';
+  return props.folderId
+    ? t('share.dialogTitleFolder', { name: props.scopeName })
+    : t('share.dialogTitleProject');
 });
 
 const link = computed(function () {
@@ -84,7 +88,7 @@ async function generate() {
 async function copy() {
   try {
     await copyText(link.value);
-    message.success('链接已复制');
+    message.success(t('share.linkCopied'));
   } catch (err) {
     message.error(err.message);
   }
@@ -105,12 +109,12 @@ function close() {
   >
     <div v-if="!created" class="form">
       <div class="field">
-        <span class="label">有效期</span>
+        <span class="label">{{ t('share.expires') }}</span>
         <n-radio-group v-model:value="expiresInDays" size="small">
           <n-space :size="14">
-            <n-radio value="30">30 天</n-radio>
-            <n-radio value="7">7 天</n-radio>
-            <n-radio value="never">永久</n-radio>
+            <n-radio value="30">{{ t('share.expires30') }}</n-radio>
+            <n-radio value="7">{{ t('share.expires7') }}</n-radio>
+            <n-radio value="never">{{ t('share.expiresNever') }}</n-radio>
           </n-space>
         </n-radio-group>
       </div>
@@ -118,25 +122,24 @@ function close() {
       <div v-if="errorText" class="error">{{ errorText }}</div>
 
       <n-button type="primary" size="small" :loading="creating" @click="generate">
-        生成链接
+        {{ t('share.generate') }}
       </n-button>
     </div>
 
     <div v-else class="result">
       <div class="link-row">
         <n-input :value="link" readonly size="small" />
-        <n-button size="small" type="primary" @click="copy">复制</n-button>
+        <n-button size="small" type="primary" @click="copy">{{ t('share.copy') }}</n-button>
       </div>
       <p class="hint">
-        这条链接已经生效。所有分享过的链接都在
-        <a class="manage-link" href="javascript:void(0)" @click="manageLinks">项目设置 → 分享链接</a>
-        里，可以再复制或撤销。
+        {{ t('share.linkActiveLead') }}
+        <a class="manage-link" href="javascript:void(0)" @click="manageLinks">{{ t('share.manageLinkText') }}</a>
+        {{ t('share.linkActiveTail') }}
       </p>
     </div>
 
     <p class="tip">
-      打开链接的人不用登录就能看到这些接口的地址、参数和示例。保密变量和鉴权信息不会出现。
-      分享的是云端的数据，本机还没同步上去的改动看不到。
+      {{ t('share.tip') }}
     </p>
   </n-modal>
 </template>

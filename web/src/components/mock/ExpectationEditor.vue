@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NFormItem, NInput, NSelect, NSpace, useMessage } from 'naive-ui';
 import * as expectationsApi from '@/api/expectations';
 import { CONDITION_OPS, CONDITION_SOURCES, opNeedsValue } from '@/utils/expectation';
@@ -23,6 +24,7 @@ const props = defineProps({
 const emit = defineEmits(['saved', 'failed']);
 
 const message = useMessage();
+const { t } = useI18n();
 
 const draft = ref(null);
 const saving = ref(false);
@@ -56,7 +58,7 @@ watch(
 
 const exampleOptions = computed(function () {
   return (props.examples || []).map(function (item) {
-    return { label: item.name || '(未命名示例)', value: item.id };
+    return { label: item.name || t('mock.unnamedExample'), value: item.id };
   });
 });
 
@@ -106,7 +108,7 @@ async function save() {
       conditions: draft.value.conditions
     });
     emit('saved', data.expectation);
-    message.success('已保存');
+    message.success(t('mock.saved'));
   } catch (err) {
     // 400 的原因（正则不合法、示例不属于该接口…）就地显示，不要只弹一句「保存失败」
     errorText.value = err.message;
@@ -124,22 +126,22 @@ async function save() {
     </n-alert>
 
     <n-space align="center" :size="10" :wrap="false" class="head">
-      <n-form-item label="名称" :show-feedback="false" class="name">
+      <n-form-item :label="t('mock.name')" :show-feedback="false" class="name">
         <n-input
           v-model:value="draft.name"
           size="small"
           :disabled="readonly"
-          placeholder="例如：id 为 404 时返回不存在"
+          :placeholder="t('mock.expectationNamePlaceholder')"
         />
       </n-form-item>
 
-      <n-form-item label="返回示例" :show-feedback="false" class="example">
+      <n-form-item :label="t('mock.exampleLabel')" :show-feedback="false" class="example">
         <n-select
           v-model:value="draft.exampleId"
           size="small"
           :disabled="readonly"
           :options="exampleOptions"
-          placeholder="选一个示例"
+          :placeholder="t('mock.examplePlaceholder')"
         />
       </n-form-item>
 
@@ -153,17 +155,17 @@ async function save() {
         :loading="saving"
         @click="save"
       >
-        保存
+        {{ t('mock.save') }}
       </n-button>
     </n-space>
 
-    <p class="label">条件（同一行的多个条件是「且」的关系）</p>
+    <p class="label">{{ t('mock.conditionsLabel') }}</p>
 
     <div class="conditions">
       <div class="row head-row">
-        <span class="cell in">位置</span>
+        <span class="cell in">{{ t('mock.colSource') }}</span>
         <span class="cell key">key</span>
-        <span class="cell op">操作</span>
+        <span class="cell op">{{ t('mock.colOperator') }}</span>
         <span class="cell value">value</span>
         <span class="cell action" />
       </div>
@@ -182,7 +184,7 @@ async function save() {
             v-model:value="condition.key"
             size="small"
             :disabled="readonly"
-            placeholder="字段名，body 支持 a.b"
+            :placeholder="t('mock.conditionKeyPlaceholder')"
           />
         </span>
         <span class="cell op">
@@ -199,9 +201,9 @@ async function save() {
             v-model:value="condition.value"
             size="small"
             :disabled="readonly"
-            placeholder="要比较的值"
+            :placeholder="t('mock.conditionValuePlaceholder')"
           />
-          <span v-else class="muted">（这个操作不看 value）</span>
+          <span v-else class="muted">{{ t('mock.conditionNoValue') }}</span>
         </span>
         <span class="cell action">
           <n-button
@@ -211,16 +213,16 @@ async function save() {
             type="error"
             @click="removeCondition(index)"
           >
-            删除
+            {{ t('app.delete') }}
           </n-button>
         </span>
       </div>
 
-      <p v-if="!draft.conditions.length" class="empty">还没有条件，这条期望会对所有请求生效。</p>
+      <p v-if="!draft.conditions.length" class="empty">{{ t('mock.noConditions') }}</p>
     </div>
 
     <n-button v-if="!readonly" size="small" quaternary type="primary" @click="addCondition">
-      ＋ 添加条件
+      {{ t('mock.addCondition') }}
     </n-button>
   </div>
 </template>
