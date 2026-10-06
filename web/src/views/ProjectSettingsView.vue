@@ -123,7 +123,7 @@ async function load() {
     if (!tree.apis.length) await tree.load();
     const project = projects.projects.find(function (item) { return item.id === projectId.value; });
     if (!project) {
-      errorText.value = '找不到这个项目，它可能已经被删除了。';
+      errorText.value = t('views.psProjectMissing');
       return;
     }
     fillFrom(project);
@@ -136,7 +136,7 @@ async function load() {
 
 async function save() {
   if (!form.value.name.trim()) {
-    message.warning('请填写项目名称');
+    message.warning(t('views.psNameRequired'));
     return;
   }
 
@@ -161,7 +161,7 @@ async function save() {
     }
 
     await projects.update(projectId.value, patch);
-    message.success('已保存');
+    message.success(t('views.psSaved'));
   } catch (err) {
     // 标识被占用这类 400 原样提示，服务端文案已经说清楚了
     message.error(err.message);
@@ -172,14 +172,14 @@ async function save() {
 
 function removeProject() {
   dialog.error({
-    title: '删除项目',
-    content: '确定删除「' + form.value.name + '」吗？项目下的接口、示例和历史都会一起删掉，不可撤销。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('views.psDeleteTitle'),
+    content: t('views.psDeleteBody', { name: form.value.name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await projects.remove(projectId.value);
-        message.success('已删除');
+        message.success(t('views.psDeleted'));
         router.replace('/workbench');
       } catch (err) {
         message.error(err.message);
@@ -202,8 +202,8 @@ watch(function () { return route.params.pid; }, load);
   <div class="page">
     <div class="header">
       <n-space align="center">
-        <n-button quaternary size="small" @click="router.push('/workbench')">← 返回</n-button>
-        <span class="title">项目设置</span>
+        <n-button quaternary size="small" @click="router.push('/workbench')">{{ t('views.psBack') }}</n-button>
+        <span class="title">{{ t('views.psTitle') }}</span>
       </n-space>
       <n-space align="center">
         <n-button
@@ -214,7 +214,7 @@ watch(function () { return route.params.pid; }, load);
           :disabled="loading || Boolean(errorText)"
           @click="removeProject"
         >
-          删除项目
+          {{ t('views.psDeleteAction') }}
         </n-button>
         <n-button
           v-if="canEdit"
@@ -224,7 +224,7 @@ watch(function () { return route.params.pid; }, load);
           :disabled="loading || Boolean(errorText)"
           @click="save"
         >
-          保存
+          {{ t('views.psSave') }}
         </n-button>
       </n-space>
     </div>
@@ -237,13 +237,13 @@ watch(function () { return route.params.pid; }, load);
       </n-alert>
 
       <n-tabs v-else v-model:value="activeTab" type="line" size="small" animated>
-        <n-tab-pane name="basic" tab="基本信息">
-          <n-card :bordered="false" size="small" title="基本信息">
+        <n-tab-pane name="basic" :tab="t('views.psTabBasic')">
+          <n-card :bordered="false" size="small" :title="t('views.psTabBasic')">
             <n-form label-placement="top">
-              <n-form-item label="名称">
-                <n-input v-model:value="form.name" :disabled="!isOwner" placeholder="项目名称" />
+              <n-form-item :label="t('views.psNameLabel')">
+                <n-input v-model:value="form.name" :disabled="!isOwner" :placeholder="t('views.psNamePlaceholder')" />
               </n-form-item>
-              <n-form-item label="说明">
+              <n-form-item :label="t('views.psDescLabel')">
                 <n-input
                   v-model:value="form.description"
                   type="textarea"
@@ -252,23 +252,23 @@ watch(function () { return route.params.pid; }, load);
                 />
               </n-form-item>
             </n-form>
-            <p v-if="!isOwner" class="tip">只有 owner 能修改项目名称和标识。</p>
-            <p class="tip">变量、鉴权、公共请求头、前置接口在「请求设置」里；脚本、Mock、数据库各有一个页签。右上角「保存」会一起保存所有页签的改动。</p>
+            <p v-if="!isOwner" class="tip">{{ t('views.psOwnerTip') }}</p>
+            <p class="tip">{{ t('views.psBasicTip') }}</p>
           </n-card>
         </n-tab-pane>
 
         <!-- 请求设置：发送时会用到的那几样（变量、鉴权、公共请求头、前置接口） -->
-        <n-tab-pane name="request" tab="请求设置">
-          <n-card :bordered="false" size="small" title="项目变量">
+        <n-tab-pane name="request" :tab="t('views.psTabRequest')">
+          <n-card :bordered="false" size="small" :title="t('views.psVarsTitle')">
             <p class="tip">
-              项目变量在发送时先展开，同名的话会被当前环境里的变量覆盖。
+              {{ t('views.psVarsTip') }}
             </p>
             <var-table v-model="form.variables" :disabled="!canEdit" />
           </n-card>
 
-          <n-card :bordered="false" size="small" title="项目级鉴权" class="card">
+          <n-card :bordered="false" size="small" :title="t('views.psAuthTitle')" class="card">
             <p class="tip">
-              接口自己的鉴权留空或选了「继承父级」时，就沿用到这里。
+              {{ t('views.psAuthTip') }}
             </p>
             <auth-editor v-model="form.auth" :disabled="!canEdit" />
           </n-card>
@@ -277,16 +277,16 @@ watch(function () { return route.params.pid; }, load);
             公共请求头（第五轮第 1 节）：这个项目里所有接口发送时都会带上。
             目录 / 接口自己写了同名的，以更靠近接口的那一层为准。
           -->
-          <n-card :bordered="false" size="small" title="公共请求头" class="card">
+          <n-card :bordered="false" size="small" :title="t('views.psHeadersTitle')" class="card">
             <p class="tip">
-              这个项目下的所有接口发送时都会带上这些请求头；接口里有同名的请求头时，用接口自己的。
+              {{ t('views.psHeadersTip') }}
             </p>
             <key-value-table
               v-model="form.headers"
               :disabled="!canEdit"
               kind="common-headers"
-              key-placeholder="请求头"
-              value-placeholder="值"
+              :key-placeholder="t('views.psHeaderNamePlaceholder')"
+              :value-placeholder="t('views.psHeaderValuePlaceholder')"
             />
           </n-card>
 
@@ -294,10 +294,9 @@ watch(function () { return route.params.pid; }, load);
             前置接口（第十轮第 3 节）：token 过期时不用再手动点一次登录。
             目录上也能设，离接口最近的那一层说了算；项目这一层是最外层。
           -->
-          <n-card :bordered="false" size="small" title="前置接口" class="card">
+          <n-card :bordered="false" size="small" :title="t('views.psPreflightTitle')" class="card">
             <p class="tip">
-              发送之前先自动调一遍这个接口（通常是登录接口），把 token 拿回来。
-              目录上单独设过的话，以目录上的为准。
+              {{ t('views.psPreflightTip') }}
             </p>
             <preflight-panel
               v-model="form.preflight"
@@ -307,11 +306,10 @@ watch(function () { return route.params.pid; }, load);
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane name="scripts" tab="脚本">
-          <n-card :bordered="false" size="small" title="项目脚本">
+        <n-tab-pane name="scripts" :tab="t('views.psTabScripts')">
+          <n-card :bordered="false" size="small" :title="t('views.psScriptsTitle')">
             <p class="tip">
-              这个项目里所有接口发送时都会执行：「请求前」脚本在请求发出之前，「响应后」脚本在响应回来之后。
-              顺序是「项目 → 目录（从外到内）→ 接口」。
+              {{ t('views.psScriptsTip') }}
             </p>
             <script-editor v-model="form.scripts" :disabled="!canEdit" min-height="180px" />
           </n-card>
@@ -323,7 +321,7 @@ watch(function () { return route.params.pid; }, load);
         </n-tab-pane>
 
         <n-tab-pane name="mock" tab="Mock">
-          <n-card :bordered="false" size="small" title="Mock 故障模拟">
+          <n-card :bordered="false" size="small" :title="t('views.psFaultTitle')">
             <mock-fault-panel
               v-model="form.mockFaults"
               :pid="projectId"
@@ -337,8 +335,8 @@ watch(function () { return route.params.pid; }, load);
           -->
         </n-tab-pane>
 
-        <n-tab-pane name="database" tab="数据库">
-          <n-card :bordered="false" size="small" title="数据库连接">
+        <n-tab-pane name="database" :tab="t('views.psTabDatabase')">
+          <n-card :bordered="false" size="small" :title="t('views.psDbTitle')">
             <database-panel
               v-model:databases="form.databases"
               :pid="projectId"
@@ -358,7 +356,7 @@ watch(function () { return route.params.pid; }, load);
           <project-backup-panel v-if="projectId" :pid="projectId" />
         </n-tab-pane>
 
-        <n-tab-pane v-if="showCloudTabs" name="members" tab="成员">
+        <n-tab-pane v-if="showCloudTabs" name="members" :tab="t('views.psTabMembers')">
           <members-panel v-if="projectId" :pid="projectId" @left="onLeft" />
         </n-tab-pane>
 
@@ -366,7 +364,7 @@ watch(function () { return route.params.pid; }, load);
           分享链接：数据在云端（分享是云端对外发布的东西），和成员管理一样，
           未登录时整块不渲染。
         -->
-        <n-tab-pane v-if="showCloudTabs" name="shares" tab="分享链接">
+        <n-tab-pane v-if="showCloudTabs" name="shares" :tab="t('views.psTabShares')">
           <share-links-panel v-if="projectId" :pid="projectId" />
         </n-tab-pane>
       </n-tabs>

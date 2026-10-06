@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useMessage } from 'naive-ui';
 import { changePassword } from '@/api/auth';
 import { useSessionStore } from '@/stores/session';
@@ -14,6 +15,7 @@ import { useSessionStore } from '@/stores/session';
  */
 const router = useRouter();
 const message = useMessage();
+const { t } = useI18n();
 const session = useSessionStore();
 
 const form = ref({ oldPassword: '', newPassword: '', confirm: '' });
@@ -24,19 +26,19 @@ async function submit() {
   errorText.value = '';
 
   if (!form.value.oldPassword) {
-    errorText.value = '请填写当前密码';
+    errorText.value = t('views.changeErrOld');
     return;
   }
   if (form.value.newPassword.length < 6) {
-    errorText.value = '新密码至少 6 位';
+    errorText.value = t('views.changeErrShort');
     return;
   }
   if (form.value.newPassword !== form.value.confirm) {
-    errorText.value = '两次输入的新密码不一致';
+    errorText.value = t('views.changeErrMismatch');
     return;
   }
   if (form.value.newPassword === form.value.oldPassword) {
-    errorText.value = '新密码不能和当前密码相同';
+    errorText.value = t('views.changeErrSame');
     return;
   }
 
@@ -44,7 +46,7 @@ async function submit() {
   try {
     await changePassword(form.value.oldPassword, form.value.newPassword);
     session.setUser(Object.assign({}, session.user, { mustChangePassword: false }));
-    message.success('密码已修改');
+    message.success(t('views.changeDone'));
     router.replace('/workbench');
   } catch (err) {
     errorText.value = err.message;
@@ -62,9 +64,9 @@ async function logout() {
 <template>
   <div class="change-page">
     <n-card class="change-card" :bordered="false">
-      <h1 class="brand">请先修改密码</h1>
+      <h1 class="brand">{{ t('views.changeTitle') }}</h1>
       <p class="subtitle">
-        你现在的密码是管理员设置的。为了安全，请先改成只有你自己知道的密码。
+        {{ t('views.changeSubtitle') }}
       </p>
 
       <n-alert v-if="errorText" type="error" :show-icon="false" class="alert">
@@ -72,39 +74,39 @@ async function logout() {
       </n-alert>
 
       <n-form @submit.prevent="submit">
-        <n-form-item label="当前密码">
+        <n-form-item :label="t('views.changeOldLabel')">
           <n-input
             v-model:value="form.oldPassword"
             type="password"
             show-password-on="click"
-            placeholder="管理员给你的密码"
+            :placeholder="t('views.changeOldPlaceholder')"
             autofocus
           />
         </n-form-item>
-        <n-form-item label="新密码">
+        <n-form-item :label="t('views.changeNewLabel')">
           <n-input
             v-model:value="form.newPassword"
             type="password"
             show-password-on="click"
-            placeholder="至少 6 位"
+            :placeholder="t('views.changeNewPlaceholder')"
           />
         </n-form-item>
-        <n-form-item label="确认新密码">
+        <n-form-item :label="t('views.changeConfirmLabel')">
           <n-input
             v-model:value="form.confirm"
             type="password"
             show-password-on="click"
-            placeholder="再输入一次"
+            :placeholder="t('views.changeConfirmPlaceholder')"
             @keyup.enter="submit"
           />
         </n-form-item>
       </n-form>
 
       <n-button type="primary" block :loading="saving" @click="submit">
-        修改并进入
+        {{ t('views.changeSubmit') }}
       </n-button>
       <n-button quaternary block class="logout" @click="logout">
-        退出登录
+        {{ t('views.changeLogout') }}
       </n-button>
     </n-card>
   </div>

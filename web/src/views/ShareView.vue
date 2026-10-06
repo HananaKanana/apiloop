@@ -1,6 +1,7 @@
 <script setup>
 import { computed, h, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { NButton, NIcon, NSpin, NTag, NTree, useMessage } from 'naive-ui';
 import { AlertTriangle, Copy } from '@vicons/tabler';
 import logoUrl from '@/assets/logo.png';
@@ -26,6 +27,7 @@ import { mockUrlFor } from '@/utils/share';
  */
 const route = useRoute();
 const message = useMessage();
+const { t } = useI18n();
 
 const loading = ref(true);
 /** 链接失效时的整页提示（过期 / 撤销 / 不存在，服务端给的都是同一句） */
@@ -64,9 +66,9 @@ onMounted(async function () {
     // 目录默认全展开：这一页就是给人翻文档的，收着反而要一个个点开
     expandedKeys.value = collectFolderKeys(nodes.value);
     if (doc.value.apis.length) selectedId.value = doc.value.apis[0].id;
-    document.title = doc.value.project.name + ' 接口文档';
+    document.title = doc.value.project.name + t('views.shareDocTitleSuffix');
   } catch (err) {
-    errorText.value = err.message || '这个链接已失效，请联系分享给你的人';
+    errorText.value = err.message || t('views.shareLinkInvalid');
   } finally {
     loading.value = false;
   }
@@ -84,7 +86,7 @@ function renderLabel(info) {
   const method = String((node.api && node.api.method) || 'GET').toUpperCase();
   return h('span', { class: 'tree-label', title: node.name }, [
     h('span', { class: 'method', style: { color: methodColor(method) } }, method),
-    h('span', { class: 'name' }, node.name || '(未命名接口)')
+    h('span', { class: 'name' }, node.name || t('utils.untitledApi'))
   ]);
 }
 
@@ -109,7 +111,7 @@ const description = computed(function () {
 const authLabel = computed(function () {
   if (!current.value) return '';
   const type = current.value.authType;
-  if (!type || type === 'inherit') return '跟随上级（这个接口没有单独配置鉴权）';
+  if (!type || type === 'inherit') return t('views.shareAuthInherit');
   return authTypeName({ type: type });
 });
 
@@ -117,8 +119,8 @@ const params = computed(function () {
   const api = current.value;
   if (!api) return [];
   const rows = [];
-  (api.params.path || []).forEach(function (row) { rows.push(Object.assign({ where: '路径' }, row)); });
-  (api.params.query || []).forEach(function (row) { rows.push(Object.assign({ where: '查询' }, row)); });
+  (api.params.path || []).forEach(function (row) { rows.push(Object.assign({ where: t('views.shareWherePath') }, row)); });
+  (api.params.query || []).forEach(function (row) { rows.push(Object.assign({ where: t('views.shareWhereQuery') }, row)); });
   return rows;
 });
 
@@ -184,7 +186,7 @@ const curlText = computed(function () {
 async function copy(text, okText) {
   try {
     await copyText(text);
-    message.success(okText || '已复制');
+    message.success(okText || t('app.copied'));
   } catch (err) {
     message.error(err.message);
   }
@@ -205,7 +207,7 @@ function statusType(status) {
       <span class="brand">apiloop</span>
       <span v-if="doc" class="project">{{ doc.project.name }}</span>
       <span class="spacer" />
-      <span v-if="doc" class="readonly">只读文档</span>
+      <span v-if="doc" class="readonly">{{ t('views.shareReadonly') }}</span>
     </header>
 
     <div v-if="loading" class="center">
@@ -216,7 +218,7 @@ function statusType(status) {
       <div class="invalid">
         <n-icon size="26" :component="AlertTriangle" />
         <p class="invalid-text">{{ errorText }}</p>
-        <p class="invalid-hint">这个链接已失效，请联系分享给你的人。</p>
+        <p class="invalid-hint">{{ t('views.shareLinkInvalidFull') }}</p>
       </div>
     </div>
 
@@ -235,19 +237,19 @@ function statusType(status) {
           :cancelable="false"
           @update:expanded-keys="(keys) => { expandedKeys = keys; }"
         />
-        <p v-else class="side-empty">这次分享里没有接口</p>
+        <p v-else class="side-empty">{{ t('views.shareNoApis') }}</p>
       </aside>
 
       <!-- 右边：选中接口的文档 -->
       <main class="doc">
-        <div v-if="!current" class="doc-empty">从左边选一个接口</div>
+        <div v-if="!current" class="doc-empty">{{ t('views.sharePickApi') }}</div>
 
         <template v-else>
           <div class="doc-head">
             <span class="method" :style="{ color: methodColor(current.method) }">
               {{ String(current.method || 'GET').toUpperCase() }}
             </span>
-            <span class="doc-title">{{ current.name || '(未命名接口)' }}</span>
+            <span class="doc-title">{{ current.name || t('utils.untitledApi') }}</span>
             <!-- 状态与负责人（第四轮第 1 节）：负责人只给名字，服务端查好的 -->
             <span
               v-if="currentStatus"
@@ -257,16 +259,16 @@ function statusType(status) {
               <span class="doc-status-dot" :style="{ background: currentStatus.color }" />
               {{ currentStatus.label }}
             </span>
-            <span v-if="current.ownerName" class="doc-owner">负责人：{{ current.ownerName }}</span>
+            <span v-if="current.ownerName" class="doc-owner">{{ t('utils.ownerPrefix') }}{{ current.ownerName }}</span>
             <span class="spacer" />
-            <n-button size="tiny" secondary @click="copy(curlText, '已复制 cURL')">
-              复制为 cURL
+            <n-button size="tiny" secondary @click="copy(curlText, t('views.shareCopiedCurl'))">
+              {{ t('views.shareCopyAsCurl') }}
             </n-button>
           </div>
 
           <div class="url-row">
             <code class="url">{{ current.url }}</code>
-            <n-button size="tiny" quaternary @click="copy(current.url, '已复制地址')">
+            <n-button size="tiny" quaternary @click="copy(current.url, t('views.shareCopiedUrl'))">
               <template #icon><n-icon :component="Copy" /></template>
             </n-button>
           </div>
@@ -276,7 +278,7 @@ function statusType(status) {
           </section>
 
           <section class="section">
-            <h3 class="section-title">鉴权</h3>
+            <h3 class="section-title">{{ t('views.shareAuthTitle') }}</h3>
             <p class="plain">{{ authLabel }}</p>
           </section>
 
@@ -284,7 +286,7 @@ function statusType(status) {
             <h3 class="section-title">Params</h3>
             <table class="kv">
               <thead>
-                <tr><th>名称</th><th>示例值</th><th>说明</th></tr>
+                <tr><th>{{ t('views.colName') }}</th><th>{{ t('views.colSampleValue') }}</th><th>{{ t('views.colDesc') }}</th></tr>
               </thead>
               <tbody>
                 <tr v-for="(row, index) in params" :key="'p' + index">
@@ -300,12 +302,12 @@ function statusType(status) {
             <h3 class="section-title">Headers</h3>
             <table class="kv">
               <thead>
-                <tr><th>名称</th><th>示例值</th><th>说明</th></tr>
+                <tr><th>{{ t('views.colName') }}</th><th>{{ t('views.colSampleValue') }}</th><th>{{ t('views.colDesc') }}</th></tr>
               </thead>
               <tbody>
                 <tr v-for="(row, index) in current.headers" :key="'h' + index">
                   <td class="key">
-                    {{ row.key }}<span v-if="row.common" class="where">公共</span>
+                    {{ row.key }}<span v-if="row.common" class="where">{{ t('views.shareCommon') }}</span>
                   </td>
                   <td class="value">{{ row.value }}</td>
                   <td class="desc">{{ row.desc }}</td>
@@ -326,7 +328,7 @@ function statusType(status) {
 
             <table v-else-if="bodyView.kind === 'form'" class="kv">
               <thead>
-                <tr><th>字段</th><th>值</th><th>说明</th></tr>
+                <tr><th>{{ t('views.colField') }}</th><th>{{ t('views.colValue') }}</th><th>{{ t('views.colDesc') }}</th></tr>
               </thead>
               <tbody>
                 <tr v-for="(row, index) in bodyView.rows" :key="'b' + index">
@@ -337,14 +339,14 @@ function statusType(status) {
               </tbody>
             </table>
 
-            <p v-else class="plain">二进制文件</p>
+            <p v-else class="plain">{{ t('views.shareBinary') }}</p>
           </section>
 
           <section v-if="current.examples.length" class="section">
-            <h3 class="section-title">示例</h3>
+            <h3 class="section-title">{{ t('views.shareExamples') }}</h3>
             <div v-for="(example, index) in current.examples" :key="'e' + index" class="example">
               <div class="example-head">
-                <span class="example-name">{{ example.name || '(未命名示例)' }}</span>
+                <span class="example-name">{{ example.name || t('views.shareUnnamedExample') }}</span>
                 <n-tag size="tiny" :bordered="false" :type="statusType(example.status)">
                   {{ example.status }}
                 </n-tag>
@@ -355,10 +357,10 @@ function statusType(status) {
 
           <!-- 响应字段说明（第六轮第 2 节）：没写过说明的接口不显示这一块 -->
           <section v-if="current.responseFields && current.responseFields.length" class="section">
-            <h3 class="section-title">响应字段</h3>
+            <h3 class="section-title">{{ t('views.shareResponseFields') }}</h3>
             <table class="kv">
               <thead>
-                <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+                <tr><th>{{ t('views.colField') }}</th><th>{{ t('views.colType') }}</th><th>{{ t('views.colDesc') }}</th></tr>
               </thead>
               <tbody>
                 <tr v-for="(field, index) in current.responseFields" :key="'f' + index">
@@ -366,7 +368,7 @@ function statusType(status) {
                   <td class="type">{{ field.type }}</td>
                   <td class="desc">
                     {{ field.desc }}
-                    <span v-if="field.required" class="required">必有</span>
+                    <span v-if="field.required" class="required">{{ t('views.shareRequired') }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -374,14 +376,14 @@ function statusType(status) {
           </section>
 
           <section class="section">
-            <h3 class="section-title">Mock 地址</h3>
+            <h3 class="section-title">{{ t('views.shareMockTitle') }}</h3>
             <div class="url-row">
               <code class="url">{{ mockUrl }}</code>
-              <n-button size="tiny" quaternary @click="copy(mockUrl, '已复制 Mock 地址')">
+              <n-button size="tiny" quaternary @click="copy(mockUrl, t('views.shareCopiedMock'))">
                 <template #icon><n-icon :component="Copy" /></template>
               </n-button>
             </div>
-            <p class="tip">在地址后面接上接口路径就能直接调通（示例值里的变量要自己换成真实值）。</p>
+            <p class="tip">{{ t('views.shareMockTip') }}</p>
           </section>
         </template>
       </main>

@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -25,6 +26,7 @@ import AutoBackupSettings from '@/components/backup/AutoBackupSettings.vue';
  */
 const router = useRouter();
 const message = useMessage();
+const { t } = useI18n();
 
 const loading = ref(true);
 const saving = ref(false);
@@ -70,7 +72,7 @@ async function save() {
     });
     // 用服务端返回的覆盖本地：密码又变回 ***，地址也被规范化过
     fillFrom(data.proxy || {});
-    message.success('已保存');
+    message.success(t('views.stSaved'));
   } catch (err) {
     // socks:// / https:// 形式这类 400 原样提示
     message.error(err.message);
@@ -86,8 +88,8 @@ onMounted(load);
   <div class="page">
     <div class="header">
       <n-space align="center">
-        <n-button quaternary size="small" @click="router.push('/workbench')">← 返回</n-button>
-        <span class="title">系统设置</span>
+        <n-button quaternary size="small" @click="router.push('/workbench')">{{ t('views.psBack') }}</n-button>
+        <span class="title">{{ t('views.stTitle') }}</span>
       </n-space>
       <n-button
         type="primary"
@@ -96,7 +98,7 @@ onMounted(load);
         :disabled="loading || Boolean(errorText)"
         @click="save"
       >
-        保存
+        {{ t('views.psSave') }}
       </n-button>
     </div>
 
@@ -109,30 +111,28 @@ onMounted(load);
         两节各自读、各自存：页头那个「保存」只管代理（代理有密码回填那套约定），
         自动备份那一节的保存按钮在卡片里。
       -->
-      <n-card v-else :bordered="false" size="small" title="代理">
+      <n-card v-else :bordered="false" size="small" :title="t('views.stProxyTitle')">
         <p class="tip">
-          代理是这台机器上的全局设置，所有项目共用。只支持 <code>http://</code> 形式的代理：
-          目标是 https 时会先用 CONNECT 建立隧道。
+          {{ t('views.stProxyTipLead') }}<code>http://</code>{{ t('views.stProxyTipTail') }}
         </p>
         <p class="tip">
-          数据库里还没有这项设置时，默认值从环境变量 <code>HTTP_PROXY</code> /
-          <code>HTTPS_PROXY</code> / <code>NO_PROXY</code> 读取，但不会写库。
+          {{ t('views.stProxyEnvLead') }}<code>HTTP_PROXY</code>{{ t('views.stProxyEnvMid') }}<code>HTTPS_PROXY</code>{{ t('views.stProxyEnvMid') }}<code>NO_PROXY</code>{{ t('views.stProxyEnvTail') }}
         </p>
 
         <n-form label-placement="top">
-          <n-form-item label="启用代理">
+          <n-form-item :label="t('views.stProxyEnabled')">
             <n-switch v-model:value="form.enabled" />
           </n-form-item>
 
-          <n-form-item label="http 代理地址">
-            <n-input v-model:value="form.http" placeholder="http://user:pass@host:port，留空表示不用" />
+          <n-form-item :label="t('views.stProxyHttpLabel')">
+            <n-input v-model:value="form.http" :placeholder="t('views.stProxyHttpPlaceholder')" />
           </n-form-item>
 
-          <n-form-item label="https 代理地址">
-            <n-input v-model:value="form.https" placeholder="http://user:pass@host:port，留空则退回 http 那一栏" />
+          <n-form-item :label="t('views.stProxyHttpsLabel')">
+            <n-input v-model:value="form.https" :placeholder="t('views.stProxyHttpsPlaceholder')" />
           </n-form-item>
 
-          <n-form-item label="不走代理的地址列表">
+          <n-form-item :label="t('views.stNoProxyLabel')">
             <n-input
               v-model:value="form.noProxy"
               type="textarea"
@@ -143,11 +143,10 @@ onMounted(load);
         </n-form>
 
         <p class="tip">
-          用逗号分隔，每一项可以是精确的主机名、以 <code>.</code> 开头的后缀、
-          <code>host:port</code>，或者 <code>*</code>（全部不走代理）。
+          {{ t('views.stNoProxyTipA') }}<code>.</code>{{ t('views.stNoProxyTipB') }}<code>host:port</code>{{ t('views.stNoProxyTipC') }}<code>*</code>{{ t('views.stNoProxyTipD') }}
         </p>
         <p class="tip">
-          地址里的密码只显示为 <code>***</code>；不修改就原样保存，服务端会保留原来的密码。
+          {{ t('views.stPasswordTipA') }}<code>***</code>{{ t('views.stPasswordTipB') }}
         </p>
       </n-card>
 

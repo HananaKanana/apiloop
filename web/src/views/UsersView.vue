@@ -1,6 +1,7 @@
 <script setup>
 import { computed, h, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   NAlert,
   NButton,
@@ -25,6 +26,7 @@ import { copyText } from '@/utils/clipboard';
 const router = useRouter();
 const session = useSessionStore();
 const message = useMessage();
+const { t } = useI18n();
 
 /**
  * 这些接口都是「只有云端有的功能」：没登录时网关返回 409 + LOGIN_REQUIRED。
@@ -47,10 +49,12 @@ const form = ref({ username: '', displayName: '', role: 'member', password: '' }
 /** 服务端只返回一次的密码（新建用户或重置密码） */
 const issuedPassword = ref(null);
 
-const roleOptions = [
-  { label: '管理员', value: 'admin' },
-  { label: '普通成员', value: 'member' }
-];
+const roleOptions = computed(function () {
+  return [
+    { label: t('views.roleAdmin'), value: 'admin' },
+    { label: t('views.roleMember'), value: 'member' }
+  ];
+});
 
 const isSelf = computed(function () {
   return Boolean(editing.value && session.user && editing.value.id === session.user.id);
@@ -69,7 +73,7 @@ async function load() {
       return Number(Boolean(b.pending)) - Number(Boolean(a.pending));
     });
   } catch (err) {
-    loadError.value = '用户列表拉不下来：' + err.message;
+    loadError.value = t('views.usersLoadFailed', { message: err.message });
     showError(err);
   } finally {
     loading.value = false;
@@ -101,10 +105,10 @@ async function save() {
         displayName: form.value.displayName,
         role: form.value.role
       });
-      message.success('已保存');
+      message.success(t('views.psSaved'));
     } else {
       if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(form.value.username)) {
-        message.warning('用户名只能是 2–32 位的字母、数字、下划线、点或短横');
+        message.warning(t('views.usersNameRule'));
         return;
       }
       const payload = {
@@ -115,7 +119,7 @@ async function save() {
       if (form.value.password) payload.password = form.value.password;
       const data = await usersApi.createUser(payload);
       if (data.password) issuedPassword.value = { username: data.user.username, password: data.password };
-      message.success('已创建');
+      message.success(t('views.usersCreated'));
     }
     showEditor.value = false;
     await load();
@@ -130,7 +134,7 @@ async function save() {
 async function toggleDisabled(row, disabled) {
   try {
     await usersApi.updateUser(row.id, { disabled: disabled });
-    message.success(disabled ? '已禁用' : '已启用');
+    message.success(disabled ? t('views.usersDisabled') : t('views.usersEnabled'));
     await load();
   } catch (err) {
     showError(err);
@@ -140,10 +144,10 @@ async function toggleDisabled(row, disabled) {
 
 async function resetPassword(row) {
   dialog.warning({
-    title: '重置密码',
-    content: '将为「' + row.username + '」生成新密码，该用户当前的登录会全部失效。确定继续吗？',
-    positiveText: '重置',
-    negativeText: '取消',
+    title: t('views.usersResetTitle'),
+    content: t('views.usersResetBody', { name: row.username }),
+    positiveText: t('views.usersResetAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         const data = await usersApi.resetPassword(row.id);
@@ -159,7 +163,7 @@ async function resetPassword(row) {
 async function approve(row) {
   try {
     await usersApi.approveUser(row.id);
-    message.success('已通过，「' + row.username + '」现在可以登录了');
+    message.success(t('views.usersApproved', { name: row.username }));
     await load();
   } catch (err) {
     showError(err);
@@ -169,14 +173,14 @@ async function approve(row) {
 /** 拒绝就是删掉这条注册：用户名空出来，对方可以换个信息重新注册 */
 function reject(row) {
   dialog.error({
-    title: '拒绝注册',
-    content: '拒绝「' + row.username + '」的注册申请？这条申请会被删掉。',
-    positiveText: '拒绝',
-    negativeText: '取消',
+    title: t('views.usersRejectTitle'),
+    content: t('views.usersRejectBody', { name: row.username }),
+    positiveText: t('views.usersRejectAction'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await usersApi.removeUser(row.id);
-        message.success('已拒绝');
+        message.success(t('views.usersRejected'));
         await load();
       } catch (err) {
         showError(err);
@@ -187,14 +191,14 @@ function reject(row) {
 
 function removeUser(row) {
   dialog.error({
-    title: '删除用户',
-    content: '确定删除「' + row.username + '」吗？此操作不可撤销。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('views.usersDeleteTitle'),
+    content: t('views.usersDeleteBody', { name: row.username }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
         await usersApi.removeUser(row.id);
-        message.success('已删除');
+        message.success(t('views.psDeleted'));
         await load();
       } catch (err) {
         showError(err);
@@ -207,9 +211,9 @@ async function copyPassword() {
   const text = issuedPassword.value ? issuedPassword.value.password : '';
   try {
     await copyText(text);
-    message.success('已复制');
+    message.success(t('app.copied'));
   } catch (err) {
-    message.warning('复制失败，请手动选中复制');
+    message.warning(t('app.copyFailed'));
   }
 }
 
@@ -218,32 +222,32 @@ function isSelfRow(row) {
   return Boolean(session.user && row.id === session.user.id);
 }
 
-const columns = [
-  { title: '用户名', key: 'username', width: 180 },
+const columns = computed(function () { return [
+  { title: t('views.usernameLabel'), key: 'username', width: 180 },
   {
-    title: '显示名',
+    title: t('views.displayNameLabel'),
     key: 'displayName',
     render: function (row) {
       return row.displayName || '—';
     }
   },
   {
-    title: '角色',
+    title: t('views.roleLabel'),
     key: 'role',
     width: 110,
     render: function (row) {
       if (row.pending) {
-        return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: () => '待审核' });
+        return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: function () { return t('views.usersPending'); } });
       }
       return h(
         NTag,
         { size: 'small', type: row.role === 'admin' ? 'info' : 'default', bordered: false },
-        { default: () => (row.role === 'admin' ? '管理员' : '普通成员') }
+        { default: function () { return row.role === 'admin' ? t('views.roleAdmin') : t('views.roleMember'); } }
       );
     }
   },
   {
-    title: '启用',
+    title: t('views.usersColEnabled'),
     key: 'disabled',
     width: 90,
     render: function (row) {
@@ -260,34 +264,34 @@ const columns = [
     }
   },
   {
-    title: '操作',
+    title: t('views.usersColActions'),
     key: 'actions',
     width: 220,
     render: function (row) {
       if (row.pending) {
         return h(NSpace, { size: 4 }, {
           default: () => [
-            h(NButton, { size: 'tiny', type: 'primary', onClick: () => approve(row) }, { default: () => '通过' }),
-            h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => reject(row) }, { default: () => '拒绝' })
+            h(NButton, { size: 'tiny', type: 'primary', onClick: function () { approve(row); } }, { default: function () { return t('views.usersApprove'); } }),
+            h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: function () { reject(row); } }, { default: function () { return t('views.usersRejectAction'); } })
           ]
         });
       }
       return h(NSpace, { size: 4 }, {
         default: () => [
-          h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, { default: () => '编辑' }),
+          h(NButton, { size: 'tiny', quaternary: true, onClick: function () { openEdit(row); } }, { default: function () { return t('views.usersEdit'); } }),
           // 自己的密码不在这里重置：重置会清掉这个人的所有会话，包括自己当前这个，
           // 新密码还没显示出来人就被踢回登录页了（2026-10-01 用户遇到）。改自己的用右上角「修改密码」
           isSelfRow(row)
             ? null
-            : h(NButton, { size: 'tiny', quaternary: true, onClick: () => resetPassword(row) }, { default: () => '重置密码' }),
+            : h(NButton, { size: 'tiny', quaternary: true, onClick: function () { resetPassword(row); } }, { default: function () { return t('views.usersResetAction2'); } }),
           isSelfRow(row)
             ? null
-            : h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => removeUser(row) }, { default: () => '删除' })
+            : h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: function () { removeUser(row); } }, { default: function () { return t('app.delete'); } })
         ]
       });
     }
   }
-];
+]; });
 
 onMounted(load);
 </script>
@@ -296,10 +300,10 @@ onMounted(load);
   <div class="page">
     <div class="header">
       <n-space align="center">
-        <n-button quaternary size="small" @click="router.push('/workbench')">← 返回</n-button>
-        <span class="title">用户管理</span>
+        <n-button quaternary size="small" @click="router.push('/workbench')">{{ t('views.psBack') }}</n-button>
+        <span class="title">{{ t('views.usersTitle') }}</span>
       </n-space>
-      <n-button type="primary" size="small" @click="openCreate">新建用户</n-button>
+      <n-button type="primary" size="small" @click="openCreate">{{ t('views.usersCreate') }}</n-button>
     </div>
 
     <div class="content">
@@ -321,29 +325,29 @@ onMounted(load);
     <n-modal
       v-model:show="showEditor"
       preset="card"
-      :title="editing ? '编辑用户' : '新建用户'"
+      :title="editing ? t('views.usersEditTitle') : t('views.usersCreateTitle')"
       style="width: 440px; max-width: 92vw"
     >
       <n-form>
-        <n-form-item label="用户名">
-          <n-input v-model:value="form.username" :disabled="Boolean(editing)" placeholder="2–32 位字母数字" />
+        <n-form-item :label="t('views.usernameLabel')">
+          <n-input v-model:value="form.username" :disabled="Boolean(editing)" :placeholder="t('views.usersNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="显示名">
-          <n-input v-model:value="form.displayName" placeholder="可留空" />
+        <n-form-item :label="t('views.displayNameLabel')">
+          <n-input v-model:value="form.displayName" :placeholder="t('views.usersDisplayNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="角色">
+        <n-form-item :label="t('views.roleLabel')">
           <n-select v-model:value="form.role" :options="roleOptions" :disabled="isSelf" />
         </n-form-item>
-        <n-form-item v-if="!editing" label="密码">
-          <n-input v-model:value="form.password" placeholder="留空则自动生成" />
+        <n-form-item v-if="!editing" :label="t('views.passwordLabel')">
+          <n-input v-model:value="form.password" :placeholder="t('views.usersPasswordPlaceholder')" />
         </n-form-item>
       </n-form>
-      <p v-if="isSelf" class="tip">不能修改自己的角色。</p>
+      <p v-if="isSelf" class="tip">{{ t('views.usersSelfRoleTip') }}</p>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showEditor = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="save">保存</n-button>
+          <n-button @click="showEditor = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" :loading="saving" @click="save">{{ t('views.psSave') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -351,22 +355,22 @@ onMounted(load);
     <n-modal
       :show="Boolean(issuedPassword)"
       preset="card"
-      title="请保存这个密码"
+      :title="t('views.usersPasswordTitle')"
       style="width: 440px; max-width: 92vw"
       @update:show="issuedPassword = null"
     >
-      <p class="tip">密码只会显示这一次，关掉就再也看不到了。</p>
+      <p class="tip">{{ t('views.usersPasswordTip') }}</p>
       <div class="password-box">
         <code>{{ issuedPassword && issuedPassword.password }}</code>
       </div>
       <p class="tip">
-        用户名：<b>{{ issuedPassword && issuedPassword.username }}</b>
+        {{ t('views.usersPasswordUsername') }}<b>{{ issuedPassword && issuedPassword.username }}</b>
       </p>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="copyPassword">复制</n-button>
-          <n-button type="primary" @click="issuedPassword = null">我已保存</n-button>
+          <n-button @click="copyPassword">{{ t('views.usersCopy') }}</n-button>
+          <n-button type="primary" @click="issuedPassword = null">{{ t('views.usersSavedIt') }}</n-button>
         </n-space>
       </template>
     </n-modal>

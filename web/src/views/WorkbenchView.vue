@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NEmpty, NIcon, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { Plus } from '@vicons/tabler';
@@ -51,6 +52,7 @@ const envs = useEnvStore();
 const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const leftWidth = ref(Number(localStorage.getItem('apiloop.treeWidth')) || 280);
 const collapsed = ref(false);
@@ -288,10 +290,10 @@ function closeTab(tab) {
   }
 
   dialog.warning({
-    title: '关闭标签页',
-    content: '「' + tab.title + '」有没保存的修改，关掉就没了。确定关闭吗？',
-    positiveText: '关闭',
-    negativeText: '取消',
+    title: t('views.wbCloseTabTitle'),
+    content: t('views.wbCloseTabBody', { name: tab.title }),
+    positiveText: t('views.wbClose'),
+    negativeText: t('app.cancel'),
     onPositiveClick: function () { tabs.close(tab.key); }
   });
 }
@@ -300,13 +302,15 @@ function closeTab(tab) {
 
 const tabMenu = ref({ show: false, x: 0, y: 0, tab: null });
 
-const TAB_MENU_OPTIONS = [
-  { label: '关闭', key: 'close' },
-  { label: '关闭其他', key: 'others' },
-  { label: '关闭右侧', key: 'right' },
-  { type: 'divider', key: 'd' },
-  { label: '关闭全部', key: 'all' }
-];
+const TAB_MENU_OPTIONS = computed(function () {
+  return [
+    { label: t('views.wbClose'), key: 'close' },
+    { label: t('views.wbCloseOthers'), key: 'others' },
+    { label: t('views.wbCloseRight'), key: 'right' },
+    { type: 'divider', key: 'd' },
+    { label: t('views.wbCloseAll'), key: 'all' }
+  ];
+});
 
 function openTabMenu(event, tab) {
   tabMenu.value = { show: true, x: event.clientX, y: event.clientY, tab: tab };
@@ -328,10 +332,10 @@ function closeTabs(list) {
   }
 
   dialog.warning({
-    title: '关闭标签页',
-    content: '其中 ' + dirty.length + ' 个标签页有没保存的修改，关掉就没了。确定关闭吗？',
-    positiveText: '关闭',
-    negativeText: '取消',
+    title: t('views.wbCloseTabTitle'),
+    content: t('views.wbCloseTabsBody', { n: dirty.length }),
+    positiveText: t('views.wbClose'),
+    negativeText: t('app.cancel'),
     onPositiveClick: doClose
   });
 }
@@ -416,8 +420,8 @@ onBeforeUnmount(function () {
           Mock 故障模拟开着时的橙色小标（第七轮第 1 节）：这个项目的 Mock 会按比例故意出错，
           所有调它的人都受影响 —— 放个显眼的标记免得忘了关，点了去设置。
         -->
-        <button v-if="mockFaultsOn" class="fault-badge" title="这个项目的 Mock 正在按规则故意出错，点一下去设置" @click="openFaultSettings">
-          故障模拟中
+        <button v-if="mockFaultsOn" class="fault-badge" :title="t('views.wbFaultBadgeTitle')" @click="openFaultSettings">
+          {{ t('views.wbFaultBadge') }}
         </button>
       </template>
     </top-bar>
@@ -430,7 +434,7 @@ onBeforeUnmount(function () {
       @close="dismissVersionBanner"
     >
       <span class="version-text">
-        有新版本 {{ versionMismatch.cloudVersion }}（本机是 {{ versionMismatch.gatewayVersion }}）。
+        {{ t('views.wbNewVersion', { cloud: versionMismatch.cloudVersion, local: versionMismatch.gatewayVersion }) }}
       </span>
       <update-action />
     </n-alert>
@@ -475,7 +479,7 @@ onBeforeUnmount(function () {
               :key="tab.key"
               class="tab-item"
               :class="{ active: tab.key === tabs.activeKey, preview: tab.preview }"
-              :title="tab.preview ? '预览标签页：再单击别的会被替换，双击固定' : ''"
+              :title="tab.preview ? t('views.wbPreviewHint') : ''"
               @click="tabs.activate(tab.key)"
               @dblclick="tabs.pin(tab.key)"
               @contextmenu.prevent="openTabMenu($event, tab)"
@@ -485,12 +489,12 @@ onBeforeUnmount(function () {
                 class="tab-method"
                 :style="{ color: methodColor(tabMethod(tab)) }"
               >{{ tabMethod(tab) }}</span>
-              <span v-if="tab.dirty" class="dot" title="有没保存的修改" />
+              <span v-if="tab.dirty" class="dot" :title="t('views.wbDirtyDot')" />
               <span class="tab-title">{{ tab.title }}</span>
-              <span class="tab-close" title="关闭" @click.stop="closeTab(tab)">×</span>
+              <span class="tab-close" :title="t('views.wbClose')" @click.stop="closeTab(tab)">×</span>
             </div>
 
-            <button class="tab-add" title="新建请求" @click="tabs.openDraft(null)">
+            <button class="tab-add" :title="t('views.wbNewRequest')" @click="tabs.openDraft(null)">
               <n-icon size="15" :component="Plus" />
             </button>
           </div>
@@ -508,7 +512,7 @@ onBeforeUnmount(function () {
           <mock-env-tab v-if="envs.editing && envs.editing.builtin" />
           <env-tab v-else-if="envs.editing" :key="envs.editing.id" :env-id="envs.editing.id" />
           <div v-else class="placeholder">
-            <n-empty description="还没有环境，点左边的「新建环境」" />
+            <n-empty :description="t('views.wbNoEnvs')" />
           </div>
         </div>
 
@@ -565,7 +569,7 @@ onBeforeUnmount(function () {
             :tab="tabs.active"
           />
           <div v-else class="placeholder">
-            <n-empty description="从左边选一个接口，或者点目录树右上角的 ＋ 新建请求" />
+            <n-empty :description="t('views.wbPickApi')" />
           </div>
         </div>
       </main>

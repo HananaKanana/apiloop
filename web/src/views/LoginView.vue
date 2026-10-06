@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { useSessionStore } from '@/stores/session';
@@ -15,6 +16,7 @@ const session = useSessionStore();
 const gateway = useGatewayStore();
 const tabs = useTabsStore();
 const dialog = useDialog();
+const { t } = useI18n();
 
 const username = ref('');
 const password = ref('');
@@ -41,15 +43,15 @@ function switchMode(next) {
 async function submitRegister() {
   errorText.value = '';
   if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(username.value)) {
-    errorText.value = '用户名只能用字母、数字、下划线、点、连字符，长度 2~32';
+    errorText.value = t('views.regErrUsername');
     return;
   }
   if (password.value.length < 6) {
-    errorText.value = '密码至少 6 位';
+    errorText.value = t('views.regErrShort');
     return;
   }
   if (password.value !== confirmPassword.value) {
-    errorText.value = '两次输入的密码不一样';
+    errorText.value = t('views.regErrMismatch');
     return;
   }
 
@@ -57,7 +59,7 @@ async function submitRegister() {
   try {
     await registerApi({ username: username.value, password: password.value, displayName: displayName.value });
     switchMode('login');
-    noticeText.value = '注册成功，等管理员审核通过后就能登录了。';
+    noticeText.value = t('views.registerNotice');
   } catch (err) {
     errorText.value = err.message;
   } finally {
@@ -96,10 +98,10 @@ function confirmDiscardDirty() {
   if (!gateway.isGateway || !tabs.hasDirty) return Promise.resolve(true);
   return new Promise(function (resolve) {
     dialog.warning({
-      title: '有没保存的修改',
-      content: '登录之后，没保存的标签页会关闭，里面的修改会丢失。要继续吗？',
-      positiveText: '继续',
-      negativeText: '取消',
+      title: t('views.dirtyTitle'),
+      content: t('views.dirtyBody'),
+      positiveText: t('views.dirtyContinue'),
+      negativeText: t('app.cancel'),
       onPositiveClick: function () { resolve(true); },
       onNegativeClick: function () { resolve(false); },
       onClose: function () { resolve(false); },
@@ -138,7 +140,7 @@ async function submit() {
   noticeText.value = '';
 
   if (!username.value || !password.value) {
-    errorText.value = '请填写用户名和密码';
+    errorText.value = t('views.loginErrEmpty');
     return;
   }
 
@@ -165,7 +167,7 @@ async function submit() {
   <div class="login-page">
     <n-card class="login-card" :bordered="false">
       <h1 class="brand">{{ session.appName }}</h1>
-      <p class="subtitle">{{ mode === 'register' ? '注册账号' : '登录管理台' }}</p>
+      <p class="subtitle">{{ mode === 'register' ? t('views.subtitleRegister') : t('views.subtitleLogin') }}</p>
 
       <n-alert v-if="errorText" type="error" :show-icon="false" class="alert">
         {{ errorText }}
@@ -176,47 +178,47 @@ async function submit() {
 
       <!-- 已经在本机模式、又从菜单进到登录页：先说清楚登录之后会看到什么 -->
       <n-alert v-if="cloudDown" type="warning" :show-icon="false" class="alert">
-        连不上云端，登录需要联网。不登录也可以继续在本机使用。
+        {{ t('views.cloudDownAlert') }}
       </n-alert>
 
       <p v-if="unbound && mode === 'login'" class="local-note">
-        登录后，本机的项目会自动同步到这个账号。
+        {{ t('views.unboundNote') }}
       </p>
 
       <n-form @submit.prevent="submit">
-        <n-form-item label="用户名">
+        <n-form-item :label="t('views.usernameLabel')">
           <n-input
             v-model:value="username"
-            placeholder="用户名"
+            :placeholder="t('views.usernameLabel')"
             autofocus
             @keyup.enter="submit"
           />
         </n-form-item>
-        <n-form-item v-if="mode === 'register'" label="显示名">
-          <n-input v-model:value="displayName" placeholder="可留空，比如你的名字" @keyup.enter="submit" />
+        <n-form-item v-if="mode === 'register'" :label="t('views.displayNameLabel')">
+          <n-input v-model:value="displayName" :placeholder="t('views.displayNamePlaceholder')" @keyup.enter="submit" />
         </n-form-item>
-        <n-form-item label="密码">
+        <n-form-item :label="t('views.passwordLabel')">
           <n-input
             v-model:value="password"
             type="password"
             show-password-on="click"
-            :placeholder="mode === 'register' ? '至少 6 位' : '密码'"
+            :placeholder="mode === 'register' ? t('views.pwdPlaceholderRegister') : t('views.pwdPlaceholderLogin')"
             @keyup.enter="submit"
           />
         </n-form-item>
-        <n-form-item v-if="mode === 'register'" label="确认密码">
+        <n-form-item v-if="mode === 'register'" :label="t('views.confirmPwdLabel')">
           <n-input
             v-model:value="confirmPassword"
             type="password"
             show-password-on="click"
-            placeholder="再输一次"
+            :placeholder="t('views.confirmPwdPlaceholder')"
             @keyup.enter="submit"
           />
         </n-form-item>
       </n-form>
 
       <n-button type="primary" block :loading="loading" @click="submit">
-        {{ mode === 'register' ? '提交注册' : '登录' }}
+        {{ mode === 'register' ? t('views.registerSubmit') : t('views.loginSubmit') }}
       </n-button>
 
       <!-- 网关上才给这条路：回工作台，数据都在本机，不登录也能用 -->
@@ -227,15 +229,15 @@ async function submit() {
         quaternary
         @click="continueLocal"
       >
-        不登录，继续在本机使用
+        {{ t('views.continueLocal') }}
       </n-button>
 
       <p v-if="mode === 'login'" class="hint">
-        没有账号？<a class="link" @click="switchMode('register')">注册</a>，管理员审核通过后即可登录。
-        <br />忘记密码？请联系管理员重置。
+        {{ t('views.noAccountLead') }}<a class="link" @click="switchMode('register')">{{ t('views.noAccountLink') }}</a>{{ t('views.noAccountTail') }}
+        <br />{{ t('views.forgotHint') }}
       </p>
       <p v-else class="hint">
-        已有账号？<a class="link" @click="switchMode('login')">去登录</a>
+        {{ t('views.hasAccountLead') }}<a class="link" @click="switchMode('login')">{{ t('views.hasAccountLink') }}</a>
       </p>
     </n-card>
   </div>
