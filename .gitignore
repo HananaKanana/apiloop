@@ -2,6 +2,8 @@
 node_modules
 .router.js
 apiloop-*.tgz
+/.workbuddy
+/.workbuddy-ai
 
 # 接口数据库是运行时生成的，不入库
 routes.db
