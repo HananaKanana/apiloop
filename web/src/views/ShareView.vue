@@ -188,7 +188,7 @@ const bodyView = computed(function () {
 const curlText = computed(function () {
   const api = current.value;
   if (!api) return '';
-  return buildCurl({ method: api.method, url: api.url, headers: api.headers, body: api.body });
+  return buildCurl({ method: api.method, url: api.url, query: api.params.query, headers: api.headers, body: api.body });
 });
 
 async function copy(text, okText) {
@@ -198,6 +198,19 @@ async function copy(text, okText) {
   } catch (err) {
     message.error(err.message);
   }
+}
+
+/**
+ * 示例响应的显示文字：JSON 先排好版（和上面请求体同一个 formatJson），排不了就原样。
+ * 不只看 responseType —— 标成 text 的示例里装的常常也是 JSON。
+ */
+function exampleText(example) {
+  const text = String((example && example.body) || '');
+  const type = String((example && example.responseType) || '').toLowerCase();
+  const looksJson = /^\s*[[{]/.test(text);
+  if (!text || (type !== 'json' && !looksJson)) return text;
+  const pretty = formatJson(text);
+  return pretty.ok ? pretty.text : text;
 }
 
 function statusType(status) {
@@ -362,7 +375,7 @@ function statusType(status) {
                   {{ example.status }}
                 </n-tag>
               </div>
-              <pre class="code">{{ example.body }}</pre>
+              <pre class="code">{{ exampleText(example) }}</pre>
             </div>
           </section>
 

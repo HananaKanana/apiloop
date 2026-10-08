@@ -715,13 +715,36 @@ export function shellQuote(text) {
   return "'" + String(text === undefined || text === null ? '' : text).replace(/'/g, "'\\''") + "'";
 }
 
+/** 原始请求体的语言 → Content-Type（接口自己没写这个头时补上，否则 curl 默认按表单发） */
+const RAW_CONTENT_TYPES = {
+  json: 'application/json',
+  xml: 'application/xml',
+  html: 'text/html',
+  javascript: 'application/javascript',
+  text: 'text/plain'
+};
+
+function rowKey(row) {
+  return String(row.key === undefined || row.key === null ? '' : row.key).trim();
+}
+
+function rowValue(row) {
+  return String(row.value === undefined || row.value === null ? '' : row.value);
+}
+
+function enabled(rows) {
+  return (rows || []).filter(function (row) { return row && row.enabled !== false && rowKey(row); });
+}
+
 /**
- * 用「当前这一次请求」的值拼一条能直接跑的 curl（`parseCurl` 的反向操作）。
+ * 拼一条能直接跑的 curl（`parseCurl` 的反向操作）。分享页的「复制为 cURL」用它。
  *
- * 分享页的「试一试」面板用它 —— 用户在面板里改过的地址、请求头、请求体都要反映到
- * 复制出来的命令里，而不是文档里那份原始值。
+ * - 查询参数拼到地址后面（有参数行时以行为准，和发送时一样）；
+ * - 原始请求体按语言补 `Content-Type`（接口没写这个头时），GraphQL 按 `{query, variables}` 发 JSON；
+ * - form-data 用 `-F`，文件字段写成 `@文件路径` 让人自己换；urlencoded 用 `--data-urlencode`。
  *
  * @param {{method?: string, url?: string,
+ *          query?: Array<{key: string, value: any, enabled?: boolean}>,
  *          headers?: Array<{key: string, value: any, enabled?: boolean}>,
  *          body?: object}} input
  *        `body` 的形状和接口的 `body` 一致（`mode` + `raw` / `graphql` / `form`）
@@ -729,28 +752,45 @@ export function shellQuote(text) {
  */
 export function buildCurl(input) {
   const source = input || {};
-  const lines = ['curl -X ' + String(source.method || 'GET').toUpperCase() + ' ' + shellQuote(source.url)];
+  let url = String(source.url || '');
+  // 和发送时一个规则（lib/url-utils.js 的 buildUrl）：有查询参数行就以行为准，地址自带的查询串丢掉 ——
+  // 地址栏和参数表是双向同步的，两边都拼的话每个参数会出现两遍
+  if (Array.isArray(source.query) && source.query.length) url = url.split('#')[0].split('?')[0];
+  const query = enabled(source.query).map(function (row) {
+    return encodeURIComponent(rowKey(row)) + '=' + encodeURIComponent(rowValue(row));
+  }).join('&');
+  if (query) url += (url.indexOf('?') === -1 ? '?' : '&') + query;
 
-  (source.headers || []).forEach(function (row) {
-    if (!row || row.enabled === false) return;
-    const key = String(row.key === undefined || row.key === null ? '' : row.key).trim();
-    if (!key) return;
-    lines.push('  -H ' + shellQuote(key + ': ' + String(row.value === undefined || row.value === null ? '' : row.value)));
+  const lines = ['curl -X ' + String(source.method || 'GET').toUpperCase() + ' ' + shellQuote(url)];
+
+  const headers = enabled(source.headers);
+  const hasContentType = headers.some(function (row) { return rowKey(row).toLowerCase() === 'content-type'; });
+  headers.forEach(function (row) {
+    lines.push('  -H ' + shellQuote(rowKey(row) + ': ' + rowValue(row)));
   });
 
   const body = source.body || {};
   if (body.mode === 'raw' && body.raw) {
+    const type = RAW_CONTENT_TYPES[String(body.language || 'text').toLowerCase()] || 'text/plain';
+    if (!hasContentType) lines.push('  -H ' + shellQuote('Content-Type: ' + type));
     lines.push('  --data-raw ' + shellQuote(body.raw));
   } else if (body.mode === 'graphql' && body.graphql && body.graphql.query) {
-    lines.push('  --data-raw ' + shellQuote(body.graphql.query));
-  } else if ((body.mode === 'urlencoded' || body.mode === 'formdata') && body.form) {
-    // 文件行由调用方决定要不要传进来：curl 的文件字段要的是本地路径（`-F 'k=@/path'`），
-    // 这里拿不到，硬拼一个 `--data-urlencode` 反而是错的
-    body.form.forEach(function (row) {
-      if (!row || row.enabled === false) return;
-      const key = String(row.key === undefined || row.key === null ? '' : row.key).trim();
-      if (!key) return;
-      lines.push('  --data-urlencode ' + shellQuote(key + '=' + String(row.value === undefined || row.value === null ? '' : row.value)));
+    let variables = {};
+    try {
+      variables = body.graphql.variables ? JSON.parse(body.graphql.variables) : {};
+    } catch (err) {
+      variables = {};
+    }
+    if (!hasContentType) lines.push('  -H ' + shellQuote('Content-Type: application/json'));
+    lines.push('  --data-raw ' + shellQuote(JSON.stringify({ query: body.graphql.query, variables: variables })));
+  } else if (body.mode === 'formdata' && body.form) {
+    enabled(body.form).forEach(function (row) {
+      const value = row.kind === 'file' ? '@' + t('utils.curlFilePath') : rowValue(row);
+      lines.push('  -F ' + shellQuote(rowKey(row) + '=' + value));
+    });
+  } else if (body.mode === 'urlencoded' && body.form) {
+    enabled(body.form).forEach(function (row) {
+      lines.push('  --data-urlencode ' + shellQuote(rowKey(row) + '=' + rowValue(row)));
     });
   }
 

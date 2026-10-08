@@ -207,5 +207,6 @@ export default {
   repSummary: 'Summary',
   repDetail: 'Details',
   repNoSteps: 'This run had no steps.',
-  repFileName: 'test-suite-report-{name}-{stamp}.html'
+  repFileName: 'test-suite-report-{name}-{stamp}.html',
+  curlFilePath: 'path/to/file'
 };

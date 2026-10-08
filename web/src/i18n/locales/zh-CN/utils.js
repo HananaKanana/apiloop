@@ -205,5 +205,6 @@ export default {
   repSummary: '汇总',
   repDetail: '明细',
   repNoSteps: '这次运行没有步骤。',
-  repFileName: '测试集报告-{name}-{stamp}.html'
+  repFileName: '测试集报告-{name}-{stamp}.html',
+  curlFilePath: '本地文件路径'
 };
