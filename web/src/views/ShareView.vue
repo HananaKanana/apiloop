@@ -13,6 +13,7 @@ import { formatJson } from '@/utils/jsonFormat';
 import { copyText } from '@/utils/clipboard';
 import { buildCurl } from '@/utils/curl';
 import { statusMeta } from '@/utils/apiStatus';
+import CodeEditor from '@/components/common/CodeEditor.vue';
 
 /**
  * 公开的接口文档页（第 4 节）。地址是 `<云端地址>/#/share/<链接串>`，**不用登录**。
@@ -150,6 +151,9 @@ const params = computed(function () {
   return rows;
 });
 
+/** 原始请求体 / 示例的类型 → 代码编辑器的高亮语言（和接口页的响应区一样显示） */
+const CODE_LANGUAGES = { json: 'json', xml: 'xml', html: 'html', javascript: 'javascript' };
+
 const bodyView = computed(function () {
   const body = (current.value && current.value.body) || { mode: 'none' };
   if (body.mode === 'none') return null;
@@ -160,9 +164,9 @@ const bodyView = computed(function () {
     const language = String(body.language || 'text').toLowerCase();
     if (language === 'json') {
       const pretty = formatJson(text);
-      return { kind: 'raw', text: pretty.ok ? pretty.text : text, json: true };
+      return { kind: 'raw', text: pretty.ok ? pretty.text : text, json: true, language: 'json' };
     }
-    return { kind: 'raw', text: text, json: false };
+    return { kind: 'raw', text: text, json: false, language: CODE_LANGUAGES[language] || 'text' };
   }
 
   if (body.mode === 'graphql') {
@@ -211,6 +215,14 @@ function exampleText(example) {
   if (!text || (type !== 'json' && !looksJson)) return text;
   const pretty = formatJson(text);
   return pretty.ok ? pretty.text : text;
+}
+
+/** 示例的高亮语言：排得了版的 JSON 一律按 JSON 高亮 */
+function exampleLanguage(example) {
+  const text = String((example && example.body) || '');
+  const type = String((example && example.responseType) || '').toLowerCase();
+  if (type === 'json' || /^\s*[[{]/.test(text)) return formatJson(text).ok ? 'json' : 'text';
+  return CODE_LANGUAGES[type] || 'text';
 }
 
 function statusType(status) {
@@ -343,11 +355,18 @@ function statusType(status) {
           <section v-if="bodyView" class="section">
             <h3 class="section-title">Body</h3>
 
-            <pre v-if="bodyView.kind === 'raw'" class="code">{{ bodyView.text }}</pre>
+            <!-- 和接口页的响应区同一个只读编辑器：高亮、行号、折叠（用户 2026-10-08） -->
+            <div v-if="bodyView.kind === 'raw'" class="code-box">
+              <code-editor :model-value="bodyView.text" :language="bodyView.language" readonly wrap min-height="0" />
+            </div>
 
             <template v-else-if="bodyView.kind === 'graphql'">
-              <pre class="code">{{ bodyView.query }}</pre>
-              <pre v-if="bodyView.variables" class="code">{{ bodyView.variables }}</pre>
+              <div class="code-box">
+                <code-editor :model-value="bodyView.query" language="text" readonly wrap min-height="0" />
+              </div>
+              <div v-if="bodyView.variables" class="code-box">
+                <code-editor :model-value="bodyView.variables" language="json" readonly wrap min-height="0" />
+              </div>
             </template>
 
             <table v-else-if="bodyView.kind === 'form'" class="kv">
@@ -375,7 +394,15 @@ function statusType(status) {
                   {{ example.status }}
                 </n-tag>
               </div>
-              <pre class="code">{{ exampleText(example) }}</pre>
+              <div class="code-box">
+                <code-editor
+                  :model-value="exampleText(example)"
+                  :language="exampleLanguage(example)"
+                  readonly
+                  wrap
+                  min-height="0"
+                />
+              </div>
             </div>
           </section>
 
@@ -659,16 +686,24 @@ function statusType(status) {
   font-family: inherit;
 }
 
-.code {
-  margin: 0;
-  padding: 10px 12px;
+/* 只读代码块：浅灰底，太长的在框里滚（别把整页撑得很长） */
+.code-box {
   border-radius: 6px;
   background: rgba(128, 128, 128, 0.09);
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-x: auto;
+  overflow: hidden;
+}
+
+.code-box + .code-box {
+  margin-top: 8px;
+}
+
+.code-box :deep(.cm-editor) {
+  max-height: 520px;
+}
+
+.code-box :deep(.cm-scroller) {
+  overflow: auto;
 }
 
 .example + .example {
