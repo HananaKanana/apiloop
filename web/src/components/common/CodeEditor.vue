@@ -421,6 +421,7 @@ function createSearchPanel(editorView) {
   const prev = mkButton('↑', t('response.searchPrev'));
   const next = mkButton('↓', t('response.searchNext'));
   const close = mkButton('×', t('response.searchClose'));
+  close.classList.add('cm-search-close');
 
   /** 数一遍匹配，并把「当前是第几个」算出来（光标前面有多少个匹配） */
   function refreshCount() {
@@ -485,9 +486,9 @@ function createSearchPanel(editorView) {
   close.addEventListener('click', function () { closeSearchPanel(editorView); });
 
   dom.appendChild(input);
+  dom.appendChild(count);
   dom.appendChild(prev);
   dom.appendChild(next);
-  dom.appendChild(count);
   dom.appendChild(close);
 
   return {
@@ -577,6 +578,85 @@ defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: 
   .code-editor .tok-attributeValue { color: #7fb0ff; }
   .code-editor .tok-variableName.tok-definition { color: #8ab4ff; }
 }
+
+/* ---------------- 自定义查找面板（T43） ----------------
+ * 必须放在这个非 scoped 的块里：面板是 createSearchPanel 在运行时建出来的节点，
+ * scoped 的 data-v 属性挂不上去（放进 scoped 块就等于没写，看到的是浏览器默认的输入框和按钮）。
+ * 选择器带上 .code-editor .cm-editor，盖过 CodeMirror 自带主题给 .cm-panels 的灰底。
+ */
+.code-editor .cm-editor .cm-panels {
+  background: var(--apiloop-surface, #fff);
+  color: inherit;
+}
+.code-editor .cm-editor .cm-panels-top {
+  border-bottom: 1px solid var(--apiloop-divider, rgba(128, 128, 128, 0.2));
+}
+
+.code-editor .cm-search-panel {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.code-editor .cm-search-input {
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 0;
+  height: 24px;
+  margin: 0 6px 0 0;
+  padding: 0 8px;
+  border: 1px solid rgba(128, 128, 128, 0.32);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+  box-shadow: none;
+}
+.code-editor .cm-search-input:focus {
+  border-color: var(--apiloop-primary, #ff6c37);
+}
+
+.code-editor .cm-search-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+}
+.code-editor .cm-search-btn:hover {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+.code-editor .cm-search-count {
+  flex: none;
+  min-width: 56px;
+  margin: 0 4px;
+  white-space: nowrap;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 关闭按钮靠右，和前面的输入、翻页分开 */
+.code-editor .cm-search-btn.cm-search-close {
+  margin-left: auto;
+}
 </style>
 
 <style scoped>
@@ -586,60 +666,5 @@ defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: 
   overflow: hidden;
   height: 100%;
   box-sizing: border-box;
-}
-
-/* ---------------- 自定义查找面板（T43） ---------------- */
-/* 这些类名是 createSearchPanel 在运行时建出来的节点，所以不能 scoped */
-.cm-search-panel {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
-  background: var(--apiloop-surface, #fff);
-  font-size: 12px;
-}
-
-.cm-search-input {
-  flex: 1;
-  min-width: 120px;
-  height: 24px;
-  padding: 0 6px;
-  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.3));
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  outline: none;
-}
-
-.cm-search-input:focus {
-  border-color: var(--apiloop-primary, #097bed);
-}
-
-.cm-search-btn {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.cm-search-btn:hover {
-  background: rgba(128, 128, 128, 0.14);
-  opacity: 1;
-}
-
-.cm-search-count {
-  flex: none;
-  white-space: nowrap;
-  opacity: 0.65;
 }
 </style>
