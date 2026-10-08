@@ -50,8 +50,9 @@ export function optionsFor(apis, options) {
   (apis || []).forEach(function (api) {
     if (!api || !api.id) return;
     const method = String(api.method || '').toUpperCase();
-    // 前置接口是用 /send 发的 HTTP 请求，非 HTTP 的接口（WS / SIO / GRPC / MQTT）不能当它
-    if (method === 'WS' || method === 'SIO' || method === 'GRPC' || method === 'MQTT') return;
+    // 前置接口是用 /send 发的 HTTP 请求，非 HTTP 的接口（WS / SIO / GRPC / MQTT / TCP / UDP）不能当它
+    if (method === 'WS' || method === 'SIO' || method === 'GRPC' || method === 'MQTT' ||
+      method === 'TCP' || method === 'UDP') return;
 
     list.push({ value: String(api.id), get label() { return api.name || t('utils.untitledApi'); } });
   });

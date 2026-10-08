@@ -54,7 +54,7 @@ const toggleTitle = computed(function () {
   return props.collapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar');
 });
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'open-folder', 'run', 'import', 'toggle']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'new-tcp', 'new-udp', 'open-folder', 'run', 'import', 'toggle']);
 
 function onTabClick(key) {
   ui.setSidebarTab(key);
@@ -139,6 +139,8 @@ watch(
         @new-sio="emit('new-sio')"
         @new-grpc="emit('new-grpc')"
         @new-mqtt="emit('new-mqtt')"
+        @new-tcp="emit('new-tcp')"
+        @new-udp="emit('new-udp')"
         @open-folder="(folderId, options) => emit('open-folder', folderId, options)"
         @run="(folderId) => emit('run', folderId)"
         @import="emit('import')"

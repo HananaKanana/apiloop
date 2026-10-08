@@ -30,7 +30,7 @@ import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.v
 import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'open-folder', 'run', 'import']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'new-tcp', 'new-udp', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
 const prefs = usePrefsStore();
@@ -67,7 +67,10 @@ const newOptions = computed(function () {
     { label: 'Socket.IO', key: 'sio' },
     // gRPC（第十一轮第 3 节）/ MQTT（第十三轮第 4 节）：同上，各自开一个临时调试标签页
     { label: 'gRPC', key: 'grpc' },
-    { label: 'MQTT', key: 'mqtt' }
+    { label: 'MQTT', key: 'mqtt' },
+    // TCP / UDP（第十六轮）：同上，两种协议共用一个标签页（按方法显示不同字段）
+    { label: 'TCP', key: 'tcp' },
+    { label: 'UDP', key: 'udp' }
   ];
 });
 
@@ -90,6 +93,14 @@ function onNewSelect(key) {
   }
   if (key === 'mqtt') {
     emit('new-mqtt');
+    return;
+  }
+  if (key === 'tcp') {
+    emit('new-tcp');
+    return;
+  }
+  if (key === 'udp') {
+    emit('new-udp');
     return;
   }
   if (key === 'folder') {

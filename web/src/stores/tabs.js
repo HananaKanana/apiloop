@@ -14,6 +14,7 @@ import { useWsStore } from '@/stores/ws';
 import { useSioStore } from '@/stores/sio';
 import { useGrpcStore } from '@/stores/grpc';
 import { useMqttStore } from '@/stores/mqtt';
+import { useSocketStore } from '@/stores/socket';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
@@ -26,30 +27,38 @@ let wsSeq = 0;
 let sioSeq = 0;
 let grpcSeq = 0;
 let mqttSeq = 0;
+let socketSeq = 0;
 
 /**
- * 四种「非 HTTP」接口各自的调试标签页。
+ * 「非 HTTP」接口各自的调试标签页。
  *
  * 表放在这里是因为它们在标签页这一层要做的事**完全一样**（打开、保存后换形态、
  * 关掉时收尾、失效时重载），差别只有 kind、默认标题和 spec 的形状 ——
  * 各写一份的话，下一个新方法又要再抄一遍。
+ *
+ * TCP 和 UDP **共用一个 kind**（`socket`）：两种协议共用一个组件，靠 `spec.method`
+ * 决定显示哪些字段（和 `apis.extra.socket` 是同一份结构）。
  */
 const DEBUG_TABS = {
   WS: { kind: 'ws', title: 'WebSocket', spec: wsSpecFromApi },
   SIO: { kind: 'sio', title: 'Socket.IO', spec: sioSpecFromApi },
   GRPC: { kind: 'grpc', title: 'gRPC', spec: grpcSpecFromApi },
   // MQTT（第十三轮第 4 节）：地址是 broker，其余全在 spec.mqtt 里
-  MQTT: { kind: 'mqtt', title: 'MQTT', spec: mqttSpecFromApi }
+  MQTT: { kind: 'mqtt', title: 'MQTT', spec: mqttSpecFromApi },
+  // TCP / UDP（第十六轮）：地址是 tcp:// / tls:// / udp://，其余全在 spec.socket 里
+  TCP: { kind: 'socket', title: 'TCP', spec: socketSpecFromApi },
+  UDP: { kind: 'socket', title: 'UDP', spec: socketSpecFromApi }
 };
 
 function debugTabOf(api) {
   return DEBUG_TABS[String((api && api.method) || '').toUpperCase()] || null;
 }
 
-/** 既是 WebSocket / Socket.IO / gRPC 标签页又是 MQTT 标签页（状态都按 key 存、都要单独收尾） */
+/** 既是 WebSocket / Socket.IO / gRPC / MQTT 标签页又是 TCP / UDP 标签页（状态都按 key 存、都要单独收尾） */
 function isSocketTab(tab) {
   return Boolean(tab) &&
-    (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc' || tab.kind === 'mqtt');
+    (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc' || tab.kind === 'mqtt' ||
+      tab.kind === 'socket');
 }
 
 /** 调试标签页自己的运行时状态（在对应的 store 里），关标签页时要把它一起收掉 */
@@ -58,6 +67,7 @@ function dropDebugState(tab) {
   if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
   else if (tab.kind === 'grpc') useGrpcStore().closeFor(tab.key);
   else if (tab.kind === 'mqtt') useMqttStore().closeFor(tab.key);
+  else if (tab.kind === 'socket') useSocketStore().closeFor(tab.key);
   else if (tab.kind === 'ws') useWsStore().closeFor(tab.key);
 }
 
@@ -260,6 +270,47 @@ export function mqttSpecFromApi(api) {
     mqtt: api.mqtt
       ? JSON.parse(JSON.stringify(api.mqtt))
       : emptyMqttSpec().mqtt
+  };
+}
+
+/**
+ * TCP / UDP 调试标签页的请求内容（第十六轮）。
+ *
+ * 和 WebSocket / Socket.IO / MQTT 一样，**没有请求头 / query / 鉴权**那一套 ——
+ * 地址就是 `tcp://host:port` / `tls://host:port` / `udp://host:port`，其余全在 `socket` 里：
+ * 连接超时、忽略证书错误、分帧方式、默认发送格式与行尾、UDP 的本机端口与允许广播、常用发送。
+ * 这份形状和 `apis.extra.socket`（`lib/api/dto.js` 的 `toApiSocket`）**一一对应**。
+ *
+ * 默认值跟后端对齐：连接超时 10 秒、不分帧、文本、不加行尾、UDP 随机端口、不允许广播
+ * （见 `lib/api/dto.js` 的 toApiSocket）。
+ *
+ * **`method` 是自己加的**：`extra.socket` 里没有它（方法在 `api.method` 上），
+ * 但组件要按它决定显示 TCP 还是 UDP 的字段，所以 spec 里带一份。
+ * `delimiter` 用转义写法存（`'\\n'` 就是两个字符「反斜杠 + n」），和后端一个口径。
+ */
+export function emptySocketSpec(method) {
+  return {
+    url: '',
+    method: String(method || 'TCP').toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
+    socket: {
+      connectTimeoutMs: 10000,
+      tlsInsecure: false,
+      framing: { type: 'none', delimiter: '\\n', lengthBytes: 2, endian: 'be' },
+      sendEncoding: 'text',
+      lineEnding: 'none',
+      udp: { bindPort: null, broadcast: false },
+      saved: []
+    }
+  };
+}
+
+export function socketSpecFromApi(api) {
+  return {
+    url: api.url || '',
+    method: String(api.method || 'TCP').toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
+    socket: api.socket
+      ? JSON.parse(JSON.stringify(api.socket))
+      : emptySocketSpec().socket
   };
 }
 
@@ -488,6 +539,8 @@ export const useTabsStore = defineStore('tabs', function () {
     if (data.api.method === 'GRPC') return pushGrpcApiTab(data.api);
     // MQTT（第十三轮第 4 节）同理，走 MQTT 标签页
     if (data.api.method === 'MQTT') return pushMqttApiTab(data.api);
+    // TCP / UDP（第十六轮）同理，走同一个「TCP / UDP」标签页
+    if (data.api.method === 'TCP' || data.api.method === 'UDP') return pushSocketApiTab(data.api);
 
     const spec = specFromApi(data.api);
     const tab = Object.assign({
@@ -781,10 +834,69 @@ export const useTabsStore = defineStore('tabs', function () {
     return tab;
   }
 
+  /**
+   * 新建一个 TCP / UDP 调试标签页（第十六轮）。和 WebSocket / Socket.IO / gRPC / MQTT 一样：
+   * **不进目录树**，想留下来就点「保存到目录」，那时会变成绑定接口的标签页。
+   *
+   * @param {'TCP'|'UDP'} method
+   */
+  function openSocket(method) {
+    socketSeq += 1;
+    const name = String(method || 'TCP').toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+    const key = 'socket:' + socketSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'socket',
+      apiId: null,
+      folderId: null,
+      title: name,
+      spec: emptySocketSpec(name),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 绑定接口的 TCP / UDP 标签页（同一接口只会有一个标签页，key 是 `api:<id>`） */
+  function pushSocketApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = socketSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'socket',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || spec.method,
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
   function activate(key) {
     activeKey.value = key;
   }
-
   /**
    * 打开目录设置。key 里带目录 id，所以**同一个目录只会有一个标签页**。
    * 可编辑的内容放在 `spec` 上，这样「和快照比出 dirty」那套机制可以直接复用。
@@ -1126,9 +1238,9 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      // 绑定了接口的 WebSocket / Socket.IO / gRPC / MQTT 标签页（kind 是 ws / sio / grpc / mqtt）也要一起收
+      // 绑定了接口的 WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 标签页也要一起收
       return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
-        tab.kind === 'grpc' || tab.kind === 'mqtt') &&
+        tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'socket') &&
         Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
@@ -1187,11 +1299,12 @@ export const useTabsStore = defineStore('tabs', function () {
       tab.savedSnapshot = snapshot(nextSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
-      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N` / `mqtt:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N` / `mqtt:N` / `socket:N`，绑上接口之后 key 变成 `api:<id>`：
       // 运行时状态（日志、连接、在途的调用）要跟着搬，否则刚调出来的东西全丢
       if (debug.kind === 'sio') useSioStore().move(previousKey, tab.key);
       else if (debug.kind === 'grpc') useGrpcStore().move(previousKey, tab.key);
       else if (debug.kind === 'mqtt') useMqttStore().move(previousKey, tab.key);
+      else if (debug.kind === 'socket') useSocketStore().move(previousKey, tab.key);
       else useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
       return;
@@ -1235,7 +1348,7 @@ export const useTabsStore = defineStore('tabs', function () {
     const list = tabs.value.filter(function (tab) {
       return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
         (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
-          tab.kind === 'grpc' || tab.kind === 'mqtt');
+          tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'socket');
     });
     if (!list.length) return;
 
@@ -1430,6 +1543,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openSio: openSio,
     openGrpc: openGrpc,
     openMqtt: openMqtt,
+    openSocket: openSocket,
     openFolder: openFolder,
     openRunner: openRunner,
     openEnvDiff: openEnvDiff,

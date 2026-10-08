@@ -17,6 +17,7 @@ import WsTab from '@/components/ws/WsTab.vue';
 import SioTab from '@/components/sio/SioTab.vue';
 import GrpcTab from '@/components/grpc/GrpcTab.vue';
 import MqttTab from '@/components/mqtt/MqttTab.vue';
+import SocketTab from '@/components/socket/SocketTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
 import LoadTab from '@/components/load/LoadTab.vue';
@@ -250,6 +251,15 @@ function onNewMqtt() {
   tabs.openMqtt();
 }
 
+/** TCP / UDP 调试标签页（第十六轮）：同上，不进目录树。两种协议共用一个组件，方法决定字段 */
+function onNewTcp() {
+  tabs.openSocket('TCP');
+}
+
+function onNewUdp() {
+  tabs.openSocket('UDP');
+}
+
 /** 目录设置也是一种标签页，和接口并列（Postman 的习惯） */
 function onOpenFolder(folderId, options) {
   tabs.openFolder(folderId, options);
@@ -277,6 +287,8 @@ function tabMethod(tab) {
   if (tab.kind === 'grpc') return 'GRPC';
   // MQTT 调试标签页固定 MQTT（第十三轮第 4 节）：同上，spec 里没有 method 字段
   if (tab.kind === 'mqtt') return 'MQTT';
+  // TCP / UDP 调试标签页（第十六轮）：两种协议共用一个 kind，方法在 spec.method 上
+  if (tab.kind === 'socket') return String((tab.spec && tab.spec.method) || 'TCP').toUpperCase();
   // 目录页签、「运行」页签、「压测」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
   if (tab.kind === 'folder' || tab.kind === 'runner' || tab.kind === 'load' ||
       tab.kind === 'suite' || tab.kind === 'envdiff') return '';
@@ -454,6 +466,8 @@ onBeforeUnmount(function () {
           @new-sio="onNewSio"
           @new-grpc="onNewGrpc"
           @new-mqtt="onNewMqtt"
+          @new-tcp="onNewTcp"
+          @new-udp="onNewUdp"
           @open-folder="onOpenFolder"
           @run="onRun"
           @import="ui.openImport()"
@@ -560,6 +574,11 @@ onBeforeUnmount(function () {
           />
           <mqtt-tab
             v-else-if="tabs.active && tabs.active.kind === 'mqtt'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <socket-tab
+            v-else-if="tabs.active && tabs.active.kind === 'socket'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />
