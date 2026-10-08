@@ -205,5 +205,3 @@ test/                   测试
 ## License
 
 ISC
-
-最早基于饥人谷的 server-mock（2016–2017）发展而来。
