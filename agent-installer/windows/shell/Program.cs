@@ -87,7 +87,7 @@ namespace Apiloop
                     return 0;
                 }
 
-                Gateway.EnsureRunning();
+                // 不在这里等网关：窗口先出来显示「正在启动」，拉起和等待在 OpenWhenReadyAsync 里做
                 Application.Run(new ShellForm());
             }
             return 0;
@@ -102,41 +102,74 @@ namespace Apiloop
         /// 后台守护：拉起 node 网关，退了就重启（相当于 Mac 上 launchd 的 KeepAlive）。
         /// 连续很快就退（比如端口被占）时等待时间翻倍，最多 30 秒，免得空转。
         /// </summary>
+        /// <summary>关机 / 注销开始后置位：之后 node 退出就**不再重启**</summary>
+        private static volatile bool sessionEnding;
+
+        /// <summary>
+        /// 关机 / 注销时 Windows 会先结束 node.exe。以前守护循环以为它挂了，马上又拉起一个 ——
+        /// 这时系统已经不让新进程正常启动了，于是弹出「node.exe 应用程序无法正常启动」之类的报错
+        /// （2026-10-08 用户在重启电脑时遇到）。
+        ///
+        /// 所以守护进程要知道「会话在结束」：主线程跑一个消息循环（SystemEvents 靠它收到
+        /// WM_QUERYENDSESSION / WM_ENDSESSION），守护循环放到后台线程。
+        /// </summary>
         public static int Run()
         {
             using (var mutex = new Mutex(true, Program.GatewayMutex, out var created))
             {
                 if (!created) return 0;   // 已经有一个在守护了
 
-                var node = Path.Combine(Paths.InstallDir, "node", "node.exe");
-                var server = Path.Combine(Paths.InstallDir, "app", "bin", "server");
-                var delay = 1000;
-
-                while (true)
+                SystemEvents.SessionEnding += (s, e) => sessionEnding = true;
+                SystemEvents.SessionEnded += (s, e) =>
                 {
-                    var startedAt = DateTime.UtcNow;
-                    try
-                    {
-                        var info = new ProcessStartInfo(node, "\"" + server + "\" gateway")
-                        {
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            WorkingDirectory = Path.Combine(Paths.InstallDir, "app")
-                        };
-                        using (var process = Process.Start(info))
-                        {
-                            process.WaitForExit();
-                        }
-                    }
-                    catch
-                    {
-                        // node.exe 不见了之类：等一会儿再试（可能正在覆盖安装）
-                    }
+                    sessionEnding = true;
+                    Application.ExitThread();
+                };
 
-                    delay = (DateTime.UtcNow - startedAt).TotalSeconds > 60 ? 1000 : Math.Min(delay * 2, 30000);
-                    Thread.Sleep(delay);
-                }
+                var worker = new Thread(Supervise) { IsBackground = true, Name = "apiloop-gateway" };
+                worker.Start();
+
+                // 只为收系统消息；守护循环自己结束（sessionEnding）时也会退出这里
+                Application.Run();
+                return 0;
             }
+        }
+
+        private static void Supervise()
+        {
+            var node = Path.Combine(Paths.InstallDir, "node", "node.exe");
+            var server = Path.Combine(Paths.InstallDir, "app", "bin", "server");
+            var delay = 1000;
+
+            while (!sessionEnding)
+            {
+                var startedAt = DateTime.UtcNow;
+                try
+                {
+                    var info = new ProcessStartInfo(node, "\"" + server + "\" gateway")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        WorkingDirectory = Path.Combine(Paths.InstallDir, "app")
+                    };
+                    using (var process = Process.Start(info))
+                    {
+                        process.WaitForExit();
+                    }
+                }
+                catch
+                {
+                    // node.exe 不见了之类：等一会儿再试（可能正在覆盖安装）
+                }
+
+                if (sessionEnding) break;
+
+                delay = (DateTime.UtcNow - startedAt).TotalSeconds > 60 ? 1000 : Math.Min(delay * 2, 30000);
+                // 分段睡：等待期间开始关机的话，立刻停下来，不再拉起 node
+                for (var waited = 0; waited < delay && !sessionEnding; waited += 200) Thread.Sleep(200);
+            }
+
+            Application.Exit();
         }
 
         /// <summary>窗口启动时：网关守护不在就拉起来，再等它写出端口文件（最多 10 秒）</summary>
@@ -240,7 +273,79 @@ namespace Apiloop
                 if (e.TryGetWebMessageAsString() == RetryMessage) RetryNow();
             };
 
-            core.Navigate(GatewayUrl);
+            await OpenWhenReadyAsync();
+        }
+
+        /// <summary>
+        /// 先显示「正在启动」，等网关**真的能返回页面**了再加载（最多等 20 秒）。
+        ///
+        /// 以前是一上来就 Navigate：开机后第一次打开、或者网关刚被拉起来还没开始监听时，
+        /// 第一次加载必然失败，WebView2 先把自己的错误页（404 / 无法访问）闪一下，
+        /// 2 秒后重试成功页面才「突然」出来（2026-10-08 用户反馈）。
+        /// </summary>
+        private async Task OpenWhenReadyAsync()
+        {
+            ShowStartingPage();
+
+            // 网关守护不在就拉起来（会等它写出端口文件，最多 10 秒）。放到后台线程，窗口不卡
+            await Task.Run(() => Gateway.EnsureRunning());
+
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (DateTime.UtcNow < deadline)
+            {
+                port = Paths.ReadPort();   // 网关刚起来时才写端口文件，每轮都重读
+                if (await PageReadyAsync(port))
+                {
+                    web.CoreWebView2.Navigate(GatewayUrl);
+                    return;
+                }
+                await Task.Delay(300);
+            }
+
+            ShowOfflinePage();
+            retryTimer.Start();
+        }
+
+        /// <summary>网关能正常返回首页（200）才算好了：端口通了但还在起、或者端口被别的程序占着，都不算</summary>
+        private static async Task<bool> PageReadyAsync(int value)
+        {
+            try
+            {
+                var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://127.0.0.1:" + value + "/index.html");
+                request.Method = "GET";
+                request.Timeout = 1500;
+                request.Proxy = null;   // 系统代理不能插手本机地址
+                var task = request.GetResponseAsync();
+                if (await Task.WhenAny(task, Task.Delay(1500)) != task)
+                {
+                    request.Abort();
+                    return false;
+                }
+                using (var response = (System.Net.HttpWebResponse)task.Result)
+                {
+                    return response.StatusCode == System.Net.HttpStatusCode.OK;
+                }
+            }
+            catch
+            {
+                return false;   // 连不上、404、超时：都是「还没好」
+            }
+        }
+
+        private void ShowStartingPage()
+        {
+            web.CoreWebView2.NavigateToString(@"<!DOCTYPE html><html lang=""zh-CN""><head><meta charset=""utf-8""><title>apiloop</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+         font-family:'Microsoft YaHei UI','Segoe UI',sans-serif; background:#f5f5f7; color:#1d1d1f; }
+  @media (prefers-color-scheme: dark) { body { background:#1e1e20; color:#f5f5f7; } }
+  .card { text-align:center; }
+  .spin { width:28px; height:28px; margin:0 auto 16px; border-radius:50%;
+          border:3px solid rgba(128,128,128,.25); border-top-color:#ff6c37; animation:s .8s linear infinite; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  p { font-size:13px; margin:0; opacity:.65; }
+</style></head><body><div class=""card""><div class=""spin""></div><p>apiloop 正在启动…</p></div></body></html>");
         }
 
         /* ---------------------------------------------------------- 导航 */
@@ -312,34 +417,18 @@ namespace Apiloop
             try
             {
                 port = Paths.ReadPort();   // 网关重启可能换了端口
-                if (await PortOpenAsync(port))
+                if (await PageReadyAsync(port))
                 {
                     web.CoreWebView2.Navigate(GatewayUrl);
                 }
                 else
                 {
-                    Gateway.EnsureRunning();
+                    await Task.Run(() => Gateway.EnsureRunning());
                 }
             }
             finally
             {
                 retrying = false;
-            }
-        }
-
-        private static async Task<bool> PortOpenAsync(int value)
-        {
-            using (var client = new System.Net.Sockets.TcpClient())
-            {
-                try
-                {
-                    var connect = client.ConnectAsync("127.0.0.1", value);
-                    return await Task.WhenAny(connect, Task.Delay(1000)) == connect && client.Connected;
-                }
-                catch
-                {
-                    return false;
-                }
             }
         }
 
