@@ -23,6 +23,7 @@ import {
   DatabaseImport,
   FileText,
   Flask,
+  Folder,
   Folders,
   GitCompare,
   Package,
@@ -373,23 +374,46 @@ function syncDraft() {
   });
 }
 
-/** 分组下拉的选项：第一个是「未分组」（值为空字符串） */
-const groupOptions = computed(function () {
-  return [{ label: t('layout.ungrouped'), value: '' }].concat(prefs.projectGroups.map(function (group) {
-    return { label: group.name, value: group.id };
-  }));
-});
-
-/** 管理分组弹窗里每个分组后面显示「N 个项目」（只数还存在的项目） */
-function groupCount(groupId) {
+/** 这个分组里现有的项目 id（去掉已经不存在的项目） */
+function groupProjectIds(groupId) {
   const group = prefs.projectGroups.find(function (item) { return item.id === groupId; });
-  if (!group) return 0;
-  return (group.projectIds || []).filter(function (id) { return byId.value.has(id); }).length;
+  if (!group) return [];
+  return (group.projectIds || []).filter(function (id) { return byId.value.has(id); });
 }
 
-function groupValueOf(projectId) {
-  const group = prefs.groupOf(projectId);
-  return group ? group.id : '';
+/** 每个分组后面显示「N 个项目」 */
+function groupCount(groupId) {
+  return groupProjectIds(groupId).length;
+}
+
+/**
+ * 某个分组多选框的选项：所有项目。已经在别的分组里的，后面注明在哪个组 ——
+ * 选进来就从那个组挪过来（一个项目只属于一个分组）。
+ */
+function projectOptionsFor(groupId) {
+  return projects.projects.map(function (project) {
+    const other = prefs.groupOf(project.id);
+    const label = other && other.id !== groupId
+      ? project.name + t('layout.inGroupSuffix', { name: other.name })
+      : project.name;
+    return { label: label, value: project.id };
+  });
+}
+
+/** 没进任何分组的项目名，弹窗底下列一行 */
+const ungroupedNames = computed(function () {
+  return projects.projects
+    .filter(function (project) { return !prefs.groupOf(project.id); })
+    .map(function (project) { return project.name; });
+});
+
+async function setProjects(groupId, ids) {
+  try {
+    await prefs.setGroupProjects(groupId, ids || []);
+  } catch (err) {
+    message.error(err.message);
+  }
+  syncDraft();
 }
 
 async function commitRename(group) {
@@ -437,15 +461,6 @@ function removeGroup(group) {
       syncDraft();
     }
   });
-}
-
-async function assign(projectId, groupId) {
-  try {
-    await prefs.assignProject(projectId, groupId || null);
-  } catch (err) {
-    message.error(err.message);
-  }
-  syncDraft();
 }
 </script>
 
@@ -611,37 +626,50 @@ async function assign(projectId, groupId) {
     </div>
   </n-popover>
 
-  <!-- 管理分组：新建 / 改名 / 删除，以及每个项目挑一个分组 -->
+  <!--
+    管理分组：每个分组一张卡片 —— 名字（点进去改）、删除、下面一个多选框挑它包含的项目。
+    2026-10-07 以前是「分组列表 + 每个项目一个下拉」两块，用户说看着奇怪。
+  -->
   <n-modal
     v-model:show="showGroups"
     preset="card"
-    :title="t('layout.manageGroups')"
-    style="width: 520px; max-width: 92vw"
+    :title="t('layout.manageGroupsTitle')"
+    style="width: 560px; max-width: 92vw"
   >
-    <div class="manage-title">{{ t('layout.groupSection') }}</div>
-    <div class="manage-box">
-      <div v-for="group in draftGroups" :key="group.id" class="manage-item">
-        <n-icon class="manage-icon" size="15" :component="Folders" />
-        <!-- 名字直接点进去改：平时看着像文字，失焦 / 回车提交 -->
-        <n-input
-          v-model:value="group.name"
-          class="manage-rename"
+    <div class="manage-list">
+      <div v-for="group in draftGroups" :key="group.id" class="group-card">
+        <div class="group-head">
+          <n-icon class="manage-icon" size="16" :component="Folder" />
+          <n-input
+            v-model:value="group.name"
+            class="manage-rename"
+            size="small"
+            :bordered="false"
+            :placeholder="t('layout.groupNamePlaceholder')"
+            @blur="commitRename(group)"
+            @keyup.enter="commitRename(group)"
+          />
+          <span class="manage-count">{{ t('layout.groupProjectCount', { n: groupCount(group.id) }) }}</span>
+          <n-button size="tiny" quaternary circle :title="t('app.delete')" @click="removeGroup(group)">
+            <template #icon>
+              <n-icon :component="Trash" />
+            </template>
+          </n-button>
+        </div>
+        <n-select
+          multiple
+          filterable
           size="small"
-          :bordered="false"
-          :placeholder="t('layout.groupNamePlaceholder')"
-          @blur="commitRename(group)"
-          @keyup.enter="commitRename(group)"
+          :value="groupProjectIds(group.id)"
+          :options="projectOptionsFor(group.id)"
+          :placeholder="t('layout.groupProjectsPlaceholder')"
+          @update:value="(value) => setProjects(group.id, value)"
         />
-        <span class="manage-count">{{ t('layout.groupProjectCount', { n: groupCount(group.id) }) }}</span>
-        <n-button size="tiny" quaternary circle :title="t('app.delete')" @click="removeGroup(group)">
-          <template #icon>
-            <n-icon :component="Trash" />
-          </template>
-        </n-button>
       </div>
+
       <div v-if="!draftGroups.length" class="manage-empty">{{ t('layout.noGroups') }}</div>
 
-      <div class="manage-item manage-add">
+      <div class="manage-add">
         <n-input
           v-model:value="newGroupName"
           size="small"
@@ -657,22 +685,11 @@ async function assign(projectId, groupId) {
       </div>
     </div>
 
-    <div class="manage-title spaced">{{ t('layout.projectGroups') }}</div>
-    <div class="manage-box">
-      <div class="manage-item manage-head">
-        <span class="manage-name">{{ t('layout.projectColumn') }}</span>
-        <span class="manage-select">{{ t('layout.groupColumn') }}</span>
-      </div>
-      <div v-for="project in projects.projects" :key="project.id" class="manage-item">
-        <span class="manage-name" :title="project.name">{{ project.name }}</span>
-        <n-select
-          class="manage-select"
-          size="small"
-          :value="groupValueOf(project.id)"
-          :options="groupOptions"
-          @update:value="(value) => assign(project.id, value)"
-        />
-      </div>
+    <div class="ungrouped-line">
+      <template v-if="ungroupedNames.length">
+        {{ t('layout.ungroupedList', { names: ungroupedNames.join('、') }) }}
+      </template>
+      <template v-else>{{ t('layout.allGrouped') }}</template>
     </div>
 
     <template #footer>
@@ -979,49 +996,27 @@ async function assign(projectId, groupId) {
   border-top: 1px solid rgba(128, 128, 128, 0.14);
 }
 
-.manage-add > .n-input {
-  flex: 1;
-}
 
-.manage-add > .n-button {
-  flex: none;
-}
 
 /* ---------------- 管理分组弹窗 ---------------- */
 
-.manage-title {
-  margin-bottom: 6px;
-  font-size: 12px;
-  opacity: 0.55;
+.manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.manage-title.spaced {
-  margin-top: 18px;
-}
-
-/* 每一块装进一个带边框的列表，行之间用细线分开 */
-.manage-box {
+.group-card {
+  padding: 8px 12px 12px;
   border: 1px solid rgba(128, 128, 128, 0.18);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-.manage-item {
+.group-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 4px 10px;
-}
-
-.manage-item + .manage-item,
-.manage-empty + .manage-item {
-  border-top: 1px solid rgba(128, 128, 128, 0.12);
-}
-
-.manage-head {
-  min-height: 30px;
-  font-size: 12px;
-  opacity: 0.5;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .manage-icon {
@@ -1029,9 +1024,11 @@ async function assign(projectId, groupId) {
   opacity: 0.5;
 }
 
+/* 名字：没边框，看着就是标题，点进去才能改 */
 .manage-rename {
   flex: 1;
   min-width: 0;
+  font-weight: 500;
 }
 
 .manage-count {
@@ -1041,26 +1038,30 @@ async function assign(projectId, groupId) {
 }
 
 .manage-add {
-  background: rgba(128, 128, 128, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.manage-name {
+.manage-add > .n-input {
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
 }
 
-.manage-select {
+.manage-add > .n-button {
   flex: none;
-  width: 160px;
 }
 
 .manage-empty {
-  padding: 10px;
+  padding: 12px;
   font-size: 12px;
+  text-align: center;
   opacity: 0.45;
+}
+
+.ungrouped-line {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.55;
 }
 </style>
