@@ -12,7 +12,7 @@ import {
   NTooltip,
   useMessage
 } from 'naive-ui';
-import { Book, File, Refresh, Trash } from '@vicons/tabler';
+import { Book, File, Refresh, TextWrap, Trash } from '@vicons/tabler';
 import { BARE_INPUT_THEME } from '@/utils/bareInput';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import VarInput from '@/components/common/VarInput.vue';
@@ -92,6 +92,30 @@ const editorRef = ref(null);
 const FORMAT_HINT = computed(function () {
   return t('request.formatHint');
 });
+
+/**
+ * 请求体编辑器自动换行（用户 2026-10-08：长字符串一行到底看不全）。默认开，
+ * 和响应区那个开关一样记在 localStorage 里（各记各的）。
+ */
+const WRAP_KEY = 'apiloop.request.wrap';
+
+function readWrap() {
+  try {
+    return localStorage.getItem(WRAP_KEY) !== '0';
+  } catch (err) {
+    return true;
+  }
+}
+const wrap = ref(readWrap());
+
+function toggleWrap() {
+  wrap.value = !wrap.value;
+  try {
+    localStorage.setItem(WRAP_KEY, wrap.value ? '1' : '0');
+  } catch (err) {
+    // 存不下就只在这次生效
+  }
+}
 
 function formatBody() {
   if (editorRef.value) editorRef.value.format();
@@ -340,6 +364,15 @@ async function onFilePicked(event) {
         </template>
         {{ FORMAT_HINT }}
       </n-tooltip>
+      <button
+        v-if="mode === 'raw' || mode === 'graphql'"
+        class="wrap-tool"
+        :class="{ on: wrap }"
+        :title="t('response.wrapTitle')"
+        @click="toggleWrap"
+      >
+        <n-icon size="16" :component="TextWrap" />
+      </button>
     </n-space>
 
     <div class="content">
@@ -348,6 +381,7 @@ async function onFilePicked(event) {
           ref="editorRef"
           :model-value="body.raw || ''"
           :language="body.language || 'json'"
+          :wrap="wrap"
           min-height="220px"
           @update:model-value="(v) => { body.raw = v; }"
           @format-error="onFormatError"
@@ -502,6 +536,7 @@ async function onFilePicked(event) {
                 :model-value="(body.graphql && body.graphql.query) || ''"
                 language="graphql"
                 :schema="gqlSchema"
+                :wrap="wrap"
                 min-height="160px"
                 @update:model-value="(v) => { body.graphql = Object.assign({ variables: '' }, body.graphql, { query: v }); }"
               />
@@ -517,6 +552,7 @@ async function onFilePicked(event) {
             <code-editor
               :model-value="(body.graphql && body.graphql.variables) || ''"
               language="json"
+              :wrap="wrap"
               min-height="120px"
               @update:model-value="(v) => { body.graphql = Object.assign({ query: '' }, body.graphql, { variables: v }); }"
             />
@@ -721,6 +757,31 @@ async function onFilePicked(event) {
 }
 
 /* 禁用的按钮不派发鼠标事件，提示要挂在外面的 span 上 */
+/* 自动换行开关：和响应区的图标按钮一个样子，开着时带底色 */
+.wrap-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.wrap-tool:hover {
+  background: rgba(128, 128, 128, 0.12);
+  opacity: 1;
+}
+
+.wrap-tool.on {
+  background: rgba(128, 128, 128, 0.16);
+  opacity: 1;
+}
+
 .gql-btn-wrap {
   display: inline-flex;
   flex: none;
