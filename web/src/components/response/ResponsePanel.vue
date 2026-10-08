@@ -413,6 +413,12 @@ function requestBodyText() {
                   <template v-else-if="result">
                     <span class="metric">{{ t('response.duration', { time: formatMs(result.timings && result.timings.total) }) }}</span>
                     <span class="metric">{{ t('response.size', { size: formatBytes(response.size) }) }}</span>
+                    <!-- 响应是一个文件时（T39）挂个小标签，悬停看完整文件名 -->
+                    <span
+                      v-if="response.fileName"
+                      class="file-tag"
+                      :title="t('response.fileTagTitle') + '：' + response.fileName"
+                    >📎 {{ response.fileName }}</span>
                   </template>
 
                   <n-tag v-if="proxy" size="small" :bordered="false" type="info" class="proxy-tag">
@@ -642,6 +648,16 @@ function requestBodyText() {
 .metric {
   opacity: 0.7;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 响应是文件时的小标签（T39）：文件名可能很长，截断，完整名字在 title 里 */
+.file-tag {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 

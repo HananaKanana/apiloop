@@ -155,5 +155,31 @@ export default {
   searchNext: 'Next (Enter)',
   searchClose: 'Close (Esc)',
   searchCount: '{index} of {total}',
-  searchNoMatch: 'No match'
+  searchNoMatch: 'No match',
+
+  /* ---------------- response file preview & save (T39) ---------------- */
+  saveLocal: 'Save to local',
+  saveLocalTitle: 'Save to local (downloads the complete file when there is one)',
+  previewTable: 'Table',
+  previewLoading: 'Loading…',
+  previewLoadingFull: 'Loading the complete file…',
+  previewLoadFailed: 'Could not load the complete file',
+  fileExpired: 'The file has expired, send the request again',
+  fileSaveFailed: 'Saving failed',
+  previewBrokenImage: 'The image cannot be displayed',
+  pdfTitle: 'PDF preview',
+  previewZipFailed: 'This archive cannot be read',
+  previewZipSummary: '{n} files, {size} uncompressed',
+  previewColName: 'Path',
+  previewColSize: 'Size',
+  previewColCompressed: 'Compressed',
+  previewZipNoExtract: 'Only the listing is shown; previewing a single entry is not supported.',
+  previewXlsxFailed: 'This spreadsheet cannot be read (only .xlsx is supported)',
+  previewXlsUnsupported: 'Only .xlsx can be previewed — save it and open it in Excel.',
+  previewTableTruncated: 'Only the first {rows} rows and {cols} columns are shown.',
+  previewEmptyTable: 'Nothing to show.',
+  previewUntitledFile: 'Untitled file',
+  previewUnknownType: 'Unknown type',
+  previewAnyway: 'Preview anyway',
+  fileTagTitle: 'This response is a file; use “Save to local” to get the complete one'
 };

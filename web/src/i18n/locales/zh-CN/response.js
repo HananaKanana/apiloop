@@ -146,5 +146,31 @@ export default {
   searchNext: '下一个（Enter）',
   searchClose: '关闭（Esc）',
   searchCount: '第 {index} / 共 {total} 个',
-  searchNoMatch: '没有匹配'
+  searchNoMatch: '没有匹配',
+
+  /* ---------------- 响应文件的预览与保存（T39） ---------------- */
+  saveLocal: '保存到本地',
+  saveLocalTitle: '保存到本地（有完整文件时下完整的那一份）',
+  previewTable: '表格',
+  previewLoading: '正在加载…',
+  previewLoadingFull: '正在加载完整文件…',
+  previewLoadFailed: '取完整文件失败',
+  fileExpired: '文件已过期，请重新发送',
+  fileSaveFailed: '保存失败',
+  previewBrokenImage: '图片显示不出来',
+  pdfTitle: 'PDF 预览',
+  previewZipFailed: '这个压缩包读不出来',
+  previewZipSummary: '共 {n} 个文件，解压后 {size}',
+  previewColName: '路径',
+  previewColSize: '大小',
+  previewColCompressed: '压缩后',
+  previewZipNoExtract: '只能看列表，不支持解开单个文件预览。',
+  previewXlsxFailed: '这个表格读不出来（只支持 .xlsx）',
+  previewXlsUnsupported: '只能预览 .xlsx，请保存到本地后用 Excel 打开。',
+  previewTableTruncated: '只显示前 {rows} 行、{cols} 列。',
+  previewEmptyTable: '没有内容。',
+  previewUntitledFile: '未命名文件',
+  previewUnknownType: '未知类型',
+  previewAnyway: '仍然预览',
+  fileTagTitle: '这个响应是一个文件，点「保存到本地」下完整的那份'
 };

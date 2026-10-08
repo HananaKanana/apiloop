@@ -5,7 +5,17 @@ import { NAutoComplete, NAlert, NButton, NCheckbox, NDropdown, NIcon, useMessage
 import { Braces, ChevronDown, Copy, Download, Eye, Filter, ListDetails, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import JsonTreeView from '@/components/response/JsonTreeView.vue';
+import ImagePreview from '@/components/response/preview/ImagePreview.vue';
+import PdfPreview from '@/components/response/preview/PdfPreview.vue';
+import MediaPreview from '@/components/response/preview/MediaPreview.vue';
+import SheetPreview from '@/components/response/preview/SheetPreview.vue';
+import CsvPreview from '@/components/response/preview/CsvPreview.vue';
+import ZipPreview from '@/components/response/preview/ZipPreview.vue';
+import FileCard from '@/components/response/preview/FileCard.vue';
 import { useUiStore } from '@/stores/ui';
+import { API_PREFIX, baseHeaders } from '@/api/client';
+import { downloadBlob } from '@/utils/download';
+import { AUTO_PREVIEW_LIMIT, detectFileKind, suggestedName } from '@/utils/responseFile';
 import { buildJsonRows } from '@/utils/jsonTree';
 import { copyText } from '@/utils/clipboard';
 import {
@@ -130,6 +140,138 @@ const isJson = computed(function () {
 const tooBigToFormat = computed(function () {
   return size.value > FORMAT_LIMIT;
 });
+
+/* ---------------- 响应文件：预览与保存（T39） ---------------- */
+
+/** 后端从 `Content-Disposition` 取出来的文件名 */
+const fileName = computed(function () {
+  return String((props.response && props.response.fileName) || '');
+});
+
+/** 非文本、或者被截断的响应才有：能下到**完整**的文件（保留 1 小时） */
+const fileId = computed(function () {
+  return String((props.response && props.response.fileId) || '');
+});
+
+/** 内存里那份的前 16 个字节，给魔数识别用（base64 解出来的） */
+const headBytes = computed(function () {
+  if (isText.value) return new Uint8Array(0);
+  const raw = body.value;
+  if (!raw) return new Uint8Array(0);
+  try {
+    const binary = atob(String(raw).slice(0, 32));
+    const out = new Uint8Array(Math.min(16, binary.length));
+    for (let i = 0; i < out.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  } catch (err) {
+    return new Uint8Array(0);
+  }
+});
+
+/** 这份响应该用哪种预览：Content-Type → 扩展名 → 魔数 */
+const fileKind = computed(function () {
+  return detectFileKind(contentType.value, fileName.value, headBytes.value);
+});
+
+/** 完整文件（从 `/response-files/:id` 取回来的） */
+const fullBytes = ref(null);
+const blobUrl = ref('');
+/** '' / 'expired'（404，过期了）/ 'failed' */
+const fullError = ref('');
+/** 超过 20 MB 时用户点了「仍然预览」 */
+const forcePreview = ref(false);
+const savingFile = ref(false);
+
+/** 要不要去取完整文件：被截断了、或者内容本来就不是文本 */
+const needFullFile = computed(function () {
+  if (!fileId.value) return false;
+  return truncated.value || !isText.value;
+});
+
+/**
+ * 正在取完整文件（还没有结果、也没出错）。
+ *
+ * 用它而不是一个 `loading` 开关：**首次渲染就是「正在加载」**（不用等 `onMounted` 才切过去），
+ * SSR 里渲染出来的也是这一屏 —— 不然会先闪一下文件卡片再变成预览。
+ */
+const fullPending = computed(function () {
+  return needFullFile.value && !fullBytes.value && !fullError.value;
+});
+
+/** 完整文件到手了、而且没超过「自动预览」的上限（或者用户硬要看） */
+const fullReady = computed(function () {
+  if (!fullBytes.value) return false;
+  return fullBytes.value.length <= AUTO_PREVIEW_LIMIT || forcePreview.value;
+});
+
+/** 太到不该自动预览（给文件卡片显示「仍然预览」用） */
+const tooBigToPreview = computed(function () {
+  return Boolean(fullBytes.value) && fullBytes.value.length > AUTO_PREVIEW_LIMIT;
+});
+
+function revokeBlob() {
+  if (blobUrl.value) {
+    try { URL.revokeObjectURL(blobUrl.value); } catch (err) { /* 已经没了就算了 */ }
+    blobUrl.value = '';
+  }
+}
+
+/** 取完整文件。404 就是过期了 */
+async function fetchFullFile() {
+  const res = await fetch(API_PREFIX + '/response-files/' + encodeURIComponent(fileId.value), {
+    headers: baseHeaders()
+  });
+  if (res.status === 404) throw new Error('expired');
+  if (!res.ok) throw new Error('failed');
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function loadFullFile() {
+  if (!needFullFile.value || fullBytes.value || fullError.value) return;
+  try {
+    const bytes = await fetchFullFile();
+    fullBytes.value = bytes;
+    revokeBlob();
+    blobUrl.value = URL.createObjectURL(
+      new Blob([bytes], { type: contentType.value || 'application/octet-stream' })
+    );
+  } catch (err) {
+    fullError.value = err && err.message === 'expired' ? 'expired' : 'failed';
+  }
+}
+
+/**
+ * 打开就有结果的标签页（比如切回来）也要取一次 —— 只挂 `watch` 的话，
+ * 初始那一次永远不会触发，界面就一直卡在「正在加载完整文件…」。
+ */
+onMounted(loadFullFile);
+
+/** 新的一次响应：把上一个文件的东西全丢掉，再重新取 */
+watch([fileId, body], function () {
+  revokeBlob();
+  fullBytes.value = null;
+  fullError.value = '';
+  forcePreview.value = false;
+  loadFullFile();
+});
+
+/** 「保存到本地」：有完整文件就下完整的那份，没有就用内存里的 */
+async function saveFile() {
+  savingFile.value = true;
+  try {
+    if (fileId.value) {
+      const bytes = fullBytes.value || await fetchFullFile();
+      const name = suggestedName(fileName.value, contentType.value, downloadName());
+      downloadBlob(name, new Blob([bytes], { type: contentType.value || 'application/octet-stream' }));
+      return;
+    }
+    download();
+  } catch (err) {
+    message.error(err && err.message === 'expired' ? t('response.fileExpired') : t('response.fileSaveFailed'));
+  } finally {
+    savingFile.value = false;
+  }
+}
 
 /** 按 content-type 认格式；没写或写得不准（不少接口 JSON 也回 text/plain）再看内容 */
 const detected = computed(function () {
@@ -308,7 +450,10 @@ const fieldTree = computed(function () {
 const availableViews = computed(function () {
   if (isText.value) {
     // 是 JSON 就多一个「字段」视图（第六轮第 1 节）：一行一个字段，可以直接加断言 / 提取
-    return fieldTree.value.ok ? ['code', 'fields', 'preview'] : ['code', 'preview'];
+    const views = fieldTree.value.ok ? ['code', 'fields', 'preview'] : ['code', 'preview'];
+    // CSV 多一个「表格」视图（T39）：CSV 本来就是文本，代码视图保留，表格是额外给的
+    if (fileKind.value === 'csv') views.splice(1, 0, 'table');
+    return views;
   }
   if (isImage.value) return ['preview'];
   return [];
@@ -656,6 +801,7 @@ onMounted(function () {
 
 onBeforeUnmount(function () {
   ui.registerResponseSearch(null);
+  revokeBlob();
   window.removeEventListener('keydown', onFilterKeydown);
   if (filterTimer) clearTimeout(filterTimer);
 });
@@ -695,6 +841,16 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
         <button class="tool" :class="{ active: view === 'preview' }" @click="view = view === 'preview' ? 'code' : 'preview'">
           <n-icon size="14" :component="Eye" />
           <span>{{ t('response.preview') }}</span>
+        </button>
+        <!-- CSV 的表格视图（T39）：代码视图还在，这个是额外给的 -->
+        <button
+          v-if="fileKind === 'csv'"
+          class="tool"
+          :class="{ active: view === 'table' }"
+          @click="view = view === 'table' ? 'code' : 'table'"
+        >
+          <n-icon size="14" :component="ListDetails" />
+          <span>{{ t('response.previewTable') }}</span>
         </button>
         <!-- 字段列表（第六轮第 1 节）：只有 JSON 才有，右边每个字段可以直接加断言 / 提取 -->
         <button
@@ -737,8 +893,9 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
           <n-icon size="16" :component="Copy" />
         </button>
       </template>
-      <button class="icon-tool" :title="t('response.downloadBodyTitle')" @click="download">
-        <n-icon size="16" :component="Download" />
+      <button class="tool save" :title="t('response.saveLocalTitle')" :disabled="savingFile" @click="saveFile">
+        <n-icon size="14" :component="Download" />
+        <span>{{ t('response.saveLocal') }}</span>
       </button>
     </div>
 
@@ -873,6 +1030,10 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
         />
       </template>
 
+      <template v-else-if="isText && view === 'table'">
+        <csv-preview :text="prettyText" />
+      </template>
+
       <template v-else-if="isText && view === 'fields'">
         <json-tree-view
           :tree="fieldTree"
@@ -890,18 +1051,57 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
         <iframe class="preview" sandbox="" :srcdoc="previewHtml" />
       </template>
 
-      <template v-else-if="isImage">
-        <div class="image-wrap">
-          <img class="image" :src="dataUrl" :alt="t('response.imageAlt')" />
-        </div>
-      </template>
+      <!--
+        非文本响应（T39）：按类型挑预览。
+        需要完整内容（被截断了、或者本来就不是文本）时先去 `/response-files/:id` 取，
+        取的过程中显示「正在加载完整文件…」；超过 20 MB 不自动预览，给文件卡片 + 「仍然预览」。
+      -->
+      <template v-else-if="!isText">
+        <div v-if="fullPending" class="preview-state">{{ t('response.previewLoadingFull') }}</div>
 
-      <template v-else>
-        <div class="binary">
-          <p>{{ t('response.binaryNotice') }}</p>
-          <p class="binary-size">{{ t('response.binarySize', { size: formatSize(size) }) }}</p>
-          <n-button size="small" @click="download">{{ t('response.download') }}</n-button>
-        </div>
+        <n-alert v-else-if="fullError" type="warning" :show-icon="false" class="notice">
+          {{ fullError === 'expired' ? t('response.fileExpired') : t('response.previewLoadFailed') }}
+        </n-alert>
+
+        <template v-else-if="needFullFile && !fullReady">
+          <file-card
+            :file-name="fileName"
+            :content-type="contentType"
+            :size="fullBytes ? fullBytes.length : size"
+            :can-preview="tooBigToPreview"
+            :saving="savingFile"
+            @save="saveFile"
+            @preview="forcePreview = true"
+          />
+        </template>
+
+        <image-preview v-else-if="fileKind === 'image'" :data-url="dataUrl" :blob-url="blobUrl" />
+
+        <pdf-preview v-else-if="fileKind === 'pdf'" :blob-url="blobUrl" />
+
+        <media-preview
+          v-else-if="fileKind === 'audio' || fileKind === 'video'"
+          :kind="fileKind"
+          :blob-url="blobUrl"
+          :mime="contentType"
+        />
+
+        <sheet-preview v-else-if="fileKind === 'xlsx'" :bytes="fullBytes" />
+
+        <zip-preview v-else-if="fileKind === 'zip'" :bytes="fullBytes" />
+
+        <n-alert v-else-if="fileKind === 'xls'" type="info" :show-icon="false" class="notice">
+          {{ t('response.previewXlsUnsupported') }}
+        </n-alert>
+
+        <file-card
+          v-else
+          :file-name="fileName"
+          :content-type="contentType"
+          :size="fullBytes ? fullBytes.length : size"
+          :saving="savingFile"
+          @save="saveFile"
+        />
       </template>
     </div>
   </div>
@@ -989,6 +1189,24 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
   font-size: 12px;
   opacity: 0.6;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 「保存到本地」是个带文字的主按钮，别像别的图标按钮那样淡 */
+.tool.save {
+  opacity: 0.85;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+}
+
+.tool.save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.preview-state {
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .notice {
