@@ -47,3 +47,8 @@ export function revokeShare(id) {
 export function getPublicDoc(token) {
   return get('/public/shares/' + encodeURIComponent(token));
 }
+
+/** 分享文档另存为 OpenAPI（JSON）：`{ filename, text }`，页面自己存成文件 */
+export function getPublicOpenapi(token) {
+  return get('/public/shares/' + encodeURIComponent(token) + '/openapi');
+}

@@ -16,6 +16,7 @@ import * as mockLogApi from '@/api/mockLog';
 import { useProjectStore } from '@/stores/project';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { useGatewayStore } from '@/stores/gateway';
 import { mockBaseUrl } from '@/utils/mock';
 
 /**
@@ -30,6 +31,10 @@ import { mockBaseUrl } from '@/utils/mock';
  * 另外还要防住**请求交叠**（定时器只有一个，不代表请求只有一个）：用 `inFlight`
  * 保证同一时刻只有一次拉取，用 `generation` 把「切项目 / 清空」之前发出的那批结果
  * 整批作废。少了这两样，慢网络下会出现重复的行，清空之后旧记录还会自己回来。
+ *
+ * **两个来源**（2026-10-08）：客户端里本机 Mock 的调用记在本机网关，云端 Mock 的记在云端，
+ * 两边各拉各的（各有各的 lastSeq —— seq 是各自进程里的计数器，不能混用），合在一起按时间倒序，
+ * 每行标上「本机 / 云端」。云端关了 Mock 或者项目没上过云端时只拉本机。网页版只有云端一个来源。
  */
 const POLL_MS = 2000;
 const MAX_ROWS = 500;
@@ -37,6 +42,7 @@ const MAX_ROWS = 500;
 const projects = useProjectStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
+const gateway = useGatewayStore();
 const message = useMessage();
 
 /**
@@ -52,7 +58,8 @@ const { t } = useI18n();
 
 /** 新的在最上面，所以内部是倒序存的 */
 const items = ref([]);
-const lastSeq = ref(0);
+/** 每个来源各自的 lastSeq：`{ local: 12, cloud: 3 }`（网页版只有 `cloud`） */
+const lastSeq = ref({});
 const paused = ref(false);
 const loaded = ref(false);
 const expandedSeq = ref(null);
@@ -72,14 +79,28 @@ const visible = computed({
 });
 
 /**
+ * 这次要拉哪几个来源。'local' 是本机网关，'cloud' 是云端（网页版直接连的就是云端）。
+ * 云端 Mock 默认关（2026-10-08）—— 关着时 mockAvailable 是 false，**一条都不转发给云端**，
+ * 客户端只拉本机；只有云端开了 Mock 才顺带拉云端那份。
+ */
+const sources = computed(function () {
+  if (!gateway.isGateway) return gateway.cloudMockOff ? [] : ['cloud'];
+  return gateway.mockAvailable ? ['local', 'cloud'] : ['local'];
+});
+
+/** 每行一个唯一键：两个来源的 seq 会撞 */
+function keyOf(item) {
+  return item.source + ':' + item.seq;
+}
+
+/**
  * 空状态里要显示的 mock 地址前缀，和 Mock 页签里那条保持一致。
- * 用 mockBaseUrl：客户端里 mock 跑在云端，原来拼 window.location.origin 会显示成
- * 127.0.0.1:47321，那个地址根本不提供 mock（用户 2026-10-02 问到）。
+ * 客户端里给本机 Mock 的地址（本机的一直在；云端的默认关，2026-10-08），网页版给云端的。
  */
 const mockPrefixText = computed(function () {
   const project = projects.current;
   if (!project) return '';
-  return mockBaseUrl(project);
+  return mockBaseUrl(project, gateway.isGateway ? 'local' : 'cloud');
 });
 
 /* ---------------- 轮询 ---------------- */
@@ -108,16 +129,36 @@ async function tick() {
   inFlight = true;
 
   try {
-    const data = await mockLogApi.listMockLog(pid, { after: lastSeq.value, limit: 100 });
+    const results = await Promise.all(sources.value.map(function (source) {
+      const after = lastSeq.value[source] || 0;
+      const opts = { after: after, limit: 100 };
+      if (gateway.isGateway && source === 'cloud') opts.source = 'cloud';
+      // 一边失败（比如云端连不上）不影响另一边：失败的这一边这轮当没有新记录
+      return mockLogApi.listMockLog(pid, opts).then(function (data) {
+        return { source: source, data: data };
+      }, function () {
+        return null;
+      });
+    }));
 
     // 拉的过程中切了项目、或者点了清空 —— 这一批已经不属于当前这一代，整批丢掉
     if (mine !== generation || pid !== projects.currentId) return;
 
-    const list = data.items || [];
-    if (list.length) {
-      items.value = list.slice().reverse().concat(items.value).slice(0, MAX_ROWS);
+    let fresh = [];
+    const seqs = { ...lastSeq.value };
+    results.forEach(function (result) {
+      if (!result) return;
+      const list = (result.data && result.data.items) || [];
+      fresh = fresh.concat(list.map(function (item) { return { ...item, source: result.source }; }));
+      if (typeof result.data.lastSeq === 'number') seqs[result.source] = result.data.lastSeq;
+    });
+    lastSeq.value = seqs;
+
+    if (fresh.length) {
+      items.value = fresh.concat(items.value).sort(function (a, b) {
+        return (b.time || 0) - (a.time || 0) || b.seq - a.seq;
+      }).slice(0, MAX_ROWS);
     }
-    if (typeof data.lastSeq === 'number') lastSeq.value = data.lastSeq;
   } catch (err) {
     // 轮询失败不打断用户：不弹提示，下一个周期自己会重试
   } finally {
@@ -131,7 +172,7 @@ async function tick() {
 function reset() {
   generation += 1;
   items.value = [];
-  lastSeq.value = 0;
+  lastSeq.value = {};
   expandedSeq.value = null;
   loaded.value = false;
 }
@@ -218,7 +259,7 @@ function statusType(item) {
 }
 
 function toggleRow(item) {
-  expandedSeq.value = expandedSeq.value === item.seq ? null : item.seq;
+  expandedSeq.value = expandedSeq.value === keyOf(item) ? null : keyOf(item);
 }
 
 async function openApi(item) {
@@ -241,7 +282,13 @@ function clearAll() {
     negativeText: t('app.cancel'),
     onPositiveClick: async function () {
       try {
-        await mockLogApi.clearMockLog(projects.currentId);
+        // 两边都清；客户端里云端那边清不掉（没权限、连不上）也不挡本机这边
+        const pid = projects.currentId;
+        await Promise.all(sources.value.map(function (source) {
+          const cloud = gateway.isGateway && source === 'cloud';
+          const call = mockLogApi.clearMockLog(pid, cloud ? 'cloud' : '');
+          return cloud ? call.catch(function () {}) : call;
+        }));
         reset();
         message.success(t('mock.cleared'));
       } catch (err) {
@@ -275,12 +322,16 @@ function clearAll() {
         <div class="list">
           <div
             v-for="item in items"
-            :key="item.seq"
+            :key="keyOf(item)"
             class="item"
-            :class="{ expanded: expandedSeq === item.seq }"
+            :class="{ expanded: expandedSeq === keyOf(item) }"
           >
             <div class="row" @click="toggleRow(item)">
               <span class="time">{{ formatTime(item.time) }}</span>
+              <!-- 客户端里两个来源合在一起，标一下是哪边的 Mock -->
+              <span v-if="gateway.isGateway" class="source" :class="item.source">
+                {{ item.source === 'cloud' ? t('mock.urlCloud') : t('mock.urlLocal') }}
+              </span>
               <span class="method">{{ item.method }}</span>
               <span class="url" :title="item.url">{{ item.url }}</span>
 
@@ -299,7 +350,7 @@ function clearAll() {
               <span class="ms">{{ formatMs(item.durationMs) }}</span>
             </div>
 
-            <div v-if="expandedSeq === item.seq" class="detail">
+            <div v-if="expandedSeq === keyOf(item)" class="detail">
               <div v-if="item.query && Object.keys(item.query).length" class="block">
                 <p class="label">{{ t('mock.queryString') }}</p>
                 <pre class="pre">{{ JSON.stringify(item.query, null, 2) }}</pre>
@@ -399,6 +450,21 @@ function clearAll() {
 .ms {
   width: 62px;
   text-align: right;
+}
+
+/* 来源：本机 / 云端，小灰字，云端的带一点蓝 */
+.source {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 0.75;
+}
+
+.source.cloud {
+  background: rgba(32, 128, 240, 0.14);
 }
 
 /* 故障标签：让它自己撑开、不要被挤掉（名字可能有点长） */

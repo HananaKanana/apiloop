@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onMounted, ref, watch } from 'vue';
+import { computed, h, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { NButton, NIcon, NSpin, NTag, NTree, useMessage } from 'naive-ui';
@@ -13,8 +13,6 @@ import { formatJson } from '@/utils/jsonFormat';
 import { copyText } from '@/utils/clipboard';
 import { buildCurl } from '@/utils/curl';
 import { statusMeta } from '@/utils/apiStatus';
-import { mockUrlFor } from '@/utils/share';
-import TryItPanel from '@/components/share/TryItPanel.vue';
 
 /**
  * 公开的接口文档页（第 4 节）。地址是 `<云端地址>/#/share/<链接串>`，**不用登录**。
@@ -57,30 +55,35 @@ const currentStatus = computed(function () {
   return current.value ? statusMeta(current.value.status) : null;
 });
 
-const mockUrl = computed(function () {
-  return doc.value ? mockUrlFor(doc.value.mockPath) : '';
-});
-
-/* ---------------- 「试一试」（第十五轮） ---------------- */
+/* ---------------- 导入到客户端（2026-10-08，替掉原来的「试一试」） ---------------- */
 
 /**
- * 不是 HTTP 的接口没有「试一试」：WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP 都连不上
- * Mock（Mock 只认 HTTP），给个点了必然失败的按钮不如不给。
+ * 分享页不再直接调 Mock（云端 Mock 默认关）：看文档的人把整份文档下载成 OpenAPI，
+ * 在自己的客户端里「导入 → OpenAPI」，再用本机 Mock 或真实环境调试。
+ * 文件是服务端用这一页同一份打过码的数据生成的。
  */
-const NON_HTTP_METHODS = ['WS', 'SIO', 'GRPC', 'MQTT', 'AMQP', 'TCP', 'UDP'];
+const downloading = ref(false);
 
-const canTry = computed(function () {
-  if (!current.value) return false;
-  return NON_HTTP_METHODS.indexOf(String(current.value.method || '').toUpperCase()) === -1;
-});
-
-/** 面板开着没有。换接口时关掉 —— 那是上一个接口填的表 */
-const tryOpen = ref(false);
-
-watch(
-  function () { return selectedId.value; },
-  function () { tryOpen.value = false; }
-);
+async function downloadOpenapi() {
+  if (downloading.value) return;
+  downloading.value = true;
+  try {
+    const data = await sharesApi.getPublicOpenapi(route.params.token);
+    const blob = new Blob([data.text], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = data.filename || 'apiloop.openapi.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+    message.success(t('share.openapiDownloaded'));
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    downloading.value = false;
+  }
+}
 
 onMounted(async function () {
   try {
@@ -180,8 +183,7 @@ const bodyView = computed(function () {
 
 /**
  * 「复制为 cURL」：按**文档里**的信息拼一条能直接跑的 curl（值可能是打码后的）。
- * 拼装交给 `utils/curl.js` 的 `buildCurl` —— 和「试一试」面板里那个按钮同一份实现，
- * 只是那边传的是用户改过的值。
+ * 拼装交给 `utils/curl.js` 的 `buildCurl`。
  */
 const curlText = computed(function () {
   const api = current.value;
@@ -213,6 +215,9 @@ function statusType(status) {
       <span class="brand">apiloop</span>
       <span v-if="doc" class="project">{{ doc.project.name }}</span>
       <span class="spacer" />
+      <n-button v-if="doc" size="small" secondary :loading="downloading" :title="t('share.downloadOpenapiHint')" @click="downloadOpenapi">
+        {{ t('share.downloadOpenapi') }}
+      </n-button>
       <span v-if="doc" class="readonly">{{ t('views.shareReadonly') }}</span>
     </header>
 
@@ -267,15 +272,6 @@ function statusType(status) {
             </span>
             <span v-if="current.ownerName" class="doc-owner">{{ t('utils.ownerPrefix') }}{{ current.ownerName }}</span>
             <span class="spacer" />
-            <n-button
-              v-if="canTry"
-              size="tiny"
-              :secondary="!tryOpen"
-              :type="tryOpen ? 'primary' : 'default'"
-              @click="tryOpen = !tryOpen"
-            >
-              {{ t('share.tryButton') }}
-            </n-button>
             <n-button size="tiny" secondary @click="copy(curlText, t('views.shareCopiedCurl'))">
               {{ t('views.shareCopyAsCurl') }}
             </n-button>
@@ -287,9 +283,6 @@ function statusType(status) {
               <template #icon><n-icon :component="Copy" /></template>
             </n-button>
           </div>
-
-          <!-- 「试一试」：直接打到这个项目的 Mock 上，不用登录、不保存 -->
-          <try-it-panel v-if="tryOpen && canTry" :api="current" :mock-base="mockUrl" />
 
           <section v-if="description.length" class="section">
             <p v-for="(line, index) in description" :key="index" class="paragraph">{{ line }}</p>
@@ -393,16 +386,6 @@ function statusType(status) {
             </table>
           </section>
 
-          <section class="section">
-            <h3 class="section-title">{{ t('views.shareMockTitle') }}</h3>
-            <div class="url-row">
-              <code class="url">{{ mockUrl }}</code>
-              <n-button size="tiny" quaternary @click="copy(mockUrl, t('views.shareCopiedMock'))">
-                <template #icon><n-icon :component="Copy" /></template>
-              </n-button>
-            </div>
-            <p class="tip">{{ t('views.shareMockTip') }}</p>
-          </section>
         </template>
       </main>
     </div>

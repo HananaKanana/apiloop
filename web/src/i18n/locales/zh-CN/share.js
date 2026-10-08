@@ -44,26 +44,8 @@ export default {
   wholeProjectScope: '整个项目',
   revokeBodyMine: '撤销后这个链接立刻失效，{project}的{scope}就打不开了。确定吗？',
 
-  /* ---------------- 文档里的「试一试」（公开文档页） ---------------- */
-  tryButton: '试一试',
-  tryHint: '请求发到 Mock，返回的是示例数据，不是真实后端。',
-  tryCopyCurl: '复制 cURL',
-  tryCopiedCurl: '已复制 cURL',
-  tryPathTitle: '路径参数',
-  tryQueryTitle: '查询参数',
-  tryHeadersTitle: '请求头',
-  tryBodyTitle: '请求体',
-  tryNoBody: '这个接口没有请求体',
-  tryBinaryBody: '这个接口的请求体是二进制文件，分享页不能试。',
-  tryFormFile: '文件字段（分享页拿不到你本地的文件，发送时会跳过）',
-  trySend: '发送',
-  trySending: '发送中…',
-  tryStatus: '状态码',
-  tryDuration: '耗时',
-  trySize: '大小',
-  tryTabBody: 'Body',
-  tryTabHeaders: '响应头',
-  tryEmptyBody: '（空响应）',
-  tryNetworkError: '请求失败：{message}',
-  tryUnresolved: '地址里还有没替换的变量，Mock 不一定认得。'
+  /* ---------------- 公开文档页：导入到客户端 ---------------- */
+  downloadOpenapi: '导入到客户端',
+  downloadOpenapiHint: '下载成 OpenAPI 文件，在 apiloop 客户端里「导入 → OpenAPI」，再用本机 Mock 或真实环境调试',
+  openapiDownloaded: '已下载。打开 apiloop 客户端，选「导入 → OpenAPI」导入这个文件'
 };
