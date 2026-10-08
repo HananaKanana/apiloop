@@ -198,6 +198,7 @@ export default {
   wbPreviewHint: 'Preview tab: clicking another tab replaces it, double click pins it',
   wbDirtyDot: 'There are unsaved changes',
   wbNewRequest: 'New request',
+  wbNewTabMore: 'Create another protocol (WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP)',
   wbNoEnvs: 'No environment yet, create one on the left',
   wbPickApi: 'Pick an API on the left, or click ＋ at the top right of the tree to make a new request'
 };

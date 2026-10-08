@@ -1,10 +1,10 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { NAlert, NEmpty, NIcon, useMessage } from 'naive-ui';
+import { NAlert, NDropdown, NEmpty, NIcon, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
-import { Plus } from '@vicons/tabler';
+import { ChevronDown, Plus } from '@vicons/tabler';
 import TopBar from '@/components/layout/TopBar.vue';
 import UpdateAction from '@/components/layout/UpdateAction.vue';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher.vue';
@@ -73,6 +73,19 @@ function onKeydown(event) {
   if (event.shiftKey && String(event.key).toLowerCase() === 'f') {
     event.preventDefault();
     ui.openFindReplace();
+    return;
+  }
+
+  /*
+   * ⌘T / Ctrl+T：新建一个 HTTP 临时请求（T35）。
+   *
+   * **⌘T 是浏览器保留键** —— Chrome / Safari / Edge 里它先开一个新浏览器标签页，
+   * `preventDefault()` 挡不住。所以这里同时认一个不冲突的 **⌘⌥T / Ctrl+Alt+T**：
+   * 在桌面客户端里 ⌘T 就能用，在浏览器里用 ⌘⌥T。
+   */
+  if (!event.shiftKey && String(event.key).toLowerCase() === 't') {
+    event.preventDefault();
+    tabs.openDraft(null);
     return;
   }
 
@@ -226,6 +239,53 @@ async function onOpenApi(api, options) {
     message.error(err.message);
   }
 }
+
+/**
+ * 「+」旁边那个下拉（T35）：列出所有能「快速开一个」的协议。
+ *
+ * 每一项的徽标颜色用 `methodColor`（和目录树、标签栏上那套一致）—— HTTP 那一项用 GET 的颜色，
+ * 它不是一个方法名，只是「普通 HTTP 请求」的意思。
+ */
+const NEW_TAB_KINDS = [
+  { key: 'http', label: 'HTTP', color: 'GET' },
+  { key: 'ws', label: 'WebSocket', color: 'WS' },
+  { key: 'sio', label: 'Socket.IO', color: 'SIO' },
+  { key: 'grpc', label: 'gRPC', color: 'GRPC' },
+  { key: 'mqtt', label: 'MQTT', color: 'MQTT' },
+  { key: 'tcp', label: 'TCP', color: 'TCP' },
+  { key: 'udp', label: 'UDP', color: 'UDP' }
+];
+
+const newTabOptions = computed(function () {
+  return NEW_TAB_KINDS.map(function (item) {
+    return { label: item.label, key: item.key };
+  });
+});
+
+/** 下拉项：协议名按方法上色 */
+function renderNewTabLabel(option) {
+  const item = NEW_TAB_KINDS.filter(function (row) { return row.key === option.key; })[0];
+  return h('span', {
+    class: 'new-tab-option',
+    style: { color: methodColor(item ? item.color : '') }
+  }, option.label);
+}
+
+function onNewTabSelect(key) {
+  if (key === 'http') return tabs.openDraft(null);
+  if (key === 'ws') return tabs.openWs();
+  if (key === 'sio') return tabs.openSio();
+  if (key === 'grpc') return tabs.openGrpc();
+  if (key === 'mqtt') return tabs.openMqtt();
+  if (key === 'tcp') return tabs.openSocket('TCP');
+  if (key === 'udp') return tabs.openSocket('UDP');
+}
+
+/** 「+」的悬停提示：把快捷键也写进去，不然没人知道有 */
+const newTabHint = computed(function () {
+  const mac = typeof navigator !== 'undefined' && /Mac/i.test(String(navigator.platform || ''));
+  return t('views.wbNewRequest') + '（' + (mac ? '⌘T' : 'Ctrl+T') + '）';
+});
 
 function onNewApi(folderId) {
   tabs.openDraft(folderId);
@@ -508,9 +568,23 @@ onBeforeUnmount(function () {
               <span class="tab-close" :title="t('views.wbClose')" @click.stop="closeTab(tab)">×</span>
             </div>
 
-            <button class="tab-add" :title="t('views.wbNewRequest')" @click="tabs.openDraft(null)">
-              <n-icon size="15" :component="Plus" />
-            </button>
+            <div class="tab-add-group">
+              <button class="tab-add" :title="newTabHint" @click="tabs.openDraft(null)">
+                <n-icon size="15" :component="Plus" />
+              </button>
+              <!-- 旁边的小箭头：选协议开别的调试标签页（点「+」本身还是 HTTP 请求，和以前一样） -->
+              <n-dropdown
+                trigger="click"
+                placement="bottom-end"
+                :options="newTabOptions"
+                :render-label="renderNewTabLabel"
+                @select="onNewTabSelect"
+              >
+                <button class="tab-add-more" :title="t('views.wbNewTabMore')">
+                  <n-icon size="11" :component="ChevronDown" />
+                </button>
+              </n-dropdown>
+            </div>
           </div>
 
           <div class="tab-tail">
@@ -757,6 +831,34 @@ onBeforeUnmount(function () {
 }
 
 .tab-add:hover {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+/* 「+」和它右边的小箭头是一个整体：两块贴在一起，中间不留缝 */
+.tab-add-group {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.tab-add-more {
+  flex: none;
+  width: 13px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 0 5px 5px 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+}
+
+.tab-add-more:hover {
   background: rgba(128, 128, 128, 0.14);
   opacity: 1;
 }

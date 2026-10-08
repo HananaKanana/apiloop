@@ -15,6 +15,7 @@ import { useSioStore } from '@/stores/sio';
 import { useGrpcStore } from '@/stores/grpc';
 import { useMqttStore } from '@/stores/mqtt';
 import { useSocketStore } from '@/stores/socket';
+import * as tempTabs from '@/stores/tempTabs';
 import { useTreeStore } from '@/stores/tree';
 import { useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
@@ -54,6 +55,44 @@ function debugTabOf(api) {
   return DEBUG_TABS[String((api && api.method) || '').toUpperCase()] || null;
 }
 
+/**
+ * 每种临时标签页的序号。恢复（T35）时也要接着往下排 ——
+ * 从头开始的话会和已经开着的标签页撞 key，Vue 会把它当成同一个节点。
+ */
+const TEMP_SEQ = {
+  draft: function () { draftSeq += 1; return draftSeq; },
+  ws: function () { wsSeq += 1; return wsSeq; },
+  sio: function () { sioSeq += 1; return sioSeq; },
+  grpc: function () { grpcSeq += 1; return grpcSeq; },
+  mqtt: function () { mqttSeq += 1; return mqttSeq; },
+  socket: function () { socketSeq += 1; return socketSeq; }
+};
+
+/** 恢复时的默认标题（用户没改过名字的话用它） */
+const TEMP_TITLE = {
+  draft: function () { return t('stores.newRequest'); },
+  ws: function () { return 'WebSocket'; },
+  sio: function () { return 'Socket.IO'; },
+  grpc: function () { return 'gRPC'; },
+  mqtt: function () { return 'MQTT'; },
+  socket: function (item) {
+    return String((item && item.spec && item.spec.method) || 'TCP').toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+  }
+};
+
+/**
+ * 恢复时把存下来的 spec 补成完整形状：老版本存过的可能少字段，
+ * 直接塞给组件会在读 `.params.query` 这种地方炸。
+ */
+const TEMP_SPEC = {
+  draft: function (value) { return Object.assign(emptySpec(), value || {}); },
+  ws: function (value) { return Object.assign(emptyWsSpec(), value || {}); },
+  sio: function (value) { return Object.assign(emptySioSpec(), value || {}); },
+  grpc: function (value) { return Object.assign(emptyGrpcSpec(), value || {}); },
+  mqtt: function (value) { return Object.assign(emptyMqttSpec(), value || {}); },
+  socket: function (value) { return Object.assign(emptySocketSpec(value && value.method), value || {}); }
+};
+
 /** 既是 WebSocket / Socket.IO / gRPC / MQTT 标签页又是 TCP / UDP 标签页（状态都按 key 存、都要单独收尾） */
 function isSocketTab(tab) {
   return Boolean(tab) &&
@@ -73,6 +112,9 @@ function dropDebugState(tab) {
 
 /** 事件视图里最多保留多少条，超出就丢最旧的（契约第 14 节的调试视图） */
 const MAX_SSE_EVENTS = 2000;
+
+/** 临时标签页写 localStorage 的防抖间隔（T35） */
+const TEMP_SAVE_DELAY = 500;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -1229,6 +1271,18 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function closeAll() {
+    /*
+     * 清空之前先把这一份原样写下去（T35）。
+     *
+     * 调用它的地方有两类：切项目、退出登录 —— 两种情况下这些**临时**标签页都还要
+     * 留着（切回这个项目、重新登录时恢复）。所以：
+     * 1. 先补写一次（内容刚改过、防抖还没到点的那种）；
+     * 2. 把 `tabsProjectId` 置空，让下面那次「空列表」的防抖写入直接跳过 ——
+     *    不置空的话 500 毫秒后会把空列表写下去，上一个项目的临时标签页就没了。
+     */
+    persistTempNow();
+    tabsProjectId = '';
+
     tabs.value.forEach(dropTab);
     tabs.value = [];
     activeKey.value = '';
@@ -1531,6 +1585,106 @@ export const useTabsStore = defineStore('tabs', function () {
   function cancelSend(tab) {
     abortTab(tab || active.value);
   }
+
+  /* ---------------- 临时标签页的本地持久化（T35） ---------------- */
+
+  /** 现在这一份标签页属于哪个项目 —— 存到哪个键下由它决定 */
+  let tabsProjectId = '';
+  /** 防抖计时器（内容一变就排一次，500 毫秒后写） */
+  let tempTimer = null;
+
+  function cancelTempPersist() {
+    if (tempTimer) {
+      clearTimeout(tempTimer);
+      tempTimer = null;
+    }
+  }
+
+  /** 立刻把当前这一份写进存储（防抖没到点时也要能补一次） */
+  function persistTempNow() {
+    cancelTempPersist();
+    // 不知道属于哪个项目就不写：`closeAll` 清空之后就是这种状态，
+    // 那一下「空列表」不能把上一个项目的临时标签页抹掉
+    if (!tabsProjectId) return;
+    tempTabs.write(tabsProjectId, tabs.value);
+  }
+
+  function scheduleTempPersist() {
+    if (!tabsProjectId) return;
+    cancelTempPersist();
+    tempTimer = setTimeout(function () {
+      tempTimer = null;
+      tempTabs.write(tabsProjectId, tabs.value);
+    }, TEMP_SAVE_DELAY);
+  }
+
+  /**
+   * 把一个项目存下来的临时标签页恢复到标签栏末尾。
+   *
+   * **恢复出来的一律算「未保存」**（`dirty: true`、没有基线快照）：它的内容只在这个
+   * 浏览器里，关掉时该提示还得提示。
+   */
+  function restoreTemp(projectId) {
+    const list = tempTabs.read(projectId);
+    if (!list.length) return;
+
+    list.forEach(function (item) {
+      const kind = item.kind;
+      const spec = TEMP_SPEC[kind](item.spec);
+      const tab = Object.assign({
+        key: kind + ':' + TEMP_SEQ[kind](),
+        kind: kind,
+        apiId: null,
+        folderId: item.folderId || null,
+        title: item.title || TEMP_TITLE[kind](item),
+        customTitle: item.customTitle === true,
+        spec: spec,
+        savedSnapshot: null,
+        // 只有 HTTP 的临时标签页带 options（cookies / 代理那些），别的调试标签页不用
+        options: kind === 'draft' ? emptyOptions() : { cookies: true },
+        api: null,
+        dirty: true,
+        result: null,
+        sendError: '',
+        missingVariables: [],
+        sending: false,
+        controller: null
+      }, emptyLive());
+
+      tabs.value.push(tab);
+    });
+
+    // 切项目时 closeAll 会把 activeKey 清掉：这里把最后恢复的那个激活，
+    // 免得标签栏里明明有东西、右边却是一片空白
+    if (!activeKey.value) activeKey.value = tabs.value[tabs.value.length - 1].key;
+  }
+
+  /**
+   * 内容一变就存（防抖）。放在这里而不是各个 `openXxx` 里：标题改名、地址栏打字、
+   * 连接参数、常用发送……全都走的是同一个 `tabs` 数组，一处收口不会漏。
+   */
+  watch(
+    function () { return tabs.value; },
+    function () { scheduleTempPersist(); },
+    { deep: true }
+  );
+
+  /**
+   * 切项目：先把上一份补写一次（防抖可能还没到点），再读这个项目的。
+   *
+   * 顺序很重要 —— `ProjectSwitcher` 是**先 `closeAll()` 再 `setCurrent()`**，
+   * 所以真正「把上一份存下来」发生在 `closeAll` 里（见那里的注释），
+   * 这里只是把项目 id 换过来并恢复。
+   */
+  watch(
+    function () { return useProjectStore().currentId; },
+    function (pid) {
+      persistTempNow();
+      tabsProjectId = pid || '';
+      if (tabsProjectId) restoreTemp(tabsProjectId);
+    },
+    { immediate: true }
+  );
 
   return {
     tabs: tabs,
