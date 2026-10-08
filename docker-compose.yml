@@ -31,6 +31,10 @@ services:
       # 客户端（本机网关）不受影响，请求一直从用户自己的电脑发出。
       # 要让网页版也能发，在 .env 里设 SERVER_SEND=1。
       APILOOP_SERVER_SEND: ${SERVER_SEND:-0}
+      # 云端 Mock（默认 0 = 关，2026-10-08 用户决定：免得 Mock 的流量把云端拖垮）。
+      # 关着时 /mock-<项目ID> 一律 404，客户端里用「Mock（本机）」，由本机网关响应。
+      # 要打开在 .env 里设 CLOUD_MOCK=1。
+      APILOOP_CLOUD_MOCK: ${CLOUD_MOCK:-0}
       # 首次启动时创建的管理员 admin 的密码。只在库里还没有任何用户时生效，
       # 已有账号不会被修改；改密码请用 ./deploy.sh user reset-password admin
       # 不设置则随机生成，打印在日志里（./deploy.sh logs 中搜「初始密码」）

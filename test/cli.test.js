@@ -150,10 +150,11 @@ test('web：登录后管理台 API 与 mock 路由都可用', async function () 
     assert.strictEqual(runCli(['init', '--db', dbPath], dir).status, 0);
 
     var port = await getFreePort();
+    // 云端 Mock 默认关（2026-10-08），这条要测 mock 路由，所以打开
     var child = spawn(process.execPath, [CLI, 'web', '--port', String(port), '--db', dbPath], {
         cwd: dir,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: Object.assign({}, process.env, { APILOOP_ADMIN_PASSWORD: TEST_PASSWORD })
+        env: Object.assign({}, process.env, { APILOOP_ADMIN_PASSWORD: TEST_PASSWORD, APILOOP_CLOUD_MOCK: '1' })
     });
     var output = '';
     child.stdout.on('data', function (chunk) { output += chunk; });

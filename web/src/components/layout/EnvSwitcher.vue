@@ -68,6 +68,8 @@ const mockItems = computed(function () {
   if (gateway.isGateway) {
     list.push({ id: MOCK_LOCAL_ENV_ID, name: t('layout.mockLocal'), hint: t('layout.mockLocalHint'), usable: true });
   }
+  // 云端关了 Mock（默认关）就不显示云端那个，只剩本机的
+  if (gateway.cloudMockOff) return list;
   list.push({
     id: MOCK_ENV_ID,
     name: gateway.isGateway ? t('layout.mockCloud') : 'Mock',

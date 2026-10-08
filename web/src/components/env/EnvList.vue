@@ -24,7 +24,8 @@ const { t } = useI18n();
 const mockItems = computed(function () {
   const list = [];
   if (gateway.isGateway) list.push({ id: MOCK_LOCAL_ENV_ID, name: t('layout.mockLocal') });
-  list.push({ id: MOCK_ENV_ID, name: gateway.isGateway ? t('layout.mockCloud') : 'Mock' });
+  // 云端关了 Mock（默认关）就不显示云端那个
+  if (!gateway.cloudMockOff) list.push({ id: MOCK_ENV_ID, name: gateway.isGateway ? t('layout.mockCloud') : 'Mock' });
   return list;
 });
 

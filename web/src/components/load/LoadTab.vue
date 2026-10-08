@@ -73,11 +73,14 @@ const envId = computed({
 const envOptions = computed(function () {
   const list = [{ label: t('load.noEnvironment'), value: '' }];
   if (gateway.isGateway) list.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
-  list.push({
-    label: gateway.isGateway ? t('layout.mockCloud') : t('load.mockBuiltIn'),
-    value: MOCK_ENV_ID,
-    disabled: !gateway.mockAvailable
-  });
+  // 云端关了 Mock（默认关）就不显示云端那个
+  if (!gateway.cloudMockOff) {
+    list.push({
+      label: gateway.isGateway ? t('layout.mockCloud') : t('load.mockBuiltIn'),
+      value: MOCK_ENV_ID,
+      disabled: !gateway.mockAvailable
+    });
+  }
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });

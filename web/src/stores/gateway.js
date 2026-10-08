@@ -164,12 +164,23 @@ export const useGatewayStore = defineStore('gateway', function () {
   });
 
   /**
+   * 云端把 Mock 关了（默认关，2026-10-08，`APILOOP_CLOUD_MOCK=1` 才开）。
+   * 客户端看网关 /status 的 `cloudMock`，网页版看 `/meta.cloudMock`；字段不存在（老版本）按开着算。
+   */
+  const cloudMockOff = computed(function () {
+    if (isGateway.value) return Boolean(status.value) && status.value.cloudMock === false;
+    const meta = useSessionStore().meta;
+    return Boolean(meta) && meta.cloudMock === false;
+  });
+
+  /**
    * mock 能不能用。
    *
-   * mock 服务跑在**云端**（网关不提供 /mock-*，见 gateway/space.js）。「未绑定」时项目从没
-   * 上过云端，mock 必然打不到；退出登录之后云端还留着上次同步的那份，所以照常给用。
+   * 说的是**云端**那一套 Mock。云端关了 Mock 就没有（界面上直接不显示「Mock（云端）」）；
+   * 「未绑定」时项目从没上过云端，mock 必然打不到；退出登录之后云端还留着上次同步的那份，所以照常给用。
    */
   const mockAvailable = computed(function () {
+    if (cloudMockOff.value) return false;
     if (!isGateway.value) return true;
     return spaceState.value !== '' && spaceState.value !== 'unbound';
   });
@@ -244,6 +255,7 @@ export const useGatewayStore = defineStore('gateway', function () {
       cloudUrl: result.cloudUrl,
       cloudReachable: result.cloudReachable,
       cloudVersion: result.cloudVersion,
+      cloudMock: result.cloudMock,
       update: result.update,
       space: result.space,
       sync: result.sync
@@ -280,6 +292,7 @@ export const useGatewayStore = defineStore('gateway', function () {
     refreshSyncDetails: refreshSyncDetails,
     cloudFeaturesAvailable: cloudFeaturesAvailable,
     mockAvailable: mockAvailable,
+    cloudMockOff: cloudMockOff,
     versionMismatch: versionMismatch,
     update: update,
     startUpdate: startUpdate,

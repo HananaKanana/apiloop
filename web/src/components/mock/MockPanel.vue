@@ -590,8 +590,14 @@ async function onDrop() {
               <code class="url" :title="localMockUrl">{{ localMockUrl }}</code>
               <n-button size="tiny" secondary @click="copyLocalMockUrl">{{ t('mock.copyAction') }}</n-button>
             </div>
+            <!-- 云端关了 Mock（默认关）：云端地址整行不显示，只有本机的 -->
+            <template v-if="gateway.cloudMockOff">
+              <span v-if="localMockUrl" class="step-text">
+                {{ t('mock.envHintLead') }}{{ isWs ? t('mock.connectAction') : t('mock.sendAction') }}{{ t('mock.envHintTail') }}
+              </span>
+            </template>
             <!-- 未绑定时项目没上过云端，云端那个地址还不可用 -->
-            <span v-if="!gateway.mockAvailable" class="step-text">
+            <span v-else-if="!gateway.mockAvailable" class="step-text">
               <template v-if="localMockUrl">{{ t('mock.urlCloud') }}：</template>{{ t('layout.signInToUse') }}
             </span>
             <template v-else>

@@ -62,6 +62,8 @@ export const useEnvStore = defineStore('env', function () {
   }
 
   const selected = computed(function () {
+    // 云端关了 Mock（网关状态晚一步才到，加载时可能还认着它）：当「无环境」
+    if (selectedId.value === MOCK_ENV_ID && useGatewayStore().cloudMockOff) return null;
     if (isMockEnvId(selectedId.value)) return mockEnvironment(selectedId.value);
     return environments.value.find(function (item) { return item.id === selectedId.value; }) || null;
   });

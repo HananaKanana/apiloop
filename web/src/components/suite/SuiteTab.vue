@@ -69,14 +69,16 @@ const envOptions = computed(function () {
   });
   const mocks = [];
   if (gateway.isGateway) mocks.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
-  mocks.push({ label: gateway.isGateway ? t('layout.mockCloud') : t('suite.mockEnv'), value: MOCK_ENV_ID });
+  // 云端关了 Mock（默认关）就不显示云端那个
+  if (!gateway.cloudMockOff) mocks.push({ label: gateway.isGateway ? t('layout.mockCloud') : t('suite.mockEnv'), value: MOCK_ENV_ID });
   return mocks.concat(list);
 });
 
 const environmentId = ref('');
 
 function fillEnv() {
-  environmentId.value = envs.selectedId || (envs.environments[0] && envs.environments[0].id) || MOCK_ENV_ID;
+  environmentId.value = envs.selectedId || (envs.environments[0] && envs.environments[0].id) ||
+    (gateway.isGateway ? MOCK_LOCAL_ENV_ID : (gateway.cloudMockOff ? '' : MOCK_ENV_ID));
 }
 
 /* ---------------- 加载与自动保存 ---------------- */

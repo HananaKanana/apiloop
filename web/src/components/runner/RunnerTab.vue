@@ -133,11 +133,14 @@ const envOptions = computed(function () {
   const list = [{ label: t('runner.noEnvironment'), value: '' }];
   // 内置 Mock 环境：本机未登录时用不了（mock 服务在云端）
   if (gateway.isGateway) list.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
-  list.push({
-    label: gateway.isGateway ? t('layout.mockCloud') : t('runner.mockBuiltIn'),
-    value: MOCK_ENV_ID,
-    disabled: !gateway.mockAvailable
-  });
+  // 云端关了 Mock（默认关）就不显示云端那个
+  if (!gateway.cloudMockOff) {
+    list.push({
+      label: gateway.isGateway ? t('layout.mockCloud') : t('runner.mockBuiltIn'),
+      value: MOCK_ENV_ID,
+      disabled: !gateway.mockAvailable
+    });
+  }
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });
