@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import {
   NConfigProvider,
   NDialogProvider,
+  NGlobalStyle,
   NMessageProvider,
   NNotificationProvider,
   darkTheme,
@@ -79,6 +80,12 @@ const themeOverrides = computed(() => ({
     :locale="naiveLocale"
     :date-locale="naiveDateLocale"
   >
+    <!--
+      页面底色和文字颜色跟着主题走（body 上）。config-provider 是 abstract 的，不会自己渲染
+      带底色的外层 div —— 没有这一行时暗色主题下文字变白、底还是浏览器默认的白，什么都看不见
+      （2026-10-08 用户反馈）。
+    -->
+    <n-global-style />
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -109,6 +116,8 @@ const themeOverrides = computed(() => ({
   :root {
     --apiloop-primary: #ff7a4d;
     --apiloop-surface: #101014;
+    /* 滚动条、原生输入框、选中色这些浏览器自己画的东西也用暗色 */
+    color-scheme: dark;
   }
 }
 
