@@ -791,8 +791,23 @@ function isDescendant(ancestor, key) {
   return found;
 }
 
+/**
+ * 正在拖的节点。n-tree 调 allow-drop 时只给 `{ node, dropPosition, phase }`，**不给被拖的节点**
+ * （naive-ui 2.45）—— 之前这里读 `info.dragNode.key` 直接抛错，拖拽整个不能用（2026-10-07 用户报）。
+ * 所以在 dragstart 时自己记下来，dragend 清掉。
+ */
+const draggingKey = ref('');
+
+function onDragStart(info) {
+  draggingKey.value = info && info.node ? info.node.key : '';
+}
+
+function onDragEnd() {
+  draggingKey.value = '';
+}
+
 function allowDrop(info) {
-  const drag = findNode(tree.nodes, info.dragNode.key);
+  const drag = findNode(tree.nodes, draggingKey.value);
   const drop = findNode(tree.nodes, info.node.key);
   if (!drag || !drop) return false;
 
@@ -803,13 +818,15 @@ function allowDrop(info) {
     return true;
   }
 
-  // 前后插入只允许同类之间，免得目录和接口混排
-  return drag.kind === drop.kind;
+  // 前后插入：落到 drop 所在的那一层。目录不能落进自己的子孙那一层
+  if (drag.kind === 'folder' && isDescendant(drag, drop.key)) return false;
+  return true;
 }
 
 async function onDrop(info) {
   const drag = findNode(tree.nodes, info.dragNode.key);
   const drop = findNode(tree.nodes, info.node.key);
+  draggingKey.value = '';
   if (!drag || !drop) return;
 
   const kind = drag.kind;
@@ -819,6 +836,12 @@ async function onDrop(info) {
   if (info.dropPosition === 'inside') {
     parentId = drop.id;
     index = siblingsUnder(parentId, kind).length;
+  } else if (drop.kind !== kind) {
+    // 目录和接口分开排（目录在前），拖到异类旁边就挨着放：
+    // 目录放到这一层目录的最后，接口放到这一层接口的最前
+    parentId = drop.parentId;
+    const siblings = siblingsUnder(parentId, kind).filter(function (item) { return item.key !== drag.key; });
+    index = kind === 'folder' ? siblings.length : 0;
   } else {
     parentId = drop.parentId;
     const siblings = siblingsUnder(parentId, kind).slice();
@@ -981,6 +1004,8 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           :cancelable="false"
           @update:expanded-keys="(keys) => { expandedKeys = keys; }"
           @update:selected-keys="onSelectedChange"
+          @dragstart="onDragStart"
+          @dragend="onDragEnd"
           @drop="onDrop"
         />
         <n-empty
