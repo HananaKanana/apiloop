@@ -144,6 +144,8 @@ export default {
   stepEnable: '打开 mock',
   stepCall: '调用 mock 地址',
   copyAction: '复制',
+  urlLocal: '本机',
+  urlCloud: '云端',
   envHintLead: '或者在右上角环境里选「Mock」，直接点「',
   envHintTail: '」',
   connectAction: '连接',

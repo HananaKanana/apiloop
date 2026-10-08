@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { NIcon, NPopover } from 'naive-ui';
 import { Bolt, Check, ChevronDown, Pencil, Server, Settings, Table } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
-import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useEnvStore, MOCK_ENV_ID, MOCK_LOCAL_ENV_ID } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
@@ -59,10 +59,27 @@ function select(id) {
   envs.select(id);
 }
 
-/** 内置 Mock 环境：本机模式下用不了（mock 服务在云端） */
-function selectMock() {
-  if (!gateway.mockAvailable) return;
-  envs.select(MOCK_ENV_ID);
+/**
+ * 内置的两个 Mock 环境（2026-10-08）：客户端里「本机」排前面、「云端」在后；
+ * 网页版只有云端那个（网页版没有本机网关）。
+ */
+const mockItems = computed(function () {
+  const list = [];
+  if (gateway.isGateway) {
+    list.push({ id: MOCK_LOCAL_ENV_ID, name: t('layout.mockLocal'), hint: t('layout.mockLocalHint'), usable: true });
+  }
+  list.push({
+    id: MOCK_ENV_ID,
+    name: gateway.isGateway ? t('layout.mockCloud') : 'Mock',
+    hint: gateway.mockAvailable ? t('layout.mockCloudHint') : t('layout.signInToUse'),
+    usable: gateway.mockAvailable
+  });
+  return list;
+});
+
+function selectMock(item) {
+  if (!item.usable) return;
+  envs.select(item.id);
 }
 
 function editCurrent() {
@@ -112,17 +129,19 @@ function compareAll() {
           <n-icon v-if="!envs.selectedId" class="tick" size="16" :component="Check" />
         </div>
 
-        <!-- 内置的 Mock 环境：不存库，固定在这里；本机模式下用不了 -->
+        <!-- 内置的 Mock 环境：不存库，固定在这里。本机的只在客户端里有；云端的未绑定时用不了 -->
         <div
+          v-for="item in mockItems"
+          :key="item.id"
           class="item"
-          :class="{ active: envs.selectedId === MOCK_ENV_ID, disabled: !gateway.mockAvailable }"
-          :title="gateway.mockAvailable ? t('layout.mockHostHint') : t('layout.signInToUse')"
-          @click="selectMock"
+          :class="{ active: envs.selectedId === item.id, disabled: !item.usable }"
+          :title="item.hint"
+          @click="selectMock(item)"
         >
           <n-icon class="item-icon" size="15" :component="Bolt" />
-          <span class="item-name">Mock</span>
-          <span class="tag">{{ gateway.mockAvailable ? t('layout.builtin') : t('layout.signInToUse') }}</span>
-          <n-icon v-if="envs.selectedId === MOCK_ENV_ID" class="tick" size="16" :component="Check" />
+          <span class="item-name">{{ item.name }}</span>
+          <span class="tag">{{ item.usable ? t('layout.builtin') : t('layout.signInToUse') }}</span>
+          <n-icon v-if="envs.selectedId === item.id" class="tick" size="16" :component="Check" />
         </div>
 
         <div

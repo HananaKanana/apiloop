@@ -29,7 +29,7 @@ import * as apisApi from '@/api/apis';
 import KeyValueTable from '@/components/common/KeyValueTable.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
 import CurlSnippet from '@/components/request/CurlSnippet.vue';
-import { mockBaseFor, MOCK_ENV_ID } from '@/utils/mock';
+import { mockBaseFor, isMockEnvId } from '@/utils/mock';
 import TemplatizeDialog from '@/components/common/TemplatizeDialog.vue';
 import CookieManagerModal from './CookieManagerModal.vue';
 import UrlBar from './UrlBar.vue';
@@ -329,7 +329,7 @@ function overrideHeader(row) {
  * 没选环境时在表格上方先说一句 —— 不然用户会以为是提取失败了。
  */
 const hasEnvironment = computed(function () {
-  return Boolean(envs.selectedId) && envs.selectedId !== MOCK_ENV_ID;
+  return Boolean(envs.selectedId) && !isMockEnvId(envs.selectedId);
 });
 
 /** 刚加进来的那一行：滚过去、闪一下。过一会儿清掉，再加同一行还会闪 */

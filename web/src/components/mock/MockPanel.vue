@@ -151,6 +151,25 @@ const mockUrl = computed(function () {
   return (isWs.value ? base.replace(/^http/, 'ws') : base) + mock.value.path;
 });
 
+/**
+ * 本机 Mock 的地址（2026-10-08）：客户端里同一个接口在本机网关上也有一份 Mock，
+ * `http://127.0.0.1:<网关端口>/mock-<项目ID>/路径`，用本机库里的示例。
+ * 只给 HTTP 接口：WebSocket 的 Mock 目前只有云端。
+ */
+const localMockUrl = computed(function () {
+  if (!gateway.isGateway || isWs.value) return '';
+  return mockBaseUrl(projects.current, 'local') + mock.value.path;
+});
+
+async function copyLocalMockUrl() {
+  try {
+    await copyText(localMockUrl.value);
+    message.success(t('mock.copiedMockUrl'));
+  } catch (err) {
+    message.warning(t('app.copyFailed'));
+  }
+}
+
 watch(
   function () { return mock.value.path; },
   function (value) { draftPath.value = value; },
@@ -565,10 +584,19 @@ async function onDrop() {
           <span class="step-no">3</span>
           <span class="step-title">{{ t('mock.stepCall') }}</span>
           <div class="step-body column">
-            <!-- 本机模式下 mock 服务在云端，地址还不可用 -->
-            <span v-if="!gateway.mockAvailable" class="step-text">{{ t('layout.signInToUse') }}</span>
+            <!-- 客户端里先给本机的地址（改了示例马上生效），再给云端的 -->
+            <div v-if="localMockUrl" class="url-row">
+              <span class="url-label">{{ t('mock.urlLocal') }}</span>
+              <code class="url" :title="localMockUrl">{{ localMockUrl }}</code>
+              <n-button size="tiny" secondary @click="copyLocalMockUrl">{{ t('mock.copyAction') }}</n-button>
+            </div>
+            <!-- 未绑定时项目没上过云端，云端那个地址还不可用 -->
+            <span v-if="!gateway.mockAvailable" class="step-text">
+              <template v-if="localMockUrl">{{ t('mock.urlCloud') }}：</template>{{ t('layout.signInToUse') }}
+            </span>
             <template v-else>
               <div class="url-row">
+                <span v-if="localMockUrl" class="url-label">{{ t('mock.urlCloud') }}</span>
                 <code class="url" :title="mockUrl">{{ mockUrl }}</code>
                 <n-button size="tiny" secondary @click="copyMockUrl">{{ t('mock.copyAction') }}</n-button>
               </div>
@@ -1109,5 +1137,12 @@ async function onDrop() {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* 客户端里两条 Mock 地址前面的「本机 / 云端」 */
+.url-label {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.6;
 }
 </style>

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { Check, Dots, Plus } from '@vicons/tabler';
-import { MOCK_ENV_ID, useEnvStore } from '@/stores/env';
+import { MOCK_ENV_ID, MOCK_LOCAL_ENV_ID, useEnvStore } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProjectStore } from '@/stores/project';
 import ContextMenu from '@/components/common/ContextMenu.vue';
@@ -17,14 +17,24 @@ const envs = useEnvStore();
 const gateway = useGatewayStore();
 const { t } = useI18n();
 
-/** 内置 Mock 环境固定排在最上面：单击编辑变量，双击设为当前（本机模式下 mock 用不了，不能设） */
-function openMock() {
-  envs.edit(MOCK_ENV_ID);
+/**
+ * 内置 Mock 环境固定排在最上面：单击编辑变量，双击设为当前。
+ * 客户端里有两个（本机 / 云端，2026-10-08），网页版只有云端那个。
+ */
+const mockItems = computed(function () {
+  const list = [];
+  if (gateway.isGateway) list.push({ id: MOCK_LOCAL_ENV_ID, name: t('layout.mockLocal') });
+  list.push({ id: MOCK_ENV_ID, name: gateway.isGateway ? t('layout.mockCloud') : 'Mock' });
+  return list;
+});
+
+function openMock(id) {
+  envs.edit(id);
 }
 
-function useMock() {
-  if (envs.selectedId === MOCK_ENV_ID || !gateway.mockAvailable) return;
-  envs.select(MOCK_ENV_ID);
+function useMock(id) {
+  if (envs.selectedId === id || !envs.mockUsable(id)) return;
+  envs.select(id);
   message.success(t('env.switchedToMock'));
 }
 const projects = useProjectStore();
@@ -145,15 +155,17 @@ async function onMenuSelect(env, key) {
 
     <div class="list">
       <div
+        v-for="item in mockItems"
+        :key="item.id"
         class="item"
-        :class="{ active: envs.editing && envs.editing.builtin }"
-        @click="openMock"
-        @dblclick="useMock"
+        :class="{ active: envs.editing && envs.editing.id === item.id }"
+        @click="openMock(item.id)"
+        @dblclick="useMock(item.id)"
       >
         <span class="tick">
-          <n-icon v-if="envs.selectedId === MOCK_ENV_ID" size="14" :component="Check" />
+          <n-icon v-if="envs.selectedId === item.id" size="14" :component="Check" />
         </span>
-        <span class="name">Mock</span>
+        <span class="name">{{ item.name }}</span>
         <span class="builtin">{{ t('env.builtin') }}</span>
       </div>
 

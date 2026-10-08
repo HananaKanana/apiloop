@@ -11,7 +11,7 @@ import {
   NSpace,
   useMessage
 } from 'naive-ui';
-import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useEnvStore, isMockEnvId } from '@/stores/env';
 import { testConnection } from '@/api/db';
 import {
   DEFAULT_PORTS,
@@ -71,7 +71,7 @@ const editorTitle = computed(function () {
 
 /** 选中的环境（内置 Mock 环境不存库，测试连接时当没选 —— 和提取变量的口径一致） */
 const environmentId = computed(function () {
-  return env.selectedId && env.selectedId !== MOCK_ENV_ID ? env.selectedId : '';
+  return env.selectedId && !isMockEnvId(env.selectedId) ? env.selectedId : '';
 });
 
 const warning = computed(function () {

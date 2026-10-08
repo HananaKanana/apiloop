@@ -5,7 +5,6 @@ import { NButton, NTag, useMessage } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
 import { MOCK_ENV_ID, useEnvStore } from '@/stores/env';
 import { useProjectStore } from '@/stores/project';
-import { useGatewayStore } from '@/stores/gateway';
 import { collapseMockVariables, defaultMockVariables, mockBaseUrl, mockVariables } from '@/utils/mock';
 import VarTable from '@/components/common/VarTable.vue';
 
@@ -19,7 +18,6 @@ import VarTable from '@/components/common/VarTable.vue';
  */
 const envs = useEnvStore();
 const projects = useProjectStore();
-const gateway = useGatewayStore();
 const message = useMessage();
 const dialog = useDialog();
 const { t } = useI18n();
@@ -29,9 +27,17 @@ const keyword = ref('');
 const draft = ref([]);
 
 const project = computed(function () { return projects.current; });
+
+/**
+ * 正在编辑的是哪一套内置 Mock（本机 / 云端，2026-10-08）。两套**共用项目上的同一份变量**
+ * （值里的地址存成占位符），只是展开成各自的地址，所以在哪边改都一样。
+ */
+const envId = computed(function () { return (envs.editing && envs.editing.id) || MOCK_ENV_ID; });
+const where = computed(function () { return (envs.editing && envs.editing.where) || 'cloud'; });
+const title = computed(function () { return (envs.editing && envs.editing.name) || 'Mock'; });
 const canEdit = computed(function () { return projects.canEdit; });
 
-const saved = computed(function () { return mockVariables(project.value); });
+const saved = computed(function () { return mockVariables(project.value, where.value); });
 const customized = computed(function () {
   return Boolean(project.value && Array.isArray(project.value.mockVariables));
 });
@@ -46,7 +52,7 @@ const dirty = computed(function () {
   return JSON.stringify(draft.value) !== JSON.stringify(saved.value);
 });
 
-const isCurrent = computed(function () { return envs.selectedId === MOCK_ENV_ID; });
+const isCurrent = computed(function () { return envs.selectedId === envId.value; });
 
 const count = computed(function () {
   return draft.value.filter(function (row) { return row && (row.key || row.value); }).length;
@@ -68,18 +74,18 @@ async function persist(value, okText) {
 
 function save() {
   if (!dirty.value) return;
-  persist(collapseMockVariables(project.value, draft.value), t('mock.saved'));
+  persist(collapseMockVariables(project.value, draft.value, where.value), t('mock.saved'));
 }
 
 function restoreDefault() {
   dialog.warning({
     title: t('env.restoreDefaultTitle'),
-    content: t('env.restoreDefaultBody', { host: mockBaseUrl(project.value) }),
+    content: t('env.restoreDefaultBody', { host: mockBaseUrl(project.value, where.value) }),
     positiveText: t('env.restoreAction'),
     negativeText: t('app.cancel'),
     onPositiveClick: function () {
       if (!customized.value) {
-        draft.value = defaultMockVariables(project.value);
+        draft.value = defaultMockVariables(project.value, where.value);
         return;
       }
       persist(null, t('env.defaultRestored'));
@@ -88,7 +94,7 @@ function restoreDefault() {
 }
 
 function setCurrent() {
-  envs.select(MOCK_ENV_ID);
+  envs.select(envId.value);
   message.success(t('env.setCurrentDone'));
 }
 
@@ -110,13 +116,13 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
 <template>
   <div class="env-tab">
     <div class="head">
-      <span class="title">Mock</span>
+      <span class="title">{{ title }}</span>
       <n-tag size="small" :bordered="false" type="warning">{{ t('env.builtin') }}</n-tag>
       <span v-if="dirty" class="dirty-dot" :title="t('env.dirtyTitle')" />
 
       <n-tag v-if="isCurrent" size="small" :bordered="false">{{ t('env.current') }}</n-tag>
       <n-button
-        v-else-if="gateway.mockAvailable"
+        v-else-if="envs.mockUsable(envId)"
         size="small"
         quaternary
         @click="setCurrent"
@@ -147,7 +153,7 @@ onBeforeUnmount(function () { window.removeEventListener('keydown', onKeydown); 
     </div>
 
     <p class="intro">
-      {{ t('env.mockIntroLead') }}<code v-pre>{{host}}/路径</code>{{ t('env.mockIntroMid') }}<code>{{ mockBaseUrl(project) }}</code>{{ t('env.mockIntroMid2') }}<code>/api</code>{{ t('env.mockIntroTail') }}
+      {{ t('env.mockIntroLead') }}<code v-pre>{{host}}/路径</code>{{ t('env.mockIntroMid') }}<code>{{ mockBaseUrl(project, where) }}</code>{{ t('env.mockIntroMid2') }}<code>/api</code>{{ t('env.mockIntroTail') }}
     </p>
 
     <div class="toolbar">

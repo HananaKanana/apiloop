@@ -10,6 +10,18 @@ import { useGatewayStore } from '@/stores/gateway';
  */
 export const MOCK_ENV_ID = 'mock';
 
+/**
+ * 内置「Mock（本机）」环境的保留 id（2026-10-08）。只在客户端里有：mock 打到本机网关
+ * （`127.0.0.1:<网关端口>/mock-<项目ID>`，和页面同一个端口），用的是本机库里的示例。
+ * `MOCK_ENV_ID` 那个是云端的。两个都不存库，服务端认这两个 id 都是「内置 Mock」。
+ */
+export const MOCK_LOCAL_ENV_ID = 'mock-local';
+
+/** 是不是两个内置 Mock 环境之一 */
+export function isMockEnvId(id) {
+  return id === MOCK_ENV_ID || id === MOCK_LOCAL_ENV_ID;
+}
+
 /** 内置 Mock 环境里那个变量的名字，和服务端 mock-env.js 的 MOCK_VARIABLE 一致 */
 export const MOCK_VARIABLE = 'host';
 
@@ -45,8 +57,20 @@ export function mockPrefix(project) {
  * @param {{isRoot?: boolean, id?: string}|null} project
  * @returns {string} 例如 `https://cloud.example.com/mock-p_xxx`；根项目就是云端地址本身
  */
-export function mockBaseUrl(project) {
-  return mockOrigin() + mockPrefix(project);
+export function mockBaseUrl(project, where) {
+  return (where === 'local' ? localMockOrigin() : mockOrigin()) + mockPrefix(project);
+}
+
+/** 本机 Mock 的地址前半段：就是页面自己（网关），`http://127.0.0.1:<端口>` */
+export function localMockOrigin() {
+  return String(window.location.origin).replace(/\/+$/, '');
+}
+
+/** 环境 id → 它是哪一套 Mock（'local' / 'cloud'），不是 Mock 环境时是空串 */
+export function mockWhere(environmentId) {
+  if (environmentId === MOCK_LOCAL_ENV_ID) return 'local';
+  if (environmentId === MOCK_ENV_ID) return 'cloud';
+  return '';
 }
 
 /**
@@ -60,26 +84,27 @@ export function mockOrigin() {
 }
 
 /** 默认的 Mock 变量表（展开后的）：只有 host = mock 地址 */
-export function defaultMockVariables(project) {
-  return [{ key: MOCK_VARIABLE, value: mockBaseUrl(project), enabled: true }];
+export function defaultMockVariables(project, where) {
+  return [{ key: MOCK_VARIABLE, value: mockBaseUrl(project, where), enabled: true }];
 }
 
 /**
  * 内置 Mock 环境实际用的变量表（展开后的）。项目上改过就用改过的（`project.mockVariables`），
  * 否则是默认值。
  */
-export function mockVariables(project) {
+export function mockVariables(project, where) {
   const stored = project && Array.isArray(project.mockVariables) ? project.mockVariables : null;
-  if (!stored) return defaultMockVariables(project);
-  const base = mockBaseUrl(project);
+  if (!stored) return defaultMockVariables(project, where);
+  // 两套 Mock 共用项目上存的那一份变量（里面的地址是占位符），只是展开成各自的地址
+  const base = mockBaseUrl(project, where);
   return stored.map(function (row) {
     return { ...row, value: String(row.value || '').split(MOCK_BASE_TOKEN).join(base) };
   });
 }
 
 /** 保存前把值里的 mock 地址收回成占位符（只认开头那一段，和用户手写的别的地址无关） */
-export function collapseMockVariables(project, rows) {
-  const base = mockBaseUrl(project);
+export function collapseMockVariables(project, rows, where) {
+  const base = mockBaseUrl(project, where);
   return (rows || []).map(function (row) {
     const value = String((row && row.value) || '');
     return { ...row, value: value.indexOf(base) === 0 ? MOCK_BASE_TOKEN + value.slice(base.length) : value };
@@ -97,5 +122,6 @@ export function collapseMockVariables(project, rows) {
  * @returns {string|undefined}
  */
 export function mockBaseFor(environmentId, project) {
-  return environmentId === MOCK_ENV_ID ? mockBaseUrl(project) : undefined;
+  const where = mockWhere(environmentId);
+  return where ? mockBaseUrl(project, where) : undefined;
 }

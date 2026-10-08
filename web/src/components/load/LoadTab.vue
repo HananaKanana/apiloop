@@ -14,7 +14,7 @@ import {
   useMessage
 } from 'naive-ui';
 import { useLoadStore } from '@/stores/load';
-import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useEnvStore, MOCK_ENV_ID, MOCK_LOCAL_ENV_ID } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
 import { useDialog } from '@/utils/dialog';
 import { copyText } from '@/utils/clipboard';
@@ -72,7 +72,12 @@ const envId = computed({
 
 const envOptions = computed(function () {
   const list = [{ label: t('load.noEnvironment'), value: '' }];
-  list.push({ label: t('load.mockBuiltIn'), value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
+  if (gateway.isGateway) list.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
+  list.push({
+    label: gateway.isGateway ? t('layout.mockCloud') : t('load.mockBuiltIn'),
+    value: MOCK_ENV_ID,
+    disabled: !gateway.mockAvailable
+  });
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });
@@ -82,7 +87,8 @@ const envOptions = computed(function () {
 const envName = computed(function () {
   const id = envId.value;
   if (!id) return '';
-  if (id === MOCK_ENV_ID) return t('load.mockBuiltIn');
+  if (id === MOCK_LOCAL_ENV_ID) return t('layout.mockLocal');
+  if (id === MOCK_ENV_ID) return gateway.isGateway ? t('layout.mockCloud') : t('load.mockBuiltIn');
   const env = envs.environments.find(function (item) { return item.id === id; });
   return env ? env.name : '';
 });

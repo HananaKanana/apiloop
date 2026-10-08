@@ -3,10 +3,11 @@ import { computed, ref } from 'vue';
 import * as envsApi from '@/api/envs';
 import { useProjectStore } from '@/stores/project';
 import { useGatewayStore } from '@/stores/gateway';
-import { MOCK_ENV_ID, mockVariables } from '@/utils/mock';
+import { t } from '@/i18n';
+import { MOCK_ENV_ID, MOCK_LOCAL_ENV_ID, isMockEnvId, mockVariables, mockWhere } from '@/utils/mock';
 
-/** 内置的 Mock 环境。定义在 utils/mock.js，这里转出去给界面用 */
-export { MOCK_ENV_ID };
+/** 内置的两个 Mock 环境（云端 / 本机）。定义在 utils/mock.js，这里转出去给界面用 */
+export { MOCK_ENV_ID, MOCK_LOCAL_ENV_ID, isMockEnvId };
 
 /**
  * 环境列表 + 当前选中的环境。
@@ -42,17 +43,26 @@ export const useEnvStore = defineStore('env', function () {
    * 临时拼出来而不是从 `environments` 里找 —— 它不是普通环境，值还要跟着云端地址走。
    * 变量高亮、悬停看值、缺失变量提示都读 `selected`，所以拼在这里它们自动就对。
    */
-  function mockEnvironment() {
+  function mockEnvironment(id) {
+    const envId = id === MOCK_LOCAL_ENV_ID ? MOCK_LOCAL_ENV_ID : MOCK_ENV_ID;
     return {
-      id: MOCK_ENV_ID,
-      name: 'Mock',
+      id: envId,
+      name: envId === MOCK_LOCAL_ENV_ID ? t('layout.mockLocal') : (useGatewayStore().isGateway ? t('layout.mockCloud') : 'Mock'),
       builtin: true,
-      variables: mockVariables(useProjectStore().current)
+      where: mockWhere(envId),
+      variables: mockVariables(useProjectStore().current, mockWhere(envId))
     };
   }
 
+  /** 这个内置 Mock 环境现在能不能用：本机的只在客户端里有；云端的要项目上过云端 */
+  function mockUsable(id) {
+    const gateway = useGatewayStore();
+    if (id === MOCK_LOCAL_ENV_ID) return gateway.isGateway;
+    return gateway.mockAvailable;
+  }
+
   const selected = computed(function () {
-    if (selectedId.value === MOCK_ENV_ID) return mockEnvironment();
+    if (isMockEnvId(selectedId.value)) return mockEnvironment(selectedId.value);
     return environments.value.find(function (item) { return item.id === selectedId.value; }) || null;
   });
 
@@ -62,7 +72,7 @@ export const useEnvStore = defineStore('env', function () {
    */
   const editing = computed(function () {
     // 内置 Mock 环境也能点开编辑变量（MockEnvTab）；但不当「没点过时」的退路
-    if (editingId.value === MOCK_ENV_ID) return mockEnvironment();
+    if (isMockEnvId(editingId.value)) return mockEnvironment(editingId.value);
     const list = environments.value;
     const picked = list.find(function (item) { return item.id === editingId.value; });
     if (picked) return picked;
@@ -115,8 +125,8 @@ export const useEnvStore = defineStore('env', function () {
     // 存的环境可能已经被删了，那就退回「无环境」。
     // 内置的 Mock 环境不在列表里，要单独认；本机模式下 mock 用不了，退成「无环境」。
     const saved = localStorage.getItem(storageKey(pid)) || '';
-    if (saved === MOCK_ENV_ID) {
-      selectedId.value = useGatewayStore().mockAvailable ? MOCK_ENV_ID : '';
+    if (isMockEnvId(saved)) {
+      selectedId.value = mockUsable(saved) ? saved : '';
       return environments.value;
     }
 
@@ -147,6 +157,7 @@ export const useEnvStore = defineStore('env', function () {
   }
 
   return {
+    mockUsable: mockUsable,
     environments: environments,
     selectedId: selectedId,
     selected: selected,

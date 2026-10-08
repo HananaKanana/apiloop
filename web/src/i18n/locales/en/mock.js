@@ -144,6 +144,8 @@ export default {
   stepEnable: 'Turn the Mock on',
   stepCall: 'Call the Mock URL',
   copyAction: 'Copy',
+  urlLocal: 'Local',
+  urlCloud: 'Cloud',
   envHintLead: 'Or pick “Mock” in the environment at the top right and click “',
   envHintTail: '”',
   connectAction: 'Connect',

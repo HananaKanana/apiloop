@@ -18,7 +18,7 @@ import * as suitesApi from '@/api/suites';
 import { useRunnerStore } from '@/stores/runner';
 import { useTabsStore } from '@/stores/tabs';
 import { useTreeStore } from '@/stores/tree';
-import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useEnvStore, MOCK_ENV_ID, MOCK_LOCAL_ENV_ID } from '@/stores/env';
 import { useGatewayStore } from '@/stores/gateway';
 import { collectApiNodes } from '@/utils/tree';
 import { methodColor } from '@/utils/method';
@@ -132,7 +132,12 @@ const envId = computed({
 const envOptions = computed(function () {
   const list = [{ label: t('runner.noEnvironment'), value: '' }];
   // 内置 Mock 环境：本机未登录时用不了（mock 服务在云端）
-  list.push({ label: t('runner.mockBuiltIn'), value: MOCK_ENV_ID, disabled: !gateway.mockAvailable });
+  if (gateway.isGateway) list.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
+  list.push({
+    label: gateway.isGateway ? t('layout.mockCloud') : t('runner.mockBuiltIn'),
+    value: MOCK_ENV_ID,
+    disabled: !gateway.mockAvailable
+  });
   envs.environments.forEach(function (env) {
     list.push({ label: env.name, value: env.id });
   });

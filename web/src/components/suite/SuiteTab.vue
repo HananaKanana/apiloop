@@ -20,7 +20,7 @@ import SuiteRunsPane from '@/components/suite/SuiteRunsPane.vue';
 import SuiteReport from '@/components/suite/SuiteReport.vue';
 import InlineRename from '@/components/common/InlineRename.vue';
 import { useProjectStore } from '@/stores/project';
-import { useEnvStore, MOCK_ENV_ID } from '@/stores/env';
+import { useEnvStore, MOCK_ENV_ID, MOCK_LOCAL_ENV_ID } from '@/stores/env';
 import { useSuitesStore } from '@/stores/suites';
 import { useSuiteRunStore } from '@/stores/suiteRun';
 import { useGatewayStore } from '@/stores/gateway';
@@ -67,7 +67,10 @@ const envOptions = computed(function () {
   const list = envs.environments.map(function (env) {
     return { label: env.name, value: env.id };
   });
-  return [{ label: t('suite.mockEnv'), value: MOCK_ENV_ID }].concat(list);
+  const mocks = [];
+  if (gateway.isGateway) mocks.push({ label: t('layout.mockLocal'), value: MOCK_LOCAL_ENV_ID });
+  mocks.push({ label: gateway.isGateway ? t('layout.mockCloud') : t('suite.mockEnv'), value: MOCK_ENV_ID });
+  return mocks.concat(list);
 });
 
 const environmentId = ref('');
