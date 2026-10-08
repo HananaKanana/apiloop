@@ -4,7 +4,7 @@ import logoUrl from '@/assets/logo.png';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { NIcon, NLayoutHeader, NTag, NTooltip } from 'naive-ui';
-import { Activity, BrandGithub, Help, PlayerRecord, Search, Settings } from '@vicons/tabler';
+import { Activity, BrandGithub, Download, Help, PlayerRecord, Search, Settings } from '@vicons/tabler';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 import { useProjectStore } from '@/stores/project';
@@ -15,6 +15,7 @@ import * as mockLogApi from '@/api/mockLog';
 import ConnectionStatus from './ConnectionStatus.vue';
 import NotificationBell from './NotificationBell.vue';
 import UserMenu from './UserMenu.vue';
+import InstallDialog from './InstallDialog.vue';
 import RecordDrawer from '@/components/record/RecordDrawer.vue';
 
 /**
@@ -24,6 +25,13 @@ import RecordDrawer from '@/components/record/RecordDrawer.vue';
  * 以及侧栏最底下的折叠按钮。这里的每个图标按钮都有悬停提示。
  */
 const emit = defineEmits(['about']);
+
+/**
+ * 网页版的「下载客户端」（2026-10-08 用户：网页版找不到下载入口）。
+ * 以前入口藏在连接状态那个圆点里，而云端默认不替网页版发请求时圆点不显示，入口就跟着没了。
+ * 客户端里不显示 —— 那边有「有新版本」提示。
+ */
+const showInstall = ref(false);
 
 /** 项目的 git 仓库。客户端里点开会交给系统浏览器 */
 const REPO_URL = 'https://github.com/HananaKanana/apiloop';
@@ -196,6 +204,16 @@ onBeforeUnmount(function () {
     </div>
 
     <div class="group right">
+      <button
+        v-if="gateway.loaded && !gateway.isGateway"
+        class="download-button"
+        :title="t('layout.downloadClientHint')"
+        @click="showInstall = true"
+      >
+        <n-icon size="15" :component="Download" />
+        <span>{{ t('layout.downloadClient') }}</span>
+      </button>
+
       <n-tooltip v-if="gateway.isGateway" trigger="hover">
         <template #trigger>
           <button class="icon-button" @click="recordVisible = true">
@@ -256,6 +274,12 @@ onBeforeUnmount(function () {
 
     <!-- Mock 录制抽屉：只在客户端里渲染（网页版没有那几个接口） -->
     <record-drawer v-if="gateway.isGateway" v-model:show="recordVisible" />
+    <install-dialog
+      v-if="!gateway.isGateway"
+      v-model:show="showInstall"
+      :is-gateway="false"
+      :cloud-url="gateway.cloudUrl"
+    />
   </n-layout-header>
 </template>
 
@@ -371,5 +395,27 @@ onBeforeUnmount(function () {
 @keyframes record-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
+}
+
+/* 网页版的「下载客户端」：顶栏里唯一带文字的按钮，用主色细边框，不抢搜索框 */
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--apiloop-primary, #ff6c37);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--apiloop-primary, #ff6c37);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.download-button:hover {
+  background: rgba(255, 108, 55, 0.1);
 }
 </style>

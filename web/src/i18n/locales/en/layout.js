@@ -73,6 +73,8 @@ export default {
   /* ---------------- InstallDialog / UpdateAction ---------------- */
   installNewVersion: 'Install new version',
   installLocal: 'Install local apiloop',
+  downloadClient: 'Download app',
+  downloadClientHint: 'With the desktop app, requests go out from your own computer, so internal and local addresses work',
   archArm64: 'Mac · Apple silicon (M1, M2, …)',
   archX64: 'Mac · Intel',
   archWinX64: 'Windows 10 / 11',

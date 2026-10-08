@@ -70,6 +70,8 @@ export default {
   /* ---------------- 安装 / 更新 InstallDialog · UpdateAction ---------------- */
   installNewVersion: '安装新版本',
   installLocal: '安装本机 apiloop',
+  downloadClient: '下载客户端',
+  downloadClientHint: '装上客户端后，请求从你自己的电脑发出，内网和本机地址都能调',
   archArm64: 'Mac · Apple 芯片（M1、M2…）',
   archX64: 'Mac · Intel 芯片',
   archWinX64: 'Windows 10 / 11',
