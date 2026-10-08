@@ -65,6 +65,30 @@ function toggleSidebar() {
   collapsed.value = !collapsed.value;
 }
 
+/**
+ * 焦点是不是落在某个 CodeMirror 编辑器里（可选：限定在某个容器内）。
+ *
+ * 判断「请求侧代码框」用它：`focusInEditor()` 为真而 `focusInEditor('[data-response-pane]')`
+ * 为假，说明焦点在请求那一侧的编辑器里，⌘F 该交给 CodeMirror 自己。
+ */
+function focusInEditor(scope) {
+  const el = document.activeElement;
+  if (!el || typeof el.closest !== 'function') return false;
+  const editor = el.closest('.cm-editor');
+  if (!editor) return false;
+  return scope ? Boolean(editor.closest(scope)) : true;
+}
+
+/** 当前选中的文字（按 ⌘F 时预填进查找框）。太长的不填 —— 塞进去这个框就没法看了 */
+function selectedText() {
+  try {
+    const selection = window.getSelection ? window.getSelection() : null;
+    return selection ? String(selection.toString()).trim().slice(0, 200) : '';
+  } catch (err) {
+    return '';
+  }
+}
+
 function onKeydown(event) {
   if (!(event.metaKey || event.ctrlKey)) return;
 
@@ -86,6 +110,25 @@ function onKeydown(event) {
   if (!event.shiftKey && String(event.key).toLowerCase() === 't') {
     event.preventDefault();
     tabs.openDraft(null);
+    return;
+  }
+
+  /*
+   * ⌘F / Ctrl+F：打开**响应**的查找（T43）。
+   *
+   * 三种情况，只有第二种才拦：
+   * 1. 焦点在请求那一侧的代码框里（Body、脚本……）：不拦，CodeMirror 自己查自己
+   *    （它已经 preventDefault 过，`defaultPrevented` 也是这么来的）；
+   * 2. 焦点在别处（地址栏、参数表、页面空白）而且当前标签页有可查的文本响应：拦下来，
+   *    打开响应的查找框；
+   * 3. 没有响应 / 响应不是文本（图片、二进制）：不拦，浏览器自己的查找照常工作。
+   */
+  if (!event.shiftKey && String(event.key).toLowerCase() === 'f') {
+    if (event.defaultPrevented) return;
+    if (focusInEditor() && !focusInEditor('[data-response-pane]')) return;
+    if (!ui.hasResponseSearch()) return;
+    event.preventDefault();
+    ui.openResponseSearch(selectedText());
     return;
   }
 

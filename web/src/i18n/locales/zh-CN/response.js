@@ -139,4 +139,12 @@ export default {
   filterNotJson: '响应不是 JSON，JSONPath 用不了',
   filterComputing: '正在计算…',
   filterTruncated: '命中太多，只显示前 {n} 行',
+
+  /* ---------------- 响应里的 ⌘F 查找（T43） ---------------- */
+  searchPanelPlaceholder: '查找',
+  searchPrev: '上一个（⇧Enter）',
+  searchNext: '下一个（Enter）',
+  searchClose: '关闭（Esc）',
+  searchCount: '第 {index} / 共 {total} 个',
+  searchNoMatch: '没有匹配'
 };

@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, StateEffect } from '@codemirror/state';
 import { json } from '@codemirror/lang-json';
@@ -12,7 +13,7 @@ import { go } from '@codemirror/lang-go';
 import { php } from '@codemirror/lang-php';
 import { autocompletion } from '@codemirror/autocomplete';
 import { Decoration } from '@codemirror/view';
-import { openSearchPanel } from '@codemirror/search';
+import { openSearchPanel, search, SearchCursor, SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, setSearchQuery } from '@codemirror/search';
 import { syntaxHighlighting } from '@codemirror/language';
 import { classHighlighter } from '@lezer/highlight';
 import { formatJson } from '@/utils/jsonFormat';
@@ -47,6 +48,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'format-error']);
+
+const { t } = useI18n();
 
 const host = ref(null);
 let view = null;
@@ -274,6 +277,9 @@ const theme = EditorView.theme({
 function buildExtensions() {
   const extensions = [
     basicSetup,
+    // 换掉自带查找面板（T43）：自带的有「替换」那一行（响应只读，用不上），也没有匹配计数。
+    // `search()` 的配置是个 facet，**后写的覆盖先写的**，所以放在 basicSetup 后面才生效。
+    search({ createPanel: createSearchPanel }),
     theme,
     languageExtension(props.language),
     // 语法高亮用 class（tok-*），颜色在下面的样式里按亮 / 暗两套给（接近 Postman 的配色）
@@ -373,6 +379,123 @@ watch(
   }
 );
 
+/**
+ * 自定义查找面板（T43）。
+ *
+ * CodeMirror 自带的面板有「替换」那一行（响应是只读的，用不上），也**没有匹配计数**。
+ * 这里用 `search({ createPanel })` 换掉它：一个输入框 + 上/下一个 + 「第 N / 共 M 个」+ 关闭，
+ * 样式和界面一致，文案走 i18n。Enter 下一个、⇧Enter 上一个、Esc 关闭（自带 keymap 也有，
+ * 这里再绑一次是因为面板里的输入框吃掉了按键）。
+ */
+function createSearchPanel(editorView) {
+  const dom = document.createElement('div');
+  dom.className = 'cm-search-panel';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'cm-search-input';
+  input.placeholder = t('response.searchPanelPlaceholder');
+  input.value = getSearchQuery(editorView.state).search;
+
+  const count = document.createElement('span');
+  count.className = 'cm-search-count';
+
+  function mkButton(label, title) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'cm-search-btn';
+    button.textContent = label;
+    button.title = title;
+    return button;
+  }
+
+  const prev = mkButton('↑', t('response.searchPrev'));
+  const next = mkButton('↓', t('response.searchNext'));
+  const close = mkButton('×', t('response.searchClose'));
+
+  /** 数一遍匹配，并把「当前是第几个」算出来（光标前面有多少个匹配） */
+  function refreshCount() {
+    const query = getSearchQuery(editorView.state);
+    if (!query.search) {
+      count.textContent = '';
+      return;
+    }
+
+    let total = 0;
+    let index = 0;
+    const head = editorView.state.selection.main.head;
+    try {
+      const cursor = new SearchCursor(editorView.state.doc, query);
+      while (!cursor.next().done) {
+        total += 1;
+        if (cursor.value.from <= head) index = total;
+      }
+    } catch (err) {
+      // 正则写坏时 SearchCursor 会抛：计数留空，不打断输入
+      count.textContent = '';
+      return;
+    }
+
+    if (!total) {
+      count.textContent = t('response.searchNoMatch');
+      return;
+    }
+    count.textContent = t('response.searchCount', { index: index || 1, total: total });
+  }
+
+  function apply() {
+    editorView.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: input.value })) });
+    refreshCount();
+  }
+
+  input.addEventListener('input', apply);
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (event.shiftKey) findPrevious(editorView);
+      else findNext(editorView);
+      refreshCount();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSearchPanel(editorView);
+    }
+  });
+
+  prev.addEventListener('click', function () {
+    findPrevious(editorView);
+    refreshCount();
+    input.focus();
+  });
+  next.addEventListener('click', function () {
+    findNext(editorView);
+    refreshCount();
+    input.focus();
+  });
+  close.addEventListener('click', function () { closeSearchPanel(editorView); });
+
+  dom.appendChild(input);
+  dom.appendChild(prev);
+  dom.appendChild(next);
+  dom.appendChild(count);
+  dom.appendChild(close);
+
+  return {
+    dom: dom,
+    top: true,
+    /** 打开时把焦点放到输入框并**全选**（预填的是选中的文字，直接打字就能换掉） */
+    mount: function () {
+      input.focus();
+      input.select();
+      refreshCount();
+    },
+    update: function (update) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) refreshCount();
+    }
+  };
+}
+
 /** 在光标处插入一段文本（「插入 Mock 字段」用），插完把焦点还给编辑器 */
 function insertAtCursor(text) {
   if (!view || props.readonly) return;
@@ -386,10 +509,19 @@ function insertAtCursor(text) {
 }
 
 /** 打开 CodeMirror 自带的查找面板（响应体工具栏的「搜索」按钮用） */
-function openSearch() {
+function openSearch(initialText) {
   if (!view) return;
   view.focus();
+
+  // 有选中文字时预填进查找框（截一下长度：整段响应塞进去这个框就没法看了）
+  const text = String(initialText === undefined || initialText === null ? '' : initialText).slice(0, 200);
+  if (text) {
+    view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: text })) });
+  }
+
   openSearchPanel(view);
+  // 预填了就直接跳到第一个匹配，不然「打开查找」看着像什么都没发生
+  if (text) findNext(view);
 }
 
 defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: openSearch });
@@ -445,5 +577,60 @@ defineExpose({ insertAtCursor: insertAtCursor, format: applyFormat, openSearch: 
   overflow: hidden;
   height: 100%;
   box-sizing: border-box;
+}
+
+/* ---------------- 自定义查找面板（T43） ---------------- */
+/* 这些类名是 createSearchPanel 在运行时建出来的节点，所以不能 scoped */
+.cm-search-panel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.24));
+  background: var(--apiloop-surface, #fff);
+  font-size: 12px;
+}
+
+.cm-search-input {
+  flex: 1;
+  min-width: 120px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.3));
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+}
+
+.cm-search-input:focus {
+  border-color: var(--apiloop-primary, #097bed);
+}
+
+.cm-search-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.cm-search-btn:hover {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+.cm-search-count {
+  flex: none;
+  white-space: nowrap;
+  opacity: 0.65;
 }
 </style>

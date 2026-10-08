@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { NAutoComplete, NAlert, NButton, NCheckbox, NDropdown, NIcon, useMessage } from 'naive-ui';
 import { Braces, ChevronDown, Copy, Download, Eye, Filter, ListDetails, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import JsonTreeView from '@/components/response/JsonTreeView.vue';
+import { useUiStore } from '@/stores/ui';
 import { buildJsonRows } from '@/utils/jsonTree';
 import { copyText } from '@/utils/clipboard';
 import {
@@ -55,6 +56,7 @@ const FORMAT_LIMIT = 1024 * 1024;
 const WRAP_KEY = 'apiloop.responseWrap';
 
 const message = useMessage();
+const ui = useUiStore();
 
 /** code：代码视图；preview：预览 */
 const view = ref('code');
@@ -203,9 +205,9 @@ async function copyBody() {
   }
 }
 
+/** 工具栏的「搜索」按钮：和 ⌘F 走同一条路（先切回代码视图再打开查找框） */
 function openSearch() {
-  if (view.value !== 'code') view.value = 'code';
-  if (editorRef.value) editorRef.value.openSearch();
+  openResponseSearch('');
 }
 
 const dataUrl = computed(function () {
@@ -444,8 +446,10 @@ const filterActive = computed(function () {
 const filterCountText = computed(function () {
   if (!filterActive.value || filterState.value.error) return '';
   if (filterState.value.pending) return t('response.filterComputing');
-  if (!filterState.value.count) return t('response.filterNoMatch');
-  return t('response.filterCount', { n: filterState.value.count });
+  const n = filterState.value.count;
+  if (!n) return t('response.filterNoMatch');
+  // 第三个参数是复数用的数字：英文按它选 `1 result` / `N results`（中文只有一种形式）
+  return t('response.filterCount', { n: n }, n);
 });
 
 const filterErrorText = computed(function () {
@@ -617,6 +621,23 @@ function highlight(line) {
   return out + escapeHtml(text.slice(at));
 }
 
+/**
+ * 打开响应的查找框（T43，工作台按 ⌘F 时通过 ui store 调到这里）。
+ *
+ * 两件事要先做：
+ * - **预览 / 字段视图下先切回代码视图** —— 那两个视图里没有 CodeMirror，查找框没处开；
+ * - 切完之后**等一帧**：CodeEditor 是这时候才挂上去的，`editorRef` 还是空的。
+ *
+ * 筛选生效时不用特别处理：代码视图显示的本来就是筛选结果，查的就是它。
+ */
+function openResponseSearch(text) {
+  if (!isText.value) return;
+  if (view.value !== 'code') view.value = 'code';
+  nextTick(function () {
+    if (editorRef.value) editorRef.value.openSearch(text);
+  });
+}
+
 /** ⌘⇧K / Ctrl+Shift+K：开关筛选（这个键位没被本应用别的功能占用） */
 function onFilterKeydown(event) {
   if (!(event.metaKey || event.ctrlKey)) return;
@@ -628,11 +649,20 @@ function onFilterKeydown(event) {
 
 onMounted(function () {
   window.addEventListener('keydown', onFilterKeydown);
+  // 把自己登记到 ui store：工作台按 ⌘F 时调的就是这个。只有文本响应才登记 ——
+  // 图片 / 二进制没有可查的东西，登记了工作台就会拦下 ⌘F 却什么也打不开
+  if (isText.value) ui.registerResponseSearch(openResponseSearch);
 });
 
 onBeforeUnmount(function () {
+  ui.registerResponseSearch(null);
   window.removeEventListener('keydown', onFilterKeydown);
   if (filterTimer) clearTimeout(filterTimer);
+});
+
+/** 响应从图片切到文本（或反过来）时重新登记 */
+watch(isText, function (yes) {
+  ui.registerResponseSearch(yes ? openResponseSearch : null);
 });
 
 /** 换接口就把「最近用过」换成这个接口的（临时标签页没有 apiId，读到的是空） */
@@ -650,7 +680,8 @@ watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], ru
 </script>
 
 <template>
-  <div class="body-viewer">
+  <!-- data-response-pane：工作台按 ⌘F 时靠它判断「焦点是不是在响应这一侧」 -->
+  <div class="body-viewer" data-response-pane>
     <div class="toolbar">
       <template v-if="isText">
         <!-- 格式：左边像 Postman 的「{ } JSON ▾」 -->

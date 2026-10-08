@@ -92,6 +92,34 @@ export const useUiStore = defineStore('ui', function () {
     }
   }
 
+  /**
+   * 响应体的查找（T43）。
+   *
+   * 按 ⌘F 要打开「当前标签页响应」的查找框，但那个 CodeMirror 藏在
+   * 工作台 › RequestTab › ResponsePanel › BodyViewer 四层里面，一层层往下传事件太啰嗦。
+   * 所以反过来：**BodyViewer 挂载时把自己「打开查找」的方法登记到这里**，
+   * 工作台按键时调一下。同一时间只有一个 BodyViewer 挂着（标签页按 key 重建），
+   * 所以不需要按 key 存。
+   *
+   * **故意不放进 reactive**：它是个函数，包成 ref 只会多一层 `.value`，没有任何响应式的用处。
+   */
+  let responseSearchHandler = null;
+
+  /** 登记 / 注销（传 null 就是注销）。只有文本响应才登记 —— 图片、二进制没有可查的东西 */
+  function registerResponseSearch(fn) {
+    responseSearchHandler = typeof fn === 'function' ? fn : null;
+  }
+
+  /** 当前标签页有没有可查的响应（工作台据此决定要不要拦 ⌘F） */
+  function hasResponseSearch() {
+    return typeof responseSearchHandler === 'function';
+  }
+
+  /** 打开响应的查找框，`text` 是要预填的（一般是选中的文字） */
+  function openResponseSearch(text) {
+    if (responseSearchHandler) responseSearchHandler(text);
+  }
+
   return {
     helpVisible: helpVisible,
     helpSection: helpSection,
@@ -111,6 +139,12 @@ export const useUiStore = defineStore('ui', function () {
     openMockLog: openMockLog,
     openQuickOpen: openQuickOpen,
     openFindReplace: openFindReplace,
-    setSidebarTab: setSidebarTab
+    setSidebarTab: setSidebarTab,
+
+    /* ---------------- 响应体的查找（T43） ---------------- */
+
+    registerResponseSearch: registerResponseSearch,
+    hasResponseSearch: hasResponseSearch,
+    openResponseSearch: openResponseSearch
   };
 });

@@ -139,7 +139,7 @@ export default {
   filterKeywordPlaceholder: 'Type a keyword',
   filterCaseSensitive: 'Match case',
   filterShowPath: 'Show paths',
-  filterCount: '{n} results',
+  filterCount: '{n} result | {n} results',
   filterNoMatch: 'No match',
   filterCopy: 'Copy result',
   filterCopied: 'Filtered result copied',
@@ -148,4 +148,12 @@ export default {
   filterNotJson: 'The response is not JSON, so JSONPath is unavailable',
   filterComputing: 'Computing…',
   filterTruncated: 'Too many matches, showing the first {n} lines',
+
+  /* ---------------- ⌘F search in the response (T43) ---------------- */
+  searchPanelPlaceholder: 'Find',
+  searchPrev: 'Previous (⇧Enter)',
+  searchNext: 'Next (Enter)',
+  searchClose: 'Close (Esc)',
+  searchCount: '{index} of {total}',
+  searchNoMatch: 'No match'
 };
