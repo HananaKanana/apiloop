@@ -129,21 +129,6 @@ function compareAll() {
           <n-icon v-if="!envs.selectedId" class="tick" size="16" :component="Check" />
         </div>
 
-        <!-- 内置的 Mock 环境：不存库，固定在这里。本机的只在客户端里有；云端的未绑定时用不了 -->
-        <div
-          v-for="item in mockItems"
-          :key="item.id"
-          class="item"
-          :class="{ active: envs.selectedId === item.id, disabled: !item.usable }"
-          :title="item.hint"
-          @click="selectMock(item)"
-        >
-          <n-icon class="item-icon" size="15" :component="Bolt" />
-          <span class="item-name">{{ item.name }}</span>
-          <span class="tag">{{ item.usable ? t('layout.builtin') : t('layout.signInToUse') }}</span>
-          <n-icon v-if="envs.selectedId === item.id" class="tick" size="16" :component="Check" />
-        </div>
-
         <div
           v-for="env in envs.environments"
           :key="env.id"
@@ -154,6 +139,21 @@ function compareAll() {
           <n-icon class="item-icon" size="15" :component="Server" />
           <span class="item-name">{{ env.name }}</span>
           <n-icon v-if="env.id === envs.selectedId" class="tick" size="16" :component="Check" />
+        </div>
+
+        <!-- 内置的 Mock 环境：不存库，排在真实环境下面、颜色浅一点（用户 2026-10-08）。本机的只在客户端里有；云端的未绑定时用不了 -->
+        <div
+          v-for="item in mockItems"
+          :key="item.id"
+          class="item"
+          :class="['builtin', { active: envs.selectedId === item.id, disabled: !item.usable }]"
+          :title="item.hint"
+          @click="selectMock(item)"
+        >
+          <n-icon class="item-icon" size="15" :component="Bolt" />
+          <span class="item-name">{{ item.name }}</span>
+          <span class="tag">{{ item.usable ? t('layout.builtin') : t('layout.signInToUse') }}</span>
+          <n-icon v-if="envs.selectedId === item.id" class="tick" size="16" :component="Check" />
         </div>
       </div>
 
@@ -289,6 +289,15 @@ function compareAll() {
 .tick {
   flex: none;
   color: var(--apiloop-primary);
+}
+
+/* 内置的 Mock 环境：比真实环境浅一档，选中时恢复 */
+.item.builtin:not(.active):not(.disabled) {
+  opacity: 0.6;
+}
+
+.item.builtin:not(.active):not(.disabled):hover {
+  opacity: 0.85;
 }
 
 /* 用不了的项（本机模式下的 Mock）：灰掉、不响应点击 */

@@ -18,7 +18,7 @@ const gateway = useGatewayStore();
 const { t } = useI18n();
 
 /**
- * 内置 Mock 环境固定排在最上面：单击编辑变量，双击设为当前。
+ * 内置 Mock 环境排在真实环境下面、颜色浅一点（用户 2026-10-08）：单击编辑变量，双击设为当前。
  * 客户端里有两个（本机 / 云端，2026-10-08），网页版只有云端那个。
  */
 const mockItems = computed(function () {
@@ -155,21 +155,6 @@ async function onMenuSelect(env, key) {
 
     <div class="list">
       <div
-        v-for="item in mockItems"
-        :key="item.id"
-        class="item"
-        :class="{ active: envs.editing && envs.editing.id === item.id }"
-        @click="openMock(item.id)"
-        @dblclick="useMock(item.id)"
-      >
-        <span class="tick">
-          <n-icon v-if="envs.selectedId === item.id" size="14" :component="Check" />
-        </span>
-        <span class="name">{{ item.name }}</span>
-        <span class="builtin">{{ t('env.builtin') }}</span>
-      </div>
-
-      <div
         v-for="env in list"
         :key="env.id"
         class="item"
@@ -198,6 +183,20 @@ async function onMenuSelect(env, key) {
         </n-dropdown>
       </div>
 
+      <div
+        v-for="item in mockItems"
+        :key="item.id"
+        class="item builtin-env"
+        :class="{ active: envs.editing && envs.editing.id === item.id }"
+        @click="openMock(item.id)"
+        @dblclick="useMock(item.id)"
+      >
+        <span class="tick">
+          <n-icon v-if="envs.selectedId === item.id" size="14" :component="Check" />
+        </span>
+        <span class="name">{{ item.name }}</span>
+        <span class="builtin">{{ t('env.builtin') }}</span>
+      </div>
     </div>
 
     <context-menu
@@ -266,6 +265,15 @@ async function onMenuSelect(env, key) {
   height: 6px;
   border-radius: 50%;
   background: var(--apiloop-primary);
+}
+
+/* 内置的 Mock 环境：比真实环境浅一档，选中时恢复 */
+.item.builtin-env:not(.active) {
+  opacity: 0.6;
+}
+
+.item.builtin-env:not(.active):hover {
+  opacity: 0.85;
 }
 
 .item:hover {
