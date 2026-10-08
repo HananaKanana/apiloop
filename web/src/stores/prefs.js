@@ -133,6 +133,18 @@ export const usePrefsStore = defineStore('prefs', function () {
     return saveGroups(projectGroups.value.filter(function (group) { return group.id !== id; }));
   }
 
+  /** 把分组挪到第 index 位（管理分组里上下移、拖拽用）；分组顺序就是项目下拉里的顺序 */
+  function moveGroup(id, index) {
+    const list = projectGroups.value.slice();
+    const from = list.findIndex(function (group) { return group.id === id; });
+    if (from === -1) return Promise.resolve(projectGroups.value);
+    const to = Math.max(0, Math.min(list.length - 1, index));
+    if (to === from) return Promise.resolve(projectGroups.value);
+    const moved = list.splice(from, 1)[0];
+    list.splice(to, 0, moved);
+    return saveGroups(list);
+  }
+
   function toggleGroupCollapsed(id) {
     return saveGroups(projectGroups.value.map(function (group) {
       if (group.id !== id) return group;
@@ -288,6 +300,7 @@ export const usePrefsStore = defineStore('prefs', function () {
     addGroup: addGroup,
     renameGroup: renameGroup,
     removeGroup: removeGroup,
+    moveGroup: moveGroup,
     toggleGroupCollapsed: toggleGroupCollapsed,
     assignProject: assignProject,
 

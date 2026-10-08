@@ -16,6 +16,8 @@ import {
 import { useDialog } from '@/utils/dialog';
 import {
   Api,
+  ArrowDown,
+  ArrowUp,
   Braces,
   ChevronDown,
   ChevronRight,
@@ -538,6 +540,63 @@ function removeGroup() {
   });
 }
 
+/* 分组排序：右栏标题的上移 / 下移，或者在左栏里拖 */
+
+const activeIndex = computed(function () {
+  return prefs.projectGroups.findIndex(function (group) { return group.id === activeGroupId.value; });
+});
+
+async function moveGroupTo(id, index) {
+  try {
+    await prefs.moveGroup(id, index);
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+function moveActive(delta) {
+  if (activeIndex.value === -1) return;
+  moveGroupTo(activeGroupId.value, activeIndex.value + delta);
+}
+
+/** 拖拽：拖着的分组 id；悬停在哪一行、插到它上面还是下面 */
+const dragGroupId = ref('');
+const dropHint = ref({ id: '', after: false });
+
+function onGroupDragStart(event, group) {
+  dragGroupId.value = group.id;
+  event.dataTransfer.effectAllowed = 'move';
+  // Firefox 不 setData 就拖不起来
+  event.dataTransfer.setData('text/plain', group.id);
+}
+
+function onGroupDragOver(event, group) {
+  if (!dragGroupId.value) return;
+  event.preventDefault();
+  const rect = event.currentTarget.getBoundingClientRect();
+  dropHint.value = { id: group.id, after: event.clientY > rect.top + rect.height / 2 };
+}
+
+function onGroupDrop(event, group) {
+  event.preventDefault();
+  const dragId = dragGroupId.value;
+  const after = dropHint.value.after;
+  onGroupDragEnd();
+  if (!dragId || dragId === group.id) return;
+
+  const ids = prefs.projectGroups.map(function (item) { return item.id; });
+  const from = ids.indexOf(dragId);
+  let to = ids.indexOf(group.id) + (after ? 1 : 0);
+  // 先拿掉自己再插：原位置在目标前面时，目标下标要减一
+  if (from < to) to -= 1;
+  moveGroupTo(dragId, to);
+}
+
+function onGroupDragEnd() {
+  dragGroupId.value = '';
+  dropHint.value = { id: '', after: false };
+}
+
 /** 放进某个分组 / 移出（groupId 为 null 就是回到「未分组」） */
 async function assign(projectId, groupId) {
   try {
@@ -738,12 +797,24 @@ async function assign(projectId, groupId) {
         </div>
 
         <div class="gm-side-list">
+          <!-- 拖着上下换位置 -->
           <div
             v-for="group in groupList"
             :key="group.id"
             class="gm-item"
-            :class="{ active: activeGroupId === group.id }"
+            :class="{
+              active: activeGroupId === group.id,
+              dragging: dragGroupId === group.id,
+              'drop-before': dropHint.id === group.id && !dropHint.after,
+              'drop-after': dropHint.id === group.id && dropHint.after
+            }"
+            draggable="true"
+            :title="t('layout.dragToReorder')"
             @click="selectGroup(group.id)"
+            @dragstart="onGroupDragStart($event, group)"
+            @dragover="onGroupDragOver($event, group)"
+            @drop="onGroupDrop($event, group)"
+            @dragend="onGroupDragEnd"
           >
             <n-icon class="gm-item-icon" size="15" :component="Folder" />
             <span class="gm-item-name">{{ group.name }}</span>
@@ -790,6 +861,30 @@ async function assign(projectId, groupId) {
             />
             <span v-else class="gm-title">{{ activeGroup.name }}</span>
             <span class="spacer" />
+            <n-button
+              size="small"
+              quaternary
+              circle
+              :title="t('layout.moveGroupUp')"
+              :disabled="activeIndex <= 0"
+              @click="moveActive(-1)"
+            >
+              <template #icon>
+                <n-icon :component="ArrowUp" />
+              </template>
+            </n-button>
+            <n-button
+              size="small"
+              quaternary
+              circle
+              :title="t('layout.moveGroupDown')"
+              :disabled="activeIndex === -1 || activeIndex >= groupList.length - 1"
+              @click="moveActive(1)"
+            >
+              <template #icon>
+                <n-icon :component="ArrowDown" />
+              </template>
+            </n-button>
             <n-button v-if="renameDraft === null" size="small" quaternary @click="startRename">
               <template #icon>
                 <n-icon :component="Pencil" />
@@ -1220,6 +1315,19 @@ async function assign(projectId, groupId) {
   background: rgba(255, 108, 55, 0.1);
   color: var(--apiloop-primary);
   font-weight: 500;
+}
+
+.gm-item.dragging {
+  opacity: 0.4;
+}
+
+/* 插入位置：上 / 下一条橙线 */
+.gm-item.drop-before {
+  box-shadow: inset 0 2px 0 var(--apiloop-primary);
+}
+
+.gm-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--apiloop-primary);
 }
 
 .gm-ungrouped {
