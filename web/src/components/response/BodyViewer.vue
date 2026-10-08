@@ -1,12 +1,20 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { NAlert, NButton, NDropdown, NIcon, useMessage } from 'naive-ui';
-import { Braces, ChevronDown, Copy, Download, Eye, ListDetails, Search, TextWrap } from '@vicons/tabler';
+import { NAutoComplete, NAlert, NButton, NCheckbox, NDropdown, NIcon, useMessage } from 'naive-ui';
+import { Braces, ChevronDown, Copy, Download, Eye, Filter, ListDetails, Search, TextWrap } from '@vicons/tabler';
 import CodeEditor from '@/components/common/CodeEditor.vue';
 import JsonTreeView from '@/components/response/JsonTreeView.vue';
 import { buildJsonRows } from '@/utils/jsonTree';
 import { copyText } from '@/utils/clipboard';
+import {
+  MAX_FILTER_LINES,
+  evaluateJsonPath,
+  filterByKeyword,
+  pushRecentPath,
+  readRecentPaths,
+  toFilterText
+} from '@/utils/responseFilter';
 
 /**
  * 响应体查看器（2026-10-01 按 Postman 重做：用户觉得原来的「太素」）。
@@ -34,7 +42,9 @@ const props = defineProps({
    * 只读角色（viewer）：不给「为这个字段加断言 / 提取为变量」这两个入口 ——
    * 它们会改接口、让接口变成「有未保存的修改」。
    */
-  readonly: { type: Boolean, default: false }
+  readonly: { type: Boolean, default: false },
+  /** 这个响应属于哪个接口（筛选的「最近用过」按它分开存）。临时标签页没有，给空串 */
+  apiId: { type: String, default: '' }
 });
 
 const emit = defineEmits(['add-assertion', 'add-extract']);
@@ -388,6 +398,255 @@ function formatSize(bytes) {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1024 / 1024).toFixed(2) + ' MB';
 }
+
+/* ---------------- 响应筛选（T37） ---------------- */
+
+/** 输入之后多久才真的去算（打一半的表达式算出来全是错，白算） */
+const FILTER_DELAY = 300;
+
+const filterOpen = ref(false);
+/** jsonpath / keyword */
+const filterMode = ref('jsonpath');
+/** 输入框里的原文 */
+const filterInput = ref('');
+/** 防抖之后真正生效的表达式 */
+const filterApplied = ref('');
+const caseSensitive = ref(false);
+const showPath = ref(false);
+const recentPaths = ref([]);
+
+/**
+ * 筛选结果：
+ * `{ pending, mode, count, error, truncated, value, text, lines }`
+ * - `pending`：大响应还在后台算；
+ * - `text`：JSONPath 的显示文本 / 关键字命中的行（不带行号，复制用）；
+ * - `lines`：关键字模式的行（带行号，显示用）。
+ */
+const filterState = ref({
+  pending: false, mode: 'jsonpath', count: 0, error: '',
+  truncated: false, value: null, text: '', lines: []
+});
+
+/** 每次重算都 +1，算完发现对不上就整批丢掉（大响应异步算时用户可能又改了输入） */
+let filterToken = 0;
+let filterTimer = null;
+
+/** JSONPath 只在「文本 + 认定成 JSON」时能用 */
+const canFilterPath = computed(function () {
+  return isText.value && language.value === 'json';
+});
+
+/** 筛选真的在起作用（关掉之后要回到完整响应，所以这里带上 filterOpen） */
+const filterActive = computed(function () {
+  return filterOpen.value && filterApplied.value !== '' && isText.value;
+});
+
+const filterCountText = computed(function () {
+  if (!filterActive.value || filterState.value.error) return '';
+  if (filterState.value.pending) return t('response.filterComputing');
+  if (!filterState.value.count) return t('response.filterNoMatch');
+  return t('response.filterCount', { n: filterState.value.count });
+});
+
+const filterErrorText = computed(function () {
+  const err = filterState.value.error;
+  if (!err) return '';
+  if (err === 'not-json') return t('response.filterNotJson');
+  return t('response.filterPathError', { message: err });
+});
+
+const recentOptions = computed(function () {
+  if (filterMode.value !== 'jsonpath') return [];
+  return recentPaths.value.map(function (item) { return { label: item, value: item }; });
+});
+
+/**
+ * 把一件重活推到空闲时再做（大响应按关键字筛要遍历几百 KB）。
+ * `requestIdleCallback` 在 Safari 里还没有，退回 `setTimeout`。
+ */
+function deferFilter(fn) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(function () { fn(); }, { timeout: 300 });
+    return;
+  }
+  setTimeout(fn, 0);
+}
+
+function computePath(expr) {
+  const out = evaluateJsonPath(body.value, expr);
+  if (!out.ok) {
+    return {
+      pending: false, mode: 'jsonpath', count: 0, error: out.error,
+      truncated: false, value: null, text: '', lines: []
+    };
+  }
+
+  const values = out.results.map(function (item) {
+    return showPath.value ? { path: item.path, value: item.value } : item.value;
+  });
+  // 只有一个结果就直接给那个值；多个给数组。打开「显示路径」时一律是 [{ path, value }]
+  const value = showPath.value ? values : (out.results.length === 1 ? values[0] : values);
+
+  let text;
+  try {
+    text = JSON.stringify(value, null, 2);
+  } catch (err) {
+    text = String(value);
+  }
+  if (text === undefined) text = 'undefined';
+
+  // 真的算出结果了才记进「最近用过」（打错的表达式不该占位）
+  if (out.results.length) recentPaths.value = pushRecentPath(props.apiId, expr);
+
+  return {
+    pending: false, mode: 'jsonpath', count: out.results.length, error: '',
+    truncated: false, value: value, text: text, lines: []
+  };
+}
+
+function computeKeyword(expr) {
+  // JSON 先格式化成多行再按行筛 —— 没格式化的 JSON 是一整行，按行筛等于没筛
+  const out = filterByKeyword(toFilterText(body.value, language.value), expr, {
+    caseSensitive: caseSensitive.value
+  });
+
+  return {
+    pending: false,
+    mode: 'keyword',
+    count: out.total,
+    error: '',
+    truncated: out.truncated,
+    value: null,
+    text: out.lines.map(function (line) { return line.text; }).join('\n'),
+    lines: out.lines
+  };
+}
+
+function runFilter() {
+  const token = ++filterToken;
+  const mode = filterMode.value;
+  const expr = filterApplied.value;
+
+  if (!filterOpen.value || !expr || !isText.value) {
+    filterState.value = {
+      pending: false, mode: mode, count: 0, error: '',
+      truncated: false, value: null, text: '', lines: []
+    };
+    return;
+  }
+
+  const compute = function () {
+    // 算的时候用户又改了输入 / 关了筛选：这一份整批作废
+    if (token !== filterToken) return;
+    filterState.value = mode === 'jsonpath' ? computePath(expr) : computeKeyword(expr);
+  };
+
+  // 大响应不在这里硬算，推到空闲时做，免得打字卡顿
+  if (size.value > FORMAT_LIMIT || body.value.length > 200000) {
+    filterState.value = Object.assign({}, filterState.value, { pending: true });
+    deferFilter(compute);
+  } else {
+    compute();
+  }
+}
+
+function onFilterInput(value) {
+  filterInput.value = value;
+  if (filterTimer) clearTimeout(filterTimer);
+  filterTimer = setTimeout(function () {
+    filterTimer = null;
+    filterApplied.value = filterInput.value;
+  }, FILTER_DELAY);
+}
+
+function setFilterMode(mode) {
+  if (mode === 'jsonpath' && !canFilterPath.value) return;
+  filterMode.value = mode;
+}
+
+function toggleFilter() {
+  if (filterOpen.value) {
+    // 关掉只是不显示，输入框里的表达式留着 —— 再点开还是它
+    filterOpen.value = false;
+    return;
+  }
+  filterOpen.value = true;
+  // 是 JSON 就默认 JSONPath，否则默认关键字
+  filterMode.value = canFilterPath.value ? 'jsonpath' : 'keyword';
+  recentPaths.value = readRecentPaths(props.apiId);
+}
+
+async function copyFilterResult() {
+  try {
+    await copyText(filterState.value.text);
+    message.success(t('response.filterCopied'));
+  } catch (err) {
+    message.warning(t('app.copyFailed'));
+  }
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * 关键字高亮。**先按原文找命中位置再转义**，不是先转义再找 ——
+ * 关键字里带 `<` 或 `&` 时先转义会对不上（响应体是外部数据，也必须转义后再塞进 innerHTML）。
+ */
+function highlight(line) {
+  const text = String(line === undefined || line === null ? '' : line);
+  const needle = filterApplied.value;
+  if (!needle) return escapeHtml(text);
+
+  const hay = caseSensitive.value ? text : text.toLowerCase();
+  const find = caseSensitive.value ? needle : needle.toLowerCase();
+
+  let out = '';
+  let at = 0;
+  let index = hay.indexOf(find, at);
+  while (index !== -1) {
+    out += escapeHtml(text.slice(at, index)) +
+      '<mark>' + escapeHtml(text.slice(index, index + needle.length)) + '</mark>';
+    at = index + needle.length;
+    index = hay.indexOf(find, at);
+  }
+  return out + escapeHtml(text.slice(at));
+}
+
+/** ⌘⇧K / Ctrl+Shift+K：开关筛选（这个键位没被本应用别的功能占用） */
+function onFilterKeydown(event) {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (!event.shiftKey) return;
+  if (String(event.key).toLowerCase() !== 'k') return;
+  event.preventDefault();
+  toggleFilter();
+}
+
+onMounted(function () {
+  window.addEventListener('keydown', onFilterKeydown);
+});
+
+onBeforeUnmount(function () {
+  window.removeEventListener('keydown', onFilterKeydown);
+  if (filterTimer) clearTimeout(filterTimer);
+});
+
+/** 换接口就把「最近用过」换成这个接口的（临时标签页没有 apiId，读到的是空） */
+watch(
+  function () { return props.apiId; },
+  function () { recentPaths.value = readRecentPaths(props.apiId); },
+  { immediate: true }
+);
+
+/**
+ * 重算的时机：表达式生效、模式变了、开关变了、**响应换了**（重新发送之后筛选条件保留，
+ * 自动作用到新响应上）。`body` 变了会走这里，所以不用额外处理「重新发送」。
+ */
+watch([filterApplied, filterMode, caseSensitive, showPath, body, filterOpen], runFilter);
 </script>
 
 <template>
@@ -416,6 +675,16 @@ function formatSize(bytes) {
         >
           <n-icon size="14" :component="ListDetails" />
           <span>{{ t('response.fields') }}</span>
+        </button>
+        <!-- 筛选（T37）：JSONPath / 关键字，⌘⇧K -->
+        <button
+          class="tool"
+          :class="{ active: filterOpen }"
+          :title="t('response.filterTitle')"
+          @click="toggleFilter"
+        >
+          <n-icon size="14" :component="Filter" />
+          <span>{{ t('response.filterLabel') }}</span>
         </button>
       </template>
       <span v-else-if="isImage" class="tool active static">
@@ -446,6 +715,65 @@ function formatSize(bytes) {
       {{ t('response.truncatedNotice') }}
     </n-alert>
 
+    <!-- 筛选栏（T37）：模式 + 表达式 + 结果数量 + 复制 / 关闭 -->
+    <div v-if="filterOpen && isText" class="filter-bar">
+      <div class="filter-modes">
+        <button
+          class="mode"
+          :class="{ active: filterMode === 'jsonpath' }"
+          :disabled="!canFilterPath"
+          :title="canFilterPath ? '' : t('response.filterNotJson')"
+          @click="setFilterMode('jsonpath')"
+        >
+          JSONPath
+        </button>
+        <button
+          class="mode"
+          :class="{ active: filterMode === 'keyword' }"
+          @click="setFilterMode('keyword')"
+        >
+          {{ t('response.filterKeyword') }}
+        </button>
+      </div>
+
+      <n-auto-complete
+        class="filter-input"
+        size="small"
+        clearable
+        :value="filterInput"
+        :options="recentOptions"
+        :placeholder="filterMode === 'jsonpath' ? t('response.filterPathPlaceholder') : t('response.filterKeywordPlaceholder')"
+        @update:value="onFilterInput"
+      />
+
+      <n-checkbox
+        v-if="filterMode === 'keyword'"
+        size="small"
+        :checked="caseSensitive"
+        @update:checked="(v) => { caseSensitive = v; }"
+      >
+        {{ t('response.filterCaseSensitive') }}
+      </n-checkbox>
+      <n-checkbox
+        v-else
+        size="small"
+        :checked="showPath"
+        @update:checked="(v) => { showPath = v; }"
+      >
+        {{ t('response.filterShowPath') }}
+      </n-checkbox>
+
+      <span class="filter-count">{{ filterCountText }}</span>
+
+      <n-button v-if="filterActive" size="tiny" quaternary @click="copyFilterResult">
+        {{ t('response.filterCopy') }}
+      </n-button>
+      <button class="icon-tool" :title="t('response.filterClose')" @click="toggleFilter">×</button>
+    </div>
+
+    <!-- 表达式写错就写在输入框下面，不弹窗 -->
+    <p v-if="filterErrorText" class="filter-error">{{ filterErrorText }}</p>
+
     <n-alert
       v-if="language === 'json' && tooBigToFormat && view === 'code'"
       type="info"
@@ -471,7 +799,37 @@ function formatSize(bytes) {
     </n-alert>
 
     <div class="content">
-      <template v-if="isText && view === 'code'">
+      <!-- 筛选生效时：内容区显示筛选结果，完整响应让位 -->
+      <template v-if="filterActive">
+        <div v-if="filterState.pending" class="filter-pending">
+          {{ t('response.filterComputing') }}
+        </div>
+
+        <template v-else-if="filterState.mode === 'keyword'">
+          <p v-if="filterState.truncated" class="filter-note">
+            {{ t('response.filterTruncated', { n: MAX_FILTER_LINES }) }}
+          </p>
+          <div class="kw-list">
+            <div v-for="line in filterState.lines" :key="line.no" class="kw-line">
+              <span class="kw-no">{{ line.no }}</span>
+              <span class="kw-text" v-html="highlight(line.text)" />
+            </div>
+          </div>
+        </template>
+
+        <!-- JSONPath 的结果：单条就是那个值，多条是数组，只读高亮 -->
+        <code-editor
+          v-else
+          class="code"
+          :model-value="filterState.text"
+          language="json"
+          :wrap="wrap"
+          readonly
+          min-height="120px"
+        />
+      </template>
+
+      <template v-else-if="isText && view === 'code'">
         <code-editor
           ref="editorRef"
           :key="editorLanguage"
@@ -659,5 +1017,117 @@ function formatSize(bytes) {
 
 .binary-size {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------------- 响应筛选（T37） ---------------- */
+
+.filter-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.09);
+}
+
+/* 模式切换：两个贴在一起的按钮，选中的那个浅底加粗 */
+.filter-modes {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.filter-modes .mode {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.filter-modes .mode:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.14);
+  opacity: 1;
+}
+
+.filter-modes .mode.active {
+  background: rgba(128, 128, 128, 0.2);
+  opacity: 1;
+  font-weight: 500;
+}
+
+/* 非 JSON 时 JSONPath 灰掉（响应不是 JSON，表达式算不了） */
+.filter-modes .mode:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 160px;
+  max-width: 420px;
+}
+
+.filter-count {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+/* 表达式写错：红字写在输入框下面，不弹窗 */
+.filter-error {
+  flex: none;
+  margin: 0;
+  padding-left: 2px;
+  font-size: 12px;
+  color: #d03050;
+  word-break: break-all;
+}
+
+.filter-pending,
+.filter-note {
+  margin: 0 0 6px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.kw-list {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.7;
+}
+
+.kw-line {
+  display: flex;
+  gap: 10px;
+}
+
+/* 行号那一列固定宽度、右对齐，右边正文不会因为行号位数变化而抖动 */
+.kw-no {
+  flex: none;
+  width: 48px;
+  text-align: right;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.kw-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.kw-text :deep(mark) {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: rgba(255, 196, 0, 0.45);
+  color: inherit;
 }
 </style>

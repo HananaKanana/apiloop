@@ -473,6 +473,7 @@ function requestBodyText() {
                 :request-url="finalUrl"
                 :request-method="requestMethod"
                 :readonly="readonly"
+                :api-id="tab.apiId || ''"
                 @add-assertion="(payload) => emit('add-assertion', payload)"
                 @add-extract="(payload) => emit('add-extract', payload)"
               />

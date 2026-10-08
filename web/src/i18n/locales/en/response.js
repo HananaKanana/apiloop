@@ -129,5 +129,23 @@ export default {
   timingDownload: 'Download',
 
   /* ---------------- VisualizerView ---------------- */
-  templateRenderError: 'Template rendering failed: {message}'
+  templateRenderError: 'Template rendering failed: {message}',
+
+  /* ---------------- response filtering (BodyViewer, T37) ---------------- */
+  filterTitle: 'Filter response (⌘⇧K)',
+  filterLabel: 'Filter',
+  filterKeyword: 'Keyword',
+  filterPathPlaceholder: '$.data.list[*].id',
+  filterKeywordPlaceholder: 'Type a keyword',
+  filterCaseSensitive: 'Match case',
+  filterShowPath: 'Show paths',
+  filterCount: '{n} results',
+  filterNoMatch: 'No match',
+  filterCopy: 'Copy result',
+  filterCopied: 'Filtered result copied',
+  filterClose: 'Close filter',
+  filterPathError: 'Bad expression: {message}',
+  filterNotJson: 'The response is not JSON, so JSONPath is unavailable',
+  filterComputing: 'Computing…',
+  filterTruncated: 'Too many matches, showing the first {n} lines',
 };

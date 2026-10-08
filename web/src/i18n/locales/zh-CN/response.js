@@ -120,5 +120,23 @@ export default {
   timingDownload: '下载响应',
 
   /* ---------------- VisualizerView ---------------- */
-  templateRenderError: '模板渲染失败：{message}'
+  templateRenderError: '模板渲染失败：{message}',
+
+  /* ---------------- 响应筛选（BodyViewer，T37） ---------------- */
+  filterTitle: '筛选响应（⌘⇧K）',
+  filterLabel: '筛选',
+  filterKeyword: '关键字',
+  filterPathPlaceholder: '$.data.list[*].id',
+  filterKeywordPlaceholder: '输入关键字',
+  filterCaseSensitive: '区分大小写',
+  filterShowPath: '显示路径',
+  filterCount: '{n} 个结果',
+  filterNoMatch: '没有匹配',
+  filterCopy: '复制结果',
+  filterCopied: '已复制筛选结果',
+  filterClose: '关闭筛选',
+  filterPathError: '表达式有问题：{message}',
+  filterNotJson: '响应不是 JSON，JSONPath 用不了',
+  filterComputing: '正在计算…',
+  filterTruncated: '命中太多，只显示前 {n} 行',
 };
