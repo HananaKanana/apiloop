@@ -191,6 +191,12 @@ export default {
   createGroupAction: '新建分组',
   noGroups: '还没有分组',
   projectGroups: '项目分组',
+  actionsCurrent: '当前项目',
+  actionsExport: '导出',
+  actionsCreate: '新建',
+  groupProjectCount: '{n} 个项目',
+  projectColumn: '项目',
+  groupColumn: '所属分组',
   deleteGroupTitle: '删除分组',
   deleteGroupBody: '删除「{name}」后，里面的项目会回到「未分组」，项目本身不受影响。',
 

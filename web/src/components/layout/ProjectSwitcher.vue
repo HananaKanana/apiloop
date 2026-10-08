@@ -14,7 +14,25 @@ import {
   useMessage
 } from 'naive-ui';
 import { useDialog } from '@/utils/dialog';
-import { ChevronDown, ChevronRight, Package, Plus, Search, Settings, Star } from '@vicons/tabler';
+import {
+  Api,
+  Braces,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  DatabaseImport,
+  FileText,
+  Flask,
+  Folders,
+  GitCompare,
+  Package,
+  Plus,
+  Replace,
+  Search,
+  Settings,
+  Star,
+  Trash
+} from '@vicons/tabler';
 import * as importExportApi from '@/api/importExport';
 import { useProjectStore } from '@/stores/project';
 import { usePrefsStore } from '@/stores/prefs';
@@ -362,6 +380,13 @@ const groupOptions = computed(function () {
   }));
 });
 
+/** 管理分组弹窗里每个分组后面显示「N 个项目」（只数还存在的项目） */
+function groupCount(groupId) {
+  const group = prefs.projectGroups.find(function (item) { return item.id === groupId; });
+  if (!group) return 0;
+  return (group.projectIds || []).filter(function (id) { return byId.value.has(id); }).length;
+}
+
 function groupValueOf(projectId) {
   const group = prefs.groupOf(projectId);
   return group ? group.id : '';
@@ -441,116 +466,146 @@ async function assign(projectId, groupId) {
       </button>
     </template>
 
+    <!-- 左边项目列表，右边按类别分好的操作（2026-10-07：原来十一个操作排成一长列压在列表下面，很乱） -->
     <div class="panel">
-      <div class="search">
-        <n-input
-          ref="searchRef"
-          v-model:value="keyword"
-          size="small"
-          clearable
-          :placeholder="t('layout.searchProjects')"
-          @keydown.esc="show = false"
-        >
-          <template #prefix>
-            <n-icon :component="Search" />
-          </template>
-        </n-input>
-      </div>
-
-      <div class="list">
-        <!-- 收藏：排在最上面 -->
-        <div v-if="favoriteProjects.length" class="section">
-          <div class="section-title">{{ t('layout.favorites') }}</div>
-          <div
-            v-for="project in favoriteProjects"
-            :key="'fav-' + project.id"
-            class="row"
-            :class="{ active: project.id === projects.currentId }"
-            @click="selectProject(project.id)"
+      <div class="projects-col">
+        <div class="search">
+          <n-input
+            ref="searchRef"
+            v-model:value="keyword"
+            size="small"
+            clearable
+            :placeholder="t('layout.searchProjects')"
+            @keydown.esc="show = false"
           >
-            <span class="row-name">{{ project.name }}</span>
-            <button
-              class="star on"
-              :title="t('layout.removeFavorite')"
-              @click.stop="toggleFavorite(project)"
-            >
-              <n-icon size="15" :component="Star" />
-            </button>
-          </div>
+            <template #prefix>
+              <n-icon :component="Search" />
+            </template>
+          </n-input>
         </div>
 
-        <div v-for="section in sections" :key="section.id" class="section">
-          <div class="section-head" @click="toggleSection(section)">
-            <n-icon size="13" :component="section.collapsed ? ChevronRight : ChevronDown" />
-            <span class="section-title flat">{{ section.name }}</span>
-            <span class="count">{{ section.projects.length }}</span>
-          </div>
-
-          <template v-if="!section.collapsed">
+        <div class="list">
+          <!-- 收藏：排在最上面 -->
+          <div v-if="favoriteProjects.length" class="section">
+            <div class="section-title">{{ t('layout.favorites') }}</div>
             <div
-              v-for="project in section.projects"
-              :key="project.id"
+              v-for="project in favoriteProjects"
+              :key="'fav-' + project.id"
               class="row"
               :class="{ active: project.id === projects.currentId }"
+              :title="project.description || project.name"
               @click="selectProject(project.id)"
             >
               <span class="row-name">{{ project.name }}</span>
-              <span v-if="project.description" class="row-desc">{{ project.description }}</span>
               <button
-                class="star"
-                :class="{ on: prefs.isProjectFavorite(project.id) }"
-                :title="prefs.isProjectFavorite(project.id) ? t('layout.removeFavorite') : t('layout.addFavorite')"
+                class="star on"
+                :title="t('layout.removeFavorite')"
                 @click.stop="toggleFavorite(project)"
               >
                 <n-icon size="15" :component="Star" />
               </button>
             </div>
-            <div v-if="!section.projects.length" class="section-empty">{{ t('layout.emptyGroup') }}</div>
-          </template>
+          </div>
+
+          <div v-for="section in sections" :key="section.id" class="section">
+            <div class="section-head" @click="toggleSection(section)">
+              <n-icon size="13" :component="section.collapsed ? ChevronRight : ChevronDown" />
+              <span class="section-title flat">{{ section.name }}</span>
+              <span class="count">{{ section.projects.length }}</span>
+            </div>
+
+            <template v-if="!section.collapsed">
+              <!-- 说明不再挤在行尾（截断后看着乱），悬停时显示 -->
+              <div
+                v-for="project in section.projects"
+                :key="project.id"
+                class="row grouped"
+                :class="{ active: project.id === projects.currentId }"
+                :title="project.description || project.name"
+                @click="selectProject(project.id)"
+              >
+                <span class="row-name">{{ project.name }}</span>
+                <button
+                  class="star"
+                  :class="{ on: prefs.isProjectFavorite(project.id) }"
+                  :title="prefs.isProjectFavorite(project.id) ? t('layout.removeFavorite') : t('layout.addFavorite')"
+                  @click.stop="toggleFavorite(project)"
+                >
+                  <n-icon size="15" :component="Star" />
+                </button>
+              </div>
+              <div v-if="!section.projects.length" class="section-empty">{{ t('layout.emptyGroup') }}</div>
+            </template>
+          </div>
+
+          <div v-if="nothingFound" class="section-empty">{{ t('layout.noMatchingProjects') }}</div>
         </div>
 
-        <div v-if="nothingFound" class="section-empty">{{ t('layout.noMatchingProjects') }}</div>
+        <!-- 分组是整个列表的事，入口放在列表底下 -->
+        <div class="list-foot">
+          <div class="row action" @click="run(openGroups)">
+            <n-icon class="row-icon" size="15" :component="Folders" />
+            <span class="row-name">{{ t('layout.manageGroups') }}</span>
+          </div>
+        </div>
       </div>
 
-      <div class="section foot">
-        <div class="row action" @click="run(openGroups)">
-          <n-icon class="row-icon" size="15" :component="Settings" />
-          <span class="row-name">{{ t('layout.manageGroups') }}</span>
+      <div class="actions-col">
+        <div class="action-group">
+          <div class="action-title">{{ t('layout.actionsCurrent') }}</div>
+          <div class="row action" @click="run(function () { emit('change', '__settings'); })">
+            <n-icon class="row-icon" size="15" :component="Settings" />
+            <span class="row-name">{{ t('layout.projectSettings') }}</span>
+          </div>
+          <!-- 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口 -->
+          <div class="row action" @click="run(function () { tabs.openEnvDiff(); })">
+            <n-icon class="row-icon" size="15" :component="GitCompare" />
+            <span class="row-name">{{ t('layout.environmentDiff') }}</span>
+          </div>
+          <!-- 查找替换（第五轮第 2 节）：快捷键 ⌘⇧F / Ctrl+Shift+F -->
+          <div class="row action" @click="run(function () { ui.openFindReplace(); })">
+            <n-icon class="row-icon" size="15" :component="Replace" />
+            <span class="row-name">{{ t('layout.findReplace') }}</span>
+          </div>
         </div>
-        <div class="row action" @click="run(function () { emit('change', '__settings'); })">
-          <span class="row-name">{{ t('layout.projectSettings') }}</span>
+
+        <div class="action-group">
+          <div class="action-title">{{ t('layout.actionsExport') }}</div>
+          <div class="row action" @click="run(exportCollection)">
+            <n-icon class="row-icon" size="15" :component="Braces" />
+            <span class="row-name">{{ t('layout.exportJson') }}</span>
+          </div>
+          <div class="row action" @click="run(function () { showOpenapi = true; })">
+            <n-icon class="row-icon" size="15" :component="Api" />
+            <span class="row-name">{{ t('layout.exportOpenapi') }}</span>
+          </div>
+          <div class="row action" @click="run(function () { showExportDoc = true; })">
+            <n-icon class="row-icon" size="15" :component="FileText" />
+            <span class="row-name">{{ t('layout.exportDocument') }}</span>
+          </div>
         </div>
-        <div class="row action" @click="run(exportCollection)">
-          <span class="row-name">{{ t('layout.exportJson') }}</span>
-        </div>
-        <div class="row action" @click="run(function () { showOpenapi = true; })">
-          <span class="row-name">{{ t('layout.exportOpenapi') }}</span>
-        </div>
-        <div class="row action" @click="run(function () { showExportDoc = true; })">
-          <span class="row-name">{{ t('layout.exportDocument') }}</span>
-        </div>
-        <!-- 环境对比（第五轮第 3 节）：环境下拉最底下也有一个入口 -->
-        <div class="row action" @click="run(function () { tabs.openEnvDiff(); })">
-          <span class="row-name">{{ t('layout.environmentDiff') }}</span>
-        </div>
-        <!-- 查找替换（第五轮第 2 节）：快捷键 ⌘⇧F / Ctrl+Shift+F -->
-        <div class="row action" @click="run(function () { ui.openFindReplace(); })">
-          <span class="row-name">{{ t('layout.findReplace') }}</span>
-        </div>
-        <!-- 复制为新项目（第六轮第 3 节）：拿现成的项目当模板 -->
-        <div class="row action" @click="run(openDuplicate)">
-          <span class="row-name">{{ t('layout.duplicateAsNew') }}</span>
-        </div>
-        <!-- 从备份恢复成新项目（第十四轮第 2 节）：拿之前下载的备份文件建一个新项目 -->
-        <div class="row action" @click="run(function () { showRestore = true; })">
-          <span class="row-name">{{ t('backup.restoreFromFileMenu') }}</span>
-        </div>
-        <div class="row action" @click="run(openCreate)">
-          <span class="row-name">{{ t('layout.newProject') }}</span>
-        </div>
-        <!-- 样例项目：点一下就有一个什么都配齐了的项目，拿来试功能 -->
-        <div class="row action" @click="run(createDemo)">
-          <span class="row-name">{{ creatingDemo ? t('layout.creatingDemo') : t('layout.createDemo') }}</span>
+
+        <div class="action-group">
+          <div class="action-title">{{ t('layout.actionsCreate') }}</div>
+          <div class="row action" @click="run(openCreate)">
+            <n-icon class="row-icon" size="15" :component="Plus" />
+            <span class="row-name">{{ t('layout.newProject') }}</span>
+          </div>
+          <!-- 复制为新项目（第六轮第 3 节）：拿现成的项目当模板 -->
+          <div class="row action" @click="run(openDuplicate)">
+            <n-icon class="row-icon" size="15" :component="Copy" />
+            <span class="row-name">{{ t('layout.duplicateAsNew') }}</span>
+          </div>
+          <!-- 从备份恢复成新项目（第十四轮第 2 节）：拿之前下载的备份文件建一个新项目 -->
+          <div class="row action" @click="run(function () { showRestore = true; })">
+            <n-icon class="row-icon" size="15" :component="DatabaseImport" />
+            <span class="row-name">{{ t('backup.restoreFromFileMenu') }}</span>
+          </div>
+          <!-- 样例项目：点一下就有一个什么都配齐了的项目，拿来试功能 -->
+          <div class="row action" @click="run(createDemo)">
+            <n-icon class="row-icon" size="15" :component="Flask" />
+            <span class="row-name">{{ creatingDemo ? t('layout.creatingDemo') : t('layout.createDemo') }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -563,22 +618,30 @@ async function assign(projectId, groupId) {
     :title="t('layout.manageGroups')"
     style="width: 520px; max-width: 92vw"
   >
-    <div class="manage-section">
-      <div class="manage-title">{{ t('layout.groupSection') }}</div>
-
-      <div v-for="group in draftGroups" :key="group.id" class="manage-row">
+    <div class="manage-title">{{ t('layout.groupSection') }}</div>
+    <div class="manage-box">
+      <div v-for="group in draftGroups" :key="group.id" class="manage-item">
+        <n-icon class="manage-icon" size="15" :component="Folders" />
+        <!-- 名字直接点进去改：平时看着像文字，失焦 / 回车提交 -->
         <n-input
           v-model:value="group.name"
+          class="manage-rename"
           size="small"
+          :bordered="false"
           :placeholder="t('layout.groupNamePlaceholder')"
           @blur="commitRename(group)"
           @keyup.enter="commitRename(group)"
         />
-        <n-button size="small" quaternary @click="removeGroup(group)">{{ t('app.delete') }}</n-button>
+        <span class="manage-count">{{ t('layout.groupProjectCount', { n: groupCount(group.id) }) }}</span>
+        <n-button size="tiny" quaternary circle :title="t('app.delete')" @click="removeGroup(group)">
+          <template #icon>
+            <n-icon :component="Trash" />
+          </template>
+        </n-button>
       </div>
       <div v-if="!draftGroups.length" class="manage-empty">{{ t('layout.noGroups') }}</div>
 
-      <n-space class="manage-add" align="center">
+      <div class="manage-item manage-add">
         <n-input
           v-model:value="newGroupName"
           size="small"
@@ -591,12 +654,16 @@ async function assign(projectId, groupId) {
           </template>
           {{ t('layout.createGroupAction') }}
         </n-button>
-      </n-space>
+      </div>
     </div>
 
-    <div class="manage-section">
-      <div class="manage-title">{{ t('layout.projectGroups') }}</div>
-      <div v-for="project in projects.projects" :key="project.id" class="manage-row">
+    <div class="manage-title spaced">{{ t('layout.projectGroups') }}</div>
+    <div class="manage-box">
+      <div class="manage-item manage-head">
+        <span class="manage-name">{{ t('layout.projectColumn') }}</span>
+        <span class="manage-select">{{ t('layout.groupColumn') }}</span>
+      </div>
+      <div v-for="project in projects.projects" :key="project.id" class="manage-item">
         <span class="manage-name" :title="project.name">{{ project.name }}</span>
         <n-select
           class="manage-select"
@@ -731,9 +798,36 @@ async function assign(projectId, groupId) {
 /* ---------------- 面板 ---------------- */
 
 .panel {
-  width: 320px;
-  max-width: 90vw;
+  display: flex;
+  width: 500px;
+  max-width: 92vw;
   font-size: 13px;
+}
+
+.projects-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 右边的操作栏：浅底色和左边的项目列表分开 */
+.actions-col {
+  flex: none;
+  width: 172px;
+  padding: 6px;
+  border-left: 1px solid rgba(128, 128, 128, 0.14);
+  background: rgba(128, 128, 128, 0.04);
+}
+
+.action-group + .action-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.action-title {
+  padding: 4px 8px;
+  font-size: 11px;
+  opacity: 0.5;
 }
 
 .search {
@@ -742,7 +836,7 @@ async function assign(projectId, groupId) {
 
 /* 项目多的时候面板别顶到屏幕外 */
 .list {
-  max-height: 46vh;
+  max-height: 60vh;
   overflow: auto;
 }
 
@@ -805,6 +899,11 @@ async function assign(projectId, groupId) {
   background: rgba(128, 128, 128, 0.1);
 }
 
+/* 分组里的项目往里缩，和分组名对齐 */
+.row.grouped {
+  padding-left: 23px;
+}
+
 /* 当前项目：浅橙底 + 橙字，一眼能看出来 */
 .row.active {
   background: rgba(255, 108, 55, 0.1);
@@ -818,16 +917,6 @@ async function assign(projectId, groupId) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.row-desc {
-  flex: none;
-  max-width: 40%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  opacity: 0.45;
 }
 
 .row-icon {
@@ -880,29 +969,79 @@ async function assign(projectId, groupId) {
   fill: currentColor;
 }
 
-.foot .row {
+.actions-col .row,
+.list-foot .row {
   height: 28px;
+}
+
+.list-foot {
+  padding: 4px 6px 6px;
+  border-top: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.manage-add > .n-input {
+  flex: 1;
+}
+
+.manage-add > .n-button {
+  flex: none;
 }
 
 /* ---------------- 管理分组弹窗 ---------------- */
 
-.manage-section + .manage-section {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(128, 128, 128, 0.14);
-}
-
 .manage-title {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 12px;
   opacity: 0.55;
 }
 
-.manage-row {
+.manage-title.spaced {
+  margin-top: 18px;
+}
+
+/* 每一块装进一个带边框的列表，行之间用细线分开 */
+.manage-box {
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 6px;
+}
+
+.manage-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  min-height: 40px;
+  padding: 4px 10px;
+}
+
+.manage-item + .manage-item,
+.manage-empty + .manage-item {
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.manage-head {
+  min-height: 30px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.manage-icon {
+  flex: none;
+  opacity: 0.5;
+}
+
+.manage-rename {
+  flex: 1;
+  min-width: 0;
+}
+
+.manage-count {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.45;
+}
+
+.manage-add {
+  background: rgba(128, 128, 128, 0.04);
 }
 
 .manage-name {
@@ -919,12 +1058,8 @@ async function assign(projectId, groupId) {
   width: 160px;
 }
 
-.manage-add {
-  margin-top: 10px;
-}
-
 .manage-empty {
-  padding: 4px 0;
+  padding: 10px;
   font-size: 12px;
   opacity: 0.45;
 }

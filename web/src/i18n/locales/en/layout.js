@@ -200,6 +200,12 @@ export default {
   createGroupAction: 'New group',
   noGroups: 'No groups yet',
   projectGroups: 'Project groups',
+  actionsCurrent: 'Current project',
+  actionsExport: 'Export',
+  actionsCreate: 'New',
+  groupProjectCount: 'Projects: {n}',
+  projectColumn: 'Project',
+  groupColumn: 'Group',
   deleteGroupTitle: 'Delete group',
   deleteGroupBody:
     'After deleting "{name}", its projects go back to "Ungrouped". The projects themselves are not affected.',
