@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput, useMessage } from 'naive-ui';
+import { NAlert, NButton, NIcon, NInput, NTab, NTabs, useMessage } from 'naive-ui';
+import { ChevronRight, Folder } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { useTreeStore } from '@/stores/tree';
 import { useTabsStore } from '@/stores/tabs';
@@ -12,10 +13,14 @@ import AuthEditor from '@/components/request/AuthEditor.vue';
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue';
 import PreflightPanel from '@/components/preflight/PreflightPanel.vue';
 import { folderChain } from '@/utils/tree';
-import { inheritHint } from '@/utils/auth';
+import { authTypeName, inheritHint, isConfiguredAuth } from '@/utils/auth';
 
 /**
  * 目录设置：名称 / 描述 / 目录变量 / 目录级鉴权（+ 只读的脚本）。
+ *
+ * 2026-10-07 改成和 Postman 一样「先看介绍、再切页签配置」：点开目录先是「概览」
+ * （描述、接口数、配置了哪些），鉴权 / 变量 / 请求头 / 脚本 / 前置接口各占一个页签。
+ * 以前一点开就是一整页表单，用户说「不能直接点开就配置吧」。
  *
  * 以前目录的鉴权在界面上根本没有入口，接口选了「继承父级」也没人知道继承到了什么；
  * 目录变量更是存下来了却不参与替换（那一半由 F1 在后端修）。这个标签页补的是入口。
@@ -77,6 +82,107 @@ const authLevels = computed(function () {
 const authHint = computed(function () {
   return inheritHint(authLevels.value);
 });
+
+/* ---------------- 页签 ---------------- */
+
+/**
+ * 当前页签记在标签页对象上：切到别的标签页再切回来（组件会重新挂载）还停在原来那一页。
+ * 每次新打开一个目录都从「概览」开始。
+ */
+const view = computed({
+  get: function () { return props.tab.folderView || 'overview'; },
+  set: function (value) { props.tab.folderView = value; }
+});
+
+function filledRows(rows) {
+  return (rows || []).filter(function (row) { return row && String(row.key || '').trim(); });
+}
+
+const varCount = computed(function () { return filledRows(spec.value.variables).length; });
+const headerCount = computed(function () { return filledRows(spec.value.headers).length; });
+
+const scriptKinds = computed(function () {
+  const list = spec.value.scripts || [];
+  function has(listen) {
+    return list.some(function (item) { return item && item.listen === listen && String(item.exec || '').trim(); });
+  }
+  return { pre: has('prerequest'), post: has('test') };
+});
+
+/** 页签上的小数字 / 圆点：一眼看出哪几页配过东西 */
+const VIEWS = computed(function () {
+  return [
+    { name: 'overview', label: t('folder.tabOverview'), mark: '' },
+    { name: 'auth', label: t('folder.tabAuth'), mark: isConfiguredAuth(spec.value.auth) ? '•' : '' },
+    { name: 'variables', label: t('folder.tabVars'), mark: varCount.value ? String(varCount.value) : '' },
+    { name: 'headers', label: t('folder.tabHeaders'), mark: headerCount.value ? String(headerCount.value) : '' },
+    { name: 'scripts', label: t('folder.tabScripts'), mark: scriptKinds.value.pre || scriptKinds.value.post ? '•' : '' },
+    { name: 'preflight', label: t('folder.tabPreflight'), mark: spec.value.preflight ? '•' : '' }
+  ];
+});
+
+/* ---------------- 概览 ---------------- */
+
+/** 这个目录（含子孙目录）下一共多少接口，直接子目录多少个 */
+const stats = computed(function () {
+  const id = props.tab.folderId;
+  const inside = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    tree.folders.forEach(function (item) {
+      if (!inside.has(item.id) && inside.has(item.parentId)) {
+        inside.add(item.id);
+        changed = true;
+      }
+    });
+  }
+  return {
+    apis: tree.apis.filter(function (api) { return inside.has(api.folderId); }).length,
+    folders: tree.folders.filter(function (item) { return item.parentId === id; }).length
+  };
+});
+
+/** 概览里「配置」那几行：点一下跳到对应页签 */
+const summary = computed(function () {
+  const notSet = t('folder.sumNotSet');
+
+  let auth = isConfiguredAuth(spec.value.auth) ? authTypeName(spec.value.auth) : t('folder.sumInherit');
+
+  const scripts = [];
+  if (scriptKinds.value.pre) scripts.push(t('folder.sumScriptPre'));
+  if (scriptKinds.value.post) scripts.push(t('folder.sumScriptPost'));
+
+  let preflight;
+  const pf = spec.value.preflight;
+  if (!pf) preflight = t('folder.sumPreflightFollow');
+  else if (!pf.apiId) preflight = t('folder.sumPreflightOff');
+  else {
+    const api = tree.apis.find(function (item) { return item.id === pf.apiId; });
+    preflight = api ? api.name : t('folder.sumApiGone');
+  }
+
+  return [
+    { view: 'auth', label: t('folder.tabAuth'), value: auth, set: isConfiguredAuth(spec.value.auth) },
+    { view: 'variables', label: t('folder.tabVars'), value: varCount.value ? t('folder.sumCount', { n: varCount.value }) : notSet, set: varCount.value > 0 },
+    { view: 'headers', label: t('folder.tabHeaders'), value: headerCount.value ? t('folder.sumCount', { n: headerCount.value }) : notSet, set: headerCount.value > 0 },
+    { view: 'scripts', label: t('folder.tabScripts'), value: scripts.length ? scripts.join(' · ') : notSet, set: scripts.length > 0 },
+    { view: 'preflight', label: t('folder.tabPreflight'), value: preflight, set: Boolean(pf && pf.apiId) }
+  ];
+});
+
+/** 描述平时只是一段文字，点「编辑」才变成输入框；「完成」时直接保存 */
+const editingDesc = ref(false);
+
+function startEditDesc() {
+  if (!canEdit.value) return;
+  editingDesc.value = true;
+}
+
+async function finishEditDesc() {
+  editingDesc.value = false;
+  if (props.tab.dirty) await save();
+}
 
 watch(
   function () { return props.tab.spec; },
@@ -175,47 +281,84 @@ onBeforeUnmount(function () {
       </n-button>
     </div>
 
+    <div v-if="folder" class="views">
+      <n-tabs :value="view" type="line" size="small" @update:value="(value) => { view = value; }">
+        <n-tab v-for="item in VIEWS" :key="item.name" :name="item.name">
+          {{ item.label }}<span v-if="item.mark" class="mark">{{ item.mark }}</span>
+        </n-tab>
+      </n-tabs>
+    </div>
+
     <div class="content">
       <n-alert v-if="!folder" type="warning" :show-icon="false" class="alert">
         {{ t('folder.gone') }}
       </n-alert>
 
       <template v-else>
-        <n-alert v-if="!canEdit" type="info" :show-icon="false" class="alert">
+        <n-alert v-if="!canEdit && view !== 'overview'" type="info" :show-icon="false" class="alert">
           {{ t('folder.readonlyHint') }}
         </n-alert>
 
-        <n-card :bordered="false" size="small" :title="t('folder.basicTitle')">
-          <n-form label-placement="top">
-            <n-form-item :label="t('folder.nameLabel')">
-              <n-input v-model:value="spec.name" :disabled="!canEdit" :placeholder="t('folder.namePlaceholder')" />
-            </n-form-item>
-            <n-form-item :label="t('folder.descLabel')">
+        <!-- 概览：名字、统计、描述、配置一览 -->
+        <div v-if="view === 'overview'" class="overview">
+          <div class="ov-title">
+            <n-icon size="22" :component="Folder" />
+            <span>{{ spec.name }}</span>
+          </div>
+          <div class="ov-stats">
+            <span>{{ t('folder.statApis', { n: stats.apis }) }}</span>
+            <span class="dot">·</span>
+            <span>{{ t('folder.statFolders', { n: stats.folders }) }}</span>
+          </div>
+
+          <div class="ov-desc">
+            <template v-if="editingDesc">
               <n-input
                 v-model:value="spec.description"
                 type="textarea"
-                :disabled="!canEdit"
-                :autosize="{ minRows: 2, maxRows: 5 }"
+                :autosize="{ minRows: 3, maxRows: 12 }"
+                :placeholder="t('folder.descPlaceholder')"
+                autofocus
               />
-            </n-form-item>
-          </n-form>
-        </n-card>
+              <div class="ov-desc-actions">
+                <n-button size="small" type="primary" :loading="saving" @click="finishEditDesc">{{ t('folder.doneEdit') }}</n-button>
+              </div>
+            </template>
+            <template v-else-if="spec.description && spec.description.trim()">
+              <p class="desc-text">{{ spec.description }}</p>
+              <a v-if="canEdit" class="link" @click="startEditDesc">{{ t('folder.editDesc') }}</a>
+            </template>
+            <template v-else>
+              <a v-if="canEdit" class="desc-empty link" @click="startEditDesc">{{ t('folder.descEmptyEdit') }}</a>
+              <span v-else class="desc-empty">{{ t('folder.descEmpty') }}</span>
+            </template>
+          </div>
 
-        <n-card :bordered="false" size="small" :title="t('folder.varsTitle')" class="card">
-          <p class="tip">{{ t('folder.varsTip') }}</p>
-          <var-table v-model="spec.variables" :disabled="!canEdit" />
-        </n-card>
+          <div class="ov-section">{{ t('folder.summaryTitle') }}</div>
+          <div class="summary">
+            <div v-for="row in summary" :key="row.view" class="sum-row" @click="view = row.view">
+              <span class="sum-label">{{ row.label }}</span>
+              <span class="sum-value" :class="{ muted: !row.set }">{{ row.value }}</span>
+              <n-icon class="sum-go" size="14" :component="ChevronRight" />
+            </div>
+          </div>
+        </div>
 
-        <n-card :bordered="false" size="small" :title="t('folder.authTitle')" class="card">
+        <div v-else-if="view === 'auth'">
           <p class="tip">{{ t('folder.authTip') }}</p>
           <auth-editor v-model="spec.auth" :disabled="!canEdit" :inherit-hint="authHint" />
-        </n-card>
+        </div>
+
+        <div v-else-if="view === 'variables'">
+          <p class="tip">{{ t('folder.varsTip') }}</p>
+          <var-table v-model="spec.variables" :disabled="!canEdit" />
+        </div>
 
         <!--
           公共请求头（第五轮第 1 节）：这个目录下的接口发送时都会带上。
           内层目录 / 接口自己写了同名的，以更靠近接口的那一层为准。
         -->
-        <n-card :bordered="false" size="small" :title="t('folder.headersTitle')" class="card">
+        <div v-else-if="view === 'headers'">
           <p class="tip">{{ t('folder.headersTip') }}</p>
           <key-value-table
             v-model="spec.headers"
@@ -224,18 +367,18 @@ onBeforeUnmount(function () {
             :key-placeholder="t('folder.headerNamePlaceholder')"
             :value-placeholder="t('folder.headerValuePlaceholder')"
           />
-        </n-card>
+        </div>
 
-        <n-card :bordered="false" size="small" :title="t('folder.scriptsTitle')" class="card">
+        <div v-else-if="view === 'scripts'">
           <p class="tip">{{ t('folder.scriptsTip') }}</p>
-          <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="180px" />
-        </n-card>
+          <script-editor v-model="spec.scripts" :disabled="!canEdit" min-height="240px" />
+        </div>
 
         <!--
           前置接口（第十轮第 3 节）：这个目录下的接口发送前先自动调一遍它（通常是登录接口）。
           没设就是「跟着外层走」；设了「不使用」就挡住往上找。
         -->
-        <n-card :bordered="false" size="small" :title="t('folder.preflightTitle')" class="card">
+        <div v-else-if="view === 'preflight'">
           <p class="tip">{{ t('folder.preflightTip') }}</p>
           <preflight-panel
             v-model="spec.preflight"
@@ -243,7 +386,7 @@ onBeforeUnmount(function () {
             allow-inherit
             :disabled="!canEdit"
           />
-        </n-card>
+        </div>
       </template>
     </div>
   </div>
@@ -293,8 +436,131 @@ onBeforeUnmount(function () {
   box-sizing: border-box;
 }
 
-.card {
-  margin-top: 12px;
+.views {
+  flex: none;
+  padding: 0 16px;
+}
+
+.mark {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--apiloop-primary);
+}
+
+/* ---------------- 概览 ---------------- */
+
+.overview {
+  padding: 12px 4px;
+}
+
+.ov-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.ov-title .n-icon {
+  opacity: 0.6;
+}
+
+.ov-stats {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.ov-stats .dot {
+  margin: 0 6px;
+}
+
+.ov-desc {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.desc-text {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.desc-empty {
+  font-size: 13px;
+  opacity: 0.5;
+}
+
+.link {
+  font-size: 12px;
+  color: var(--apiloop-primary);
+  cursor: pointer;
+}
+
+.desc-empty.link {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.ov-desc-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ov-section {
+  margin: 28px 0 8px;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.summary {
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 6px;
+}
+
+.sum-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sum-row + .sum-row {
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.sum-row:hover {
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.sum-label {
+  flex: none;
+  width: 96px;
+  opacity: 0.7;
+}
+
+.sum-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sum-value.muted {
+  opacity: 0.45;
+}
+
+.sum-go {
+  flex: none;
+  opacity: 0.35;
 }
 
 .alert {
