@@ -158,25 +158,6 @@ export const usePrefsStore = defineStore('prefs', function () {
     }));
   }
 
-  /**
-   * 一次设定某个分组里有哪些项目（管理分组弹窗里的多选框用）：
-   * 选进来的项目从别的分组里拿掉（一个项目只属于一个分组），去掉的回到「未分组」。
-   * 原来就在里面的保持原来的顺序，新加的排在后面。
-   */
-  function setGroupProjects(groupId, projectIds) {
-    const wanted = new Set(projectIds);
-    return saveGroups(projectGroups.value.map(function (group) {
-      const current = group.projectIds || [];
-      if (group.id !== groupId) {
-        const kept = current.filter(function (id) { return !wanted.has(id); });
-        return kept.length === current.length ? group : Object.assign({}, group, { projectIds: kept });
-      }
-      const kept = current.filter(function (id) { return wanted.has(id); });
-      const added = projectIds.filter(function (id) { return kept.indexOf(id) === -1; });
-      return Object.assign({}, group, { projectIds: kept.concat(added) });
-    }));
-  }
-
   /* ------------------------------------------------------------------ 收藏 */
 
   function isProjectFavorite(projectId) {
@@ -309,7 +290,6 @@ export const usePrefsStore = defineStore('prefs', function () {
     removeGroup: removeGroup,
     toggleGroupCollapsed: toggleGroupCollapsed,
     assignProject: assignProject,
-    setGroupProjects: setGroupProjects,
 
     isProjectFavorite: isProjectFavorite,
     isApiFavorite: isApiFavorite,

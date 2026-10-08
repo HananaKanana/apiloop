@@ -27,6 +27,7 @@ import {
   Folders,
   GitCompare,
   Package,
+  Pencil,
   Plus,
   Replace,
   Search,
@@ -337,6 +338,38 @@ async function createDemo() {
   }
 }
 
+/* ---------------- 删除项目 ---------------- */
+
+/**
+ * 以前只有项目设置页右上角一个不起眼的红字按钮，用户找不到（2026-10-07），下拉里也放一个。
+ * 只有 owner / 管理员能删；默认项目、根项目服务端不让删，这里干脆不显示。
+ */
+const canDeleteCurrent = computed(function () {
+  const current = projects.current;
+  return Boolean(current && projects.isOwner && !current.isDefault && !current.isRoot);
+});
+
+function deleteCurrent() {
+  const current = projects.current;
+  if (!current) return;
+  dialog.error({
+    title: t('views.psDeleteTitle'),
+    content: t('views.psDeleteBody', { name: current.name }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
+    onPositiveClick: async function () {
+      try {
+        tabs.closeAll();
+        await projects.remove(current.id);
+        message.success(t('views.psDeleted'));
+        if (projects.currentId) emit('change', projects.currentId);
+      } catch (err) {
+        message.error(err.message);
+      }
+    }
+  });
+}
+
 /* ---------------- 从备份恢复成新项目（第十四轮第 2 节） ---------------- */
 
 const showRestore = ref(false);
@@ -357,21 +390,27 @@ async function onRestored(data) {
 
 /* ---------------- 管理分组 ---------------- */
 
+/*
+ * 左右两栏（2026-10-07 用户选的）：左边分组列表（最后是「未分组」），右边是选中那一组里的项目。
+ * 右边可以改名 / 删除分组、移出项目、从下拉里添加项目；「未分组」里每个项目可以直接放进某个分组。
+ */
+const UNGROUPED = '__ungrouped';
+
 const showGroups = ref(false);
-/** 弹窗里编辑中的副本：改名只在失焦 / 回车时提交，不要每敲一个字就写一次 */
-const draftGroups = ref([]);
+const activeGroupId = ref(UNGROUPED);
+/** 左栏底下「新建分组」的输入框：点 + 才出来 */
+const addingGroup = ref(false);
 const newGroupName = ref('');
+const newGroupRef = ref(null);
+/** 右栏标题改名：null 是没在改 */
+const renameDraft = ref(null);
 
 function openGroups() {
   show.value = false;
-  syncDraft();
+  addingGroup.value = false;
+  renameDraft.value = null;
+  activeGroupId.value = prefs.projectGroups.length ? prefs.projectGroups[0].id : UNGROUPED;
   showGroups.value = true;
-}
-
-function syncDraft() {
-  draftGroups.value = prefs.projectGroups.map(function (group) {
-    return { id: group.id, name: group.name };
-  });
 }
 
 /** 这个分组里现有的项目 id（去掉已经不存在的项目） */
@@ -381,72 +420,108 @@ function groupProjectIds(groupId) {
   return (group.projectIds || []).filter(function (id) { return byId.value.has(id); });
 }
 
-/** 每个分组后面显示「N 个项目」 */
-function groupCount(groupId) {
-  return groupProjectIds(groupId).length;
+const ungroupedProjects = computed(function () {
+  return projects.projects.filter(function (project) { return !prefs.groupOf(project.id); });
+});
+
+/** 左栏：每个分组 + 项目数，最后是「未分组」 */
+const groupList = computed(function () {
+  return prefs.projectGroups.map(function (group) {
+    return { id: group.id, name: group.name, count: groupProjectIds(group.id).length };
+  });
+});
+
+const activeGroup = computed(function () {
+  if (activeGroupId.value === UNGROUPED) return null;
+  return prefs.projectGroups.find(function (item) { return item.id === activeGroupId.value; }) || null;
+});
+
+/** 右栏列出的项目 */
+const activeProjects = computed(function () {
+  if (!activeGroup.value) return ungroupedProjects.value;
+  return groupProjectIds(activeGroup.value.id).map(function (id) { return byId.value.get(id); });
+});
+
+/** 右栏底下「添加项目」的选项：不在这一组的项目，在别的组的注明在哪 */
+const addProjectOptions = computed(function () {
+  if (!activeGroup.value) return [];
+  const groupId = activeGroup.value.id;
+  return projects.projects
+    .filter(function (project) {
+      const group = prefs.groupOf(project.id);
+      return !group || group.id !== groupId;
+    })
+    .map(function (project) {
+      const other = prefs.groupOf(project.id);
+      return {
+        label: other ? project.name + t('layout.inGroupSuffix', { name: other.name }) : project.name,
+        value: project.id
+      };
+    });
+});
+
+/** 「未分组」里每个项目后面的「放到分组」下拉 */
+const moveToOptions = computed(function () {
+  return prefs.projectGroups.map(function (group) { return { label: group.name, value: group.id }; });
+});
+
+function selectGroup(id) {
+  activeGroupId.value = id;
+  renameDraft.value = null;
 }
 
-/**
- * 某个分组多选框的选项：所有项目。已经在别的分组里的，后面注明在哪个组 ——
- * 选进来就从那个组挪过来（一个项目只属于一个分组）。
- */
-function projectOptionsFor(groupId) {
-  return projects.projects.map(function (project) {
-    const other = prefs.groupOf(project.id);
-    const label = other && other.id !== groupId
-      ? project.name + t('layout.inGroupSuffix', { name: other.name })
-      : project.name;
-    return { label: label, value: project.id };
+function startAddGroup() {
+  addingGroup.value = true;
+  newGroupName.value = '';
+  nextTick(function () {
+    if (newGroupRef.value) newGroupRef.value.focus();
   });
 }
 
-/** 没进任何分组的项目名，弹窗底下列一行 */
-const ungroupedNames = computed(function () {
-  return projects.projects
-    .filter(function (project) { return !prefs.groupOf(project.id); })
-    .map(function (project) { return project.name; });
-});
+/** 回车之后输入框会失焦，blur 又来一次 —— 正在建的时候别再建一个 */
+let creatingGroup = false;
 
-async function setProjects(groupId, ids) {
-  try {
-    await prefs.setGroupProjects(groupId, ids || []);
-  } catch (err) {
-    message.error(err.message);
-  }
-  syncDraft();
-}
-
-async function commitRename(group) {
-  const name = String(group.name || '').trim();
-  const original = prefs.projectGroups.find(function (item) { return item.id === group.id; });
-  if (!original || original.name === name || !name) {
-    syncDraft();
+async function createGroup() {
+  if (creatingGroup) return;
+  const name = newGroupName.value.trim();
+  if (!name) {
+    addingGroup.value = false;
     return;
   }
+  creatingGroup = true;
+  try {
+    const list = await prefs.addGroup(name);
+    const created = list[list.length - 1];
+    if (created) activeGroupId.value = created.id;
+    addingGroup.value = false;
+    newGroupName.value = '';
+  } catch (err) {
+    message.error(err.message);
+  } finally {
+    creatingGroup = false;
+  }
+}
+
+function startRename() {
+  if (!activeGroup.value) return;
+  renameDraft.value = activeGroup.value.name;
+}
+
+async function commitRename() {
+  const group = activeGroup.value;
+  const name = String(renameDraft.value || '').trim();
+  renameDraft.value = null;
+  if (!group || !name || name === group.name) return;
   try {
     await prefs.renameGroup(group.id, name);
   } catch (err) {
     message.error(err.message);
   }
-  syncDraft();
 }
 
-async function createGroup() {
-  const name = newGroupName.value.trim();
-  if (!name) {
-    message.warning(t('layout.groupNameRequired'));
-    return;
-  }
-  try {
-    await prefs.addGroup(name);
-    newGroupName.value = '';
-  } catch (err) {
-    message.error(err.message);
-  }
-  syncDraft();
-}
-
-function removeGroup(group) {
+function removeGroup() {
+  const group = activeGroup.value;
+  if (!group) return;
   dialog.warning({
     title: t('layout.deleteGroupTitle'),
     content: t('layout.deleteGroupBody', { name: group.name }),
@@ -455,12 +530,21 @@ function removeGroup(group) {
     onPositiveClick: async function () {
       try {
         await prefs.removeGroup(group.id);
+        activeGroupId.value = prefs.projectGroups.length ? prefs.projectGroups[0].id : UNGROUPED;
       } catch (err) {
         message.error(err.message);
       }
-      syncDraft();
     }
   });
+}
+
+/** 放进某个分组 / 移出（groupId 为 null 就是回到「未分组」） */
+async function assign(projectId, groupId) {
+  try {
+    await prefs.assignProject(projectId, groupId || null);
+  } catch (err) {
+    message.error(err.message);
+  }
 }
 </script>
 
@@ -582,6 +666,10 @@ function removeGroup(group) {
             <n-icon class="row-icon" size="15" :component="Replace" />
             <span class="row-name">{{ t('layout.findReplace') }}</span>
           </div>
+          <div v-if="canDeleteCurrent" class="row action danger" @click="run(deleteCurrent)">
+            <n-icon class="row-icon" size="15" :component="Trash" />
+            <span class="row-name">{{ t('views.psDeleteAction') }}</span>
+          </div>
         </div>
 
         <div class="action-group">
@@ -627,69 +715,132 @@ function removeGroup(group) {
   </n-popover>
 
   <!--
-    管理分组：每个分组一张卡片 —— 名字（点进去改）、删除、下面一个多选框挑它包含的项目。
-    2026-10-07 以前是「分组列表 + 每个项目一个下拉」两块，用户说看着奇怪。
+    管理分组：左边分组列表，右边选中分组里的项目（2026-10-07 用户选的左右两栏）。
+    以前试过「分组列表 + 每个项目一个下拉」和「每组一张卡片 + 多选框」，用户都说丑。
   -->
   <n-modal
     v-model:show="showGroups"
     preset="card"
     :title="t('layout.manageGroupsTitle')"
-    style="width: 560px; max-width: 92vw"
+    style="width: 640px; max-width: 94vw"
+    content-style="padding: 0"
   >
-    <div class="manage-list">
-      <div v-for="group in draftGroups" :key="group.id" class="group-card">
-        <div class="group-head">
-          <n-icon class="manage-icon" size="16" :component="Folder" />
-          <n-input
-            v-model:value="group.name"
-            class="manage-rename"
-            size="small"
-            :bordered="false"
-            :placeholder="t('layout.groupNamePlaceholder')"
-            @blur="commitRename(group)"
-            @keyup.enter="commitRename(group)"
-          />
-          <span class="manage-count">{{ t('layout.groupProjectCount', { n: groupCount(group.id) }) }}</span>
-          <n-button size="tiny" quaternary circle :title="t('app.delete')" @click="removeGroup(group)">
+    <div class="gm">
+      <!-- 左栏：分组 -->
+      <div class="gm-side">
+        <div class="gm-side-head">
+          <span>{{ t('layout.groupSection') }}</span>
+          <n-button size="tiny" quaternary circle :title="t('layout.createGroupAction')" @click="startAddGroup">
             <template #icon>
-              <n-icon :component="Trash" />
+              <n-icon :component="Plus" />
             </template>
           </n-button>
         </div>
-        <n-select
-          multiple
-          filterable
-          size="small"
-          :value="groupProjectIds(group.id)"
-          :options="projectOptionsFor(group.id)"
-          :placeholder="t('layout.groupProjectsPlaceholder')"
-          @update:value="(value) => setProjects(group.id, value)"
-        />
+
+        <div class="gm-side-list">
+          <div
+            v-for="group in groupList"
+            :key="group.id"
+            class="gm-item"
+            :class="{ active: activeGroupId === group.id }"
+            @click="selectGroup(group.id)"
+          >
+            <n-icon class="gm-item-icon" size="15" :component="Folder" />
+            <span class="gm-item-name">{{ group.name }}</span>
+            <span class="gm-item-count">{{ group.count }}</span>
+          </div>
+
+          <div v-if="addingGroup" class="gm-new">
+            <n-input
+              ref="newGroupRef"
+              v-model:value="newGroupName"
+              size="small"
+              :placeholder="t('layout.newGroupNamePlaceholder')"
+              @keyup.enter="createGroup"
+              @keyup.esc="addingGroup = false"
+              @blur="createGroup"
+            />
+          </div>
+          <div v-else-if="!groupList.length" class="gm-hint">{{ t('layout.noGroups') }}</div>
+
+          <div
+            class="gm-item gm-ungrouped"
+            :class="{ active: activeGroupId === UNGROUPED }"
+            @click="selectGroup(UNGROUPED)"
+          >
+            <span class="gm-item-name">{{ t('layout.ungrouped') }}</span>
+            <span class="gm-item-count">{{ ungroupedProjects.length }}</span>
+          </div>
+        </div>
       </div>
 
-      <div v-if="!draftGroups.length" class="manage-empty">{{ t('layout.noGroups') }}</div>
-
-      <div class="manage-add">
-        <n-input
-          v-model:value="newGroupName"
-          size="small"
-          :placeholder="t('layout.newGroupNamePlaceholder')"
-          @keyup.enter="createGroup"
-        />
-        <n-button size="small" @click="createGroup">
-          <template #icon>
-            <n-icon :component="Plus" />
+      <!-- 右栏：选中分组里的项目 -->
+      <div class="gm-main">
+        <div class="gm-main-head">
+          <template v-if="activeGroup">
+            <n-input
+              v-if="renameDraft !== null"
+              v-model:value="renameDraft"
+              size="small"
+              class="gm-rename"
+              autofocus
+              @keyup.enter="commitRename"
+              @keyup.esc="renameDraft = null"
+              @blur="commitRename"
+            />
+            <span v-else class="gm-title">{{ activeGroup.name }}</span>
+            <span class="spacer" />
+            <n-button v-if="renameDraft === null" size="small" quaternary @click="startRename">
+              <template #icon>
+                <n-icon :component="Pencil" />
+              </template>
+              {{ t('layout.renameGroup') }}
+            </n-button>
+            <n-button size="small" quaternary @click="removeGroup">
+              <template #icon>
+                <n-icon :component="Trash" />
+              </template>
+              {{ t('app.delete') }}
+            </n-button>
           </template>
-          {{ t('layout.createGroupAction') }}
-        </n-button>
-      </div>
-    </div>
+          <template v-else>
+            <span class="gm-title">{{ t('layout.ungrouped') }}</span>
+          </template>
+        </div>
 
-    <div class="ungrouped-line">
-      <template v-if="ungroupedNames.length">
-        {{ t('layout.ungroupedList', { names: ungroupedNames.join('、') }) }}
-      </template>
-      <template v-else>{{ t('layout.allGrouped') }}</template>
+        <div class="gm-main-list">
+          <div v-for="project in activeProjects" :key="project.id" class="gm-row">
+            <n-icon class="gm-item-icon" size="15" :component="Package" />
+            <span class="gm-row-name" :title="project.name">{{ project.name }}</span>
+            <n-button v-if="activeGroup" size="tiny" quaternary @click="assign(project.id, null)">
+              {{ t('layout.removeFromGroup') }}
+            </n-button>
+            <n-select
+              v-else-if="moveToOptions.length"
+              class="gm-move"
+              size="tiny"
+              :value="null"
+              :options="moveToOptions"
+              :placeholder="t('layout.moveToGroup')"
+              @update:value="(value) => assign(project.id, value)"
+            />
+          </div>
+          <div v-if="!activeProjects.length" class="gm-hint">
+            {{ activeGroup ? t('layout.emptyGroup') : t('layout.allGrouped') }}
+          </div>
+        </div>
+
+        <div v-if="activeGroup" class="gm-main-foot">
+          <n-select
+            filterable
+            size="small"
+            :value="null"
+            :options="addProjectOptions"
+            :placeholder="t('layout.addProjectToGroup')"
+            @update:value="(value) => assign(value, activeGroup.id)"
+          />
+        </div>
+      </div>
     </div>
 
     <template #footer>
@@ -936,6 +1087,15 @@ function removeGroup(group) {
   white-space: nowrap;
 }
 
+/* 删除项目：红字 */
+.row.danger {
+  color: var(--n-error-color, #d03050);
+}
+
+.row.danger .row-icon {
+  opacity: 0.8;
+}
+
 .row-icon {
   flex: none;
   opacity: 0.55;
@@ -1000,68 +1160,155 @@ function removeGroup(group) {
 
 /* ---------------- 管理分组弹窗 ---------------- */
 
-.manage-list {
+.gm {
+  display: flex;
+  height: 420px;
+  max-height: 64vh;
+  border-top: 1px solid rgba(128, 128, 128, 0.14);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.gm-side {
+  flex: none;
+  width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  border-right: 1px solid rgba(128, 128, 128, 0.14);
+  background: rgba(128, 128, 128, 0.04);
 }
 
-.group-card {
-  padding: 8px 12px 12px;
-  border: 1px solid rgba(128, 128, 128, 0.18);
-  border-radius: 8px;
-}
-
-.group-head {
+.gm-side-head,
+.gm-main-head {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  height: 44px;
+  padding: 0 12px;
 }
 
-.manage-icon {
-  flex: none;
-  opacity: 0.5;
-}
-
-/* 名字：没边框，看着就是标题，点进去才能改 */
-.manage-rename {
-  flex: 1;
-  min-width: 0;
-  font-weight: 500;
-}
-
-.manage-count {
-  flex: none;
+.gm-side-head {
+  justify-content: space-between;
   font-size: 12px;
-  opacity: 0.45;
+  opacity: 0.75;
 }
 
-.manage-add {
+.gm-side-list,
+.gm-main-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+
+.gm-item {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.manage-add > .n-input {
-  flex: 1;
+.gm-item:hover {
+  background: rgba(128, 128, 128, 0.1);
 }
 
-.manage-add > .n-button {
+.gm-item.active {
+  background: rgba(255, 108, 55, 0.1);
+  color: var(--apiloop-primary);
+  font-weight: 500;
+}
+
+.gm-ungrouped {
+  margin-top: 6px;
+  border-top: 1px dashed rgba(128, 128, 128, 0.2);
+  border-radius: 0 0 6px 6px;
+}
+
+.gm-item-icon {
   flex: none;
+  opacity: 0.55;
 }
 
-.manage-empty {
-  padding: 12px;
+.gm-item-name,
+.gm-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-item-count {
+  flex: none;
   font-size: 12px;
-  text-align: center;
   opacity: 0.45;
 }
 
-.ungrouped-line {
-  margin-top: 14px;
+.gm-new {
+  padding: 4px 0;
+}
+
+.gm-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gm-main-head {
+  border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+  padding: 0 16px;
+}
+
+.gm-title {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-rename {
+  max-width: 240px;
+}
+
+.gm-main-list {
+  padding: 6px 8px;
+}
+
+.gm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.gm-row:hover {
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.gm-move {
+  flex: none;
+  width: 140px;
+}
+
+.gm-main-foot {
+  flex: none;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.gm-hint {
+  padding: 16px 8px;
   font-size: 12px;
-  line-height: 1.6;
-  opacity: 0.55;
+  text-align: center;
+  opacity: 0.45;
 }
 </style>
