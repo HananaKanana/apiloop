@@ -61,7 +61,13 @@ const placeholderGroups = computed(function () {
   const groups = [];
   const byName = {};
   list.forEach(function (item) {
-    if (!item || !item.group || item.group === '模板') return;
+    /*
+     * 分组名是后端给的（`group`），会跟着界面语言变，所以**不按某个具体文字过滤** ——
+     * 以前这里写的是 `item.group === '模板'`，把「模板」那个分组排除掉；现在模板走的是
+     * 另一个字段（`session.meta.templates`），占位符里已经没有这个分组了。
+     * 没有分组名的条目跳过（分组是后端说了算的，空名字没法归类）。
+     */
+    if (!item || !item.group) return;
     if (!byName[item.group]) {
       byName[item.group] = { name: item.group, items: [] };
       groups.push(byName[item.group]);

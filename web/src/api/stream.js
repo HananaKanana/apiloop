@@ -1,4 +1,4 @@
-import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
+import { API_PREFIX, baseHeaders, redirectToLogin, toError } from './client';
 import { t } from '@/i18n';
 
 /**
@@ -98,7 +98,7 @@ export function postNdjson(path, body, options) {
   const opts = options || {};
   const init = {
     method: 'POST',
-    headers: Object.assign({ 'Content-Type': 'application/json' }, CUSTOM_HEADERS),
+    headers: Object.assign({ 'Content-Type': 'application/json' }, baseHeaders()),
     body: JSON.stringify(body),
     credentials: 'same-origin'
   };
@@ -111,7 +111,7 @@ export function getNdjson(path, options) {
   const opts = options || {};
   const init = {
     method: 'GET',
-    headers: Object.assign({}, CUSTOM_HEADERS),
+    headers: Object.assign({}, baseHeaders()),
     credentials: 'same-origin'
   };
   if (opts.signal) init.signal = opts.signal;

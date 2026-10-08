@@ -1,5 +1,4 @@
-import { get, post, put, API_PREFIX, CUSTOM_HEADERS, toError, redirectToLogin } from './client';
-import { currentLocale } from '@/i18n';
+import { get, post, put, API_PREFIX, baseHeaders, toError, redirectToLogin } from './client';
 
 /**
  * 项目备份与恢复（第十四轮 T18 的后端，接口约定见 lib/api/backup.js）。
@@ -9,17 +8,11 @@ import { currentLocale } from '@/i18n';
  * `request` —— 那个会把响应当 JSON 解析、把文件名头丢掉。下面自己 fetch 一次，
  * 把「文本 + 文件名」一起带回来，落盘交给 `utils/download` 的 `downloadText`。
  *
- * 认证/语言那两个头要自己拼：`request()` 里那份没导出，而 api/client.js 不在本任务的
- * 改动范围里。口径和它保持一致（`X-Apiloop: 1` + `Accept-Language`）。
+ * 发往本应用后端的头（`X-Apiloop: 1` + `Accept-Language`）用 `client.js` 导出的
+ * `baseHeaders()`，和别的接口保持一个口径。
  */
 
 const FALLBACK_NAME = 'apiloop-backup.json';
-
-function headers() {
-  return Object.assign({}, CUSTOM_HEADERS, {
-    'Accept-Language': currentLocale() === 'en' ? 'en' : 'zh-CN'
-  });
-}
 
 /**
  * 从 `Content-Disposition` 里取文件名。
@@ -50,7 +43,7 @@ function fileNameFrom(header, fallback) {
 async function fetchFile(path, fallbackName) {
   const res = await fetch(API_PREFIX + path, {
     method: 'GET',
-    headers: headers(),
+    headers: baseHeaders(),
     credentials: 'same-origin'
   });
 

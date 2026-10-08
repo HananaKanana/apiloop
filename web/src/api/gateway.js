@@ -1,19 +1,20 @@
-import { CUSTOM_HEADERS } from './client';
+import { baseHeaders } from './client';
 import { t } from '@/i18n';
 
 /**
  * 网关自己的地址。
  *
  * L1 起前缀是 **`/__apiloop`**（原来是 `/__gateway`）。它**不在 `/__admin/api` 下面**，
- * 所以不能用 `client.js` 里那个带前缀的 `request`。自定义头 `X-Apiloop: 1` 还是要带 ——
- * 网关的安全闸门对 `/__apiloop/*` 的非 GET 请求同样要求它（`lib/gateway/index.js` 的 createGuard）。
+ * 所以不能用 `client.js` 里那个带前缀的 `request`。发往本应用后端的头照旧要带 ——
+ * 网关的安全闸门对 `/__apiloop/*` 的非 GET 请求要求 `X-Apiloop: 1`
+ * （`lib/gateway/index.js` 的 createGuard），语言也跟着一起带（`baseHeaders()`）。
  */
 const GATEWAY_PREFIX = '/__apiloop';
 
 async function requestGateway(method, path, body) {
   const init = {
     method: method,
-    headers: Object.assign({}, CUSTOM_HEADERS),
+    headers: Object.assign({}, baseHeaders()),
     credentials: 'same-origin'
   };
 
@@ -55,7 +56,7 @@ export async function getStatus() {
   try {
     res = await fetch(GATEWAY_PREFIX + '/status', {
       method: 'GET',
-      headers: Object.assign({}, CUSTOM_HEADERS),
+      headers: Object.assign({}, baseHeaders()),
       credentials: 'same-origin'
     });
   } catch (err) {

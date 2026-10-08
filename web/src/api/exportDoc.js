@@ -1,4 +1,4 @@
-import { API_PREFIX, CUSTOM_HEADERS, redirectToLogin, toError } from './client';
+import { API_PREFIX, baseHeaders, redirectToLogin, toError } from './client';
 import { t } from '@/i18n';
 
 /**
@@ -48,7 +48,7 @@ export async function downloadDoc(pid, options) {
     API_PREFIX + '/projects/' + encodeURIComponent(pid) + '/export/doc?' + params.toString(),
     {
       method: 'GET',
-      headers: Object.assign({}, CUSTOM_HEADERS),
+      headers: Object.assign({}, baseHeaders()),
       credentials: 'same-origin'
     }
   );

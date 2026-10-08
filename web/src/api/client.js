@@ -21,17 +21,22 @@ export const API_PREFIX = '/__admin/api';
 export const CUSTOM_HEADERS = { 'X-Apiloop': '1' };
 
 /**
- * 界面语言（第十五轮）：每个请求都带上，给后端以后按语言返回错误信息用
- * （这一轮后端还没用，先发过去）。
+ * 界面语言：每个请求都带上，后端按它返回中文或英文提示（`Accept-Language`）。
  */
 function acceptLanguage() {
   return currentLocale() === 'en' ? 'en' : 'zh-CN';
 }
 
 /**
- * 请求头：自定义头 + 语言。请求体相关的头（Content-Type）由调用处再补。
+ * 发往**本应用后端**的请求要带的那几个头：自定义头 + 界面语言。
+ *
+ * 请求体相关的头（Content-Type）由调用处再补。导出成公共的是因为有几个接口
+ * （`stream.js` 的 NDJSON、`gateway.js` 的 `/__apiloop`、`exportDoc.js` 和 `backup.js`
+ * 的下载）不走 `request()`、自己 `fetch`，以前各自拼一遍 —— 口径迟早会走岔。
+ *
+ * **用户发往被测接口的请求不要带这个函数**：那是服务端替用户发的，和界面语言无关。
  */
-function baseHeaders() {
+export function baseHeaders() {
   return Object.assign({}, CUSTOM_HEADERS, { 'Accept-Language': acceptLanguage() });
 }
 
