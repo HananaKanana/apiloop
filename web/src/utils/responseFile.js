@@ -112,6 +112,8 @@ export function detectFileKind(contentType, fileName, bytes) {
     const ext = extensionOf(fileName);
     if (ext === 'xlsx') return 'xlsx';
     if (ext === 'xls') return 'xls';
+    // docx / pptx / jar / apk 这些也是 zip 容器，列出内部文件没什么用，按普通文件给卡片
+    if (ext && ext !== 'zip') return 'other';
   }
   return fromMagic || 'other';
 }
