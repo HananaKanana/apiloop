@@ -989,6 +989,14 @@ function onTemplatizeConfirm(payload) {
 /** 逐跳和长度相关的响应头不录进示例：SSE 回放时长度由服务端自己决定 */
 const SSE_HEADER_SKIP = ['content-length', 'content-encoding', 'transfer-encoding', 'connection'];
 
+/**
+ * 「保存为示例」时丢掉的响应头：和传输方式、这一次连接有关，不是接口本身的内容。
+ * 存进去的话 Mock 返回时会和它自己的 Content-Length 打架（2026-10-08 用户：
+ * 「Content-Length can't be present with Transfer-Encoding」）。
+ */
+const EXAMPLE_HEADER_SKIP = ['content-length', 'content-encoding', 'transfer-encoding', 'connection',
+  'keep-alive', 'date', 'set-cookie', 'te', 'trailer', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
+
 function sseExampleHeaders() {
   const head = props.tab.head;
   const headers = (head && head.response && head.response.headers) || [];
@@ -1078,7 +1086,9 @@ async function saveExample(body, isTemplate) {
     const data = await apisApi.createExample(props.tab.apiId, {
       name: saveExampleName.value || t('request.recordedAt', { status: response.status, time: stamp() }),
       status: response.status,
-      headers: (response.headers || []).map(function (pair) {
+      headers: (response.headers || []).filter(function (pair) {
+        return EXAMPLE_HEADER_SKIP.indexOf(String(pair[0]).toLowerCase()) === -1;
+      }).map(function (pair) {
         return {
           key: pair[0],
           value: pair[1],
