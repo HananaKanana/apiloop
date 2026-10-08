@@ -704,3 +704,55 @@ export function parseCurl(text) {
     warnings: warnings
   };
 }
+
+/* ------------------------------------------------------------------ 生成 */
+
+/**
+ * 按 shell 规则把一段文字包成单引号参数（内部的单引号写成 `'\''`）。
+ * 地址、请求头值、请求体都可能有空格和引号，不包起来复制出去跑不了。
+ */
+export function shellQuote(text) {
+  return "'" + String(text === undefined || text === null ? '' : text).replace(/'/g, "'\\''") + "'";
+}
+
+/**
+ * 用「当前这一次请求」的值拼一条能直接跑的 curl（`parseCurl` 的反向操作）。
+ *
+ * 分享页的「试一试」面板用它 —— 用户在面板里改过的地址、请求头、请求体都要反映到
+ * 复制出来的命令里，而不是文档里那份原始值。
+ *
+ * @param {{method?: string, url?: string,
+ *          headers?: Array<{key: string, value: any, enabled?: boolean}>,
+ *          body?: object}} input
+ *        `body` 的形状和接口的 `body` 一致（`mode` + `raw` / `graphql` / `form`）
+ * @returns {string} 多行命令，续行用 ` \` 收尾
+ */
+export function buildCurl(input) {
+  const source = input || {};
+  const lines = ['curl -X ' + String(source.method || 'GET').toUpperCase() + ' ' + shellQuote(source.url)];
+
+  (source.headers || []).forEach(function (row) {
+    if (!row || row.enabled === false) return;
+    const key = String(row.key === undefined || row.key === null ? '' : row.key).trim();
+    if (!key) return;
+    lines.push('  -H ' + shellQuote(key + ': ' + String(row.value === undefined || row.value === null ? '' : row.value)));
+  });
+
+  const body = source.body || {};
+  if (body.mode === 'raw' && body.raw) {
+    lines.push('  --data-raw ' + shellQuote(body.raw));
+  } else if (body.mode === 'graphql' && body.graphql && body.graphql.query) {
+    lines.push('  --data-raw ' + shellQuote(body.graphql.query));
+  } else if ((body.mode === 'urlencoded' || body.mode === 'formdata') && body.form) {
+    // 文件行由调用方决定要不要传进来：curl 的文件字段要的是本地路径（`-F 'k=@/path'`），
+    // 这里拿不到，硬拼一个 `--data-urlencode` 反而是错的
+    body.form.forEach(function (row) {
+      if (!row || row.enabled === false) return;
+      const key = String(row.key === undefined || row.key === null ? '' : row.key).trim();
+      if (!key) return;
+      lines.push('  --data-urlencode ' + shellQuote(key + '=' + String(row.value === undefined || row.value === null ? '' : row.value)));
+    });
+  }
+
+  return lines.join(' \\\n');
+}

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onMounted, ref } from 'vue';
+import { computed, h, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { NButton, NIcon, NSpin, NTag, NTree, useMessage } from 'naive-ui';
@@ -11,8 +11,10 @@ import { methodColor } from '@/utils/method';
 import { authTypeName } from '@/utils/auth';
 import { formatJson } from '@/utils/jsonFormat';
 import { copyText } from '@/utils/clipboard';
+import { buildCurl } from '@/utils/curl';
 import { statusMeta } from '@/utils/apiStatus';
 import { mockUrlFor } from '@/utils/share';
+import TryItPanel from '@/components/share/TryItPanel.vue';
 
 /**
  * 公开的接口文档页（第 4 节）。地址是 `<云端地址>/#/share/<链接串>`，**不用登录**。
@@ -58,6 +60,27 @@ const currentStatus = computed(function () {
 const mockUrl = computed(function () {
   return doc.value ? mockUrlFor(doc.value.mockPath) : '';
 });
+
+/* ---------------- 「试一试」（第十五轮） ---------------- */
+
+/**
+ * 不是 HTTP 的接口没有「试一试」：WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 都连不上
+ * Mock（Mock 只认 HTTP），给个点了必然失败的按钮不如不给。
+ */
+const NON_HTTP_METHODS = ['WS', 'SIO', 'GRPC', 'MQTT', 'TCP', 'UDP'];
+
+const canTry = computed(function () {
+  if (!current.value) return false;
+  return NON_HTTP_METHODS.indexOf(String(current.value.method || '').toUpperCase()) === -1;
+});
+
+/** 面板开着没有。换接口时关掉 —— 那是上一个接口填的表 */
+const tryOpen = ref(false);
+
+watch(
+  function () { return selectedId.value; },
+  function () { tryOpen.value = false; }
+);
 
 onMounted(async function () {
   try {
@@ -155,32 +178,15 @@ const bodyView = computed(function () {
 
 /* ---------------- 复制 ---------------- */
 
-function shellQuote(text) {
-  return "'" + String(text === undefined || text === null ? '' : text).replace(/'/g, "'\\''") + "'";
-}
-
-/** 「复制为 cURL」：按文档里的信息拼一条能直接跑的 curl（值可能是打码后的） */
+/**
+ * 「复制为 cURL」：按**文档里**的信息拼一条能直接跑的 curl（值可能是打码后的）。
+ * 拼装交给 `utils/curl.js` 的 `buildCurl` —— 和「试一试」面板里那个按钮同一份实现，
+ * 只是那边传的是用户改过的值。
+ */
 const curlText = computed(function () {
   const api = current.value;
   if (!api) return '';
-
-  const lines = ['curl -X ' + String(api.method || 'GET').toUpperCase() + ' ' + shellQuote(api.url)];
-  (api.headers || []).forEach(function (row) {
-    lines.push('  -H ' + shellQuote(row.key + ': ' + row.value));
-  });
-
-  const body = api.body || {};
-  if (body.mode === 'raw' && body.raw) {
-    lines.push('  --data-raw ' + shellQuote(body.raw));
-  } else if (body.mode === 'graphql' && body.graphql && body.graphql.query) {
-    lines.push('  --data-raw ' + shellQuote(body.graphql.query));
-  } else if ((body.mode === 'urlencoded' || body.mode === 'formdata') && body.form) {
-    body.form.forEach(function (row) {
-      lines.push('  --data-urlencode ' + shellQuote(row.key + '=' + row.value));
-    });
-  }
-
-  return lines.join(' \\\n');
+  return buildCurl({ method: api.method, url: api.url, headers: api.headers, body: api.body });
 });
 
 async function copy(text, okText) {
@@ -261,6 +267,15 @@ function statusType(status) {
             </span>
             <span v-if="current.ownerName" class="doc-owner">{{ t('utils.ownerPrefix') }}{{ current.ownerName }}</span>
             <span class="spacer" />
+            <n-button
+              v-if="canTry"
+              size="tiny"
+              :secondary="!tryOpen"
+              :type="tryOpen ? 'primary' : 'default'"
+              @click="tryOpen = !tryOpen"
+            >
+              {{ t('share.tryButton') }}
+            </n-button>
             <n-button size="tiny" secondary @click="copy(curlText, t('views.shareCopiedCurl'))">
               {{ t('views.shareCopyAsCurl') }}
             </n-button>
@@ -272,6 +287,9 @@ function statusType(status) {
               <template #icon><n-icon :component="Copy" /></template>
             </n-button>
           </div>
+
+          <!-- 「试一试」：直接打到这个项目的 Mock 上，不用登录、不保存 -->
+          <try-it-panel v-if="tryOpen && canTry" :api="current" :mock-base="mockUrl" />
 
           <section v-if="description.length" class="section">
             <p v-for="(line, index) in description" :key="index" class="paragraph">{{ line }}</p>
