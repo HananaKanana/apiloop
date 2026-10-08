@@ -277,9 +277,6 @@ const theme = EditorView.theme({
 function buildExtensions() {
   const extensions = [
     basicSetup,
-    // 换掉自带查找面板（T43）：自带的有「替换」那一行（响应只读，用不上），也没有匹配计数。
-    // `search()` 的配置是个 facet，**后写的覆盖先写的**，所以放在 basicSetup 后面才生效。
-    search({ createPanel: createSearchPanel }),
     theme,
     languageExtension(props.language),
     // 语法高亮用 class（tok-*），颜色在下面的样式里按亮 / 暗两套给（接近 Postman 的配色）
@@ -293,6 +290,18 @@ function buildExtensions() {
   ];
 
   if (props.wrap) extensions.push(EditorView.lineWrapping);
+
+  /*
+   * 只读的代码框（响应体）才换成自定义的查找面板（T43）。
+   *
+   * 自带的面板有「替换」那一行 —— 响应是只读的，用不上；而且它**没有匹配计数**，
+   * 所以响应这边要换掉。**可编辑的代码框一个字都不动**：请求的 Body、脚本、Mock 编辑
+   * 这些地方是要改内容的，替换那一行必须留着，用的还是 CodeMirror 自带的面板。
+   *
+   * `search()` 的配置是个 facet，**后写的覆盖先写的**，所以放在 `basicSetup` 之后才生效。
+   * `readonly` 变了会走上面那个 watch 重建整个 view（重新调这里），面板跟着换。
+   */
+  if (props.readonly) extensions.push(search({ createPanel: createSearchPanel }));
 
   // GraphQL 的补全 / 校验 / 悬停（动态加载好的那份扩展）
   if (graphqlExtension) extensions.push(graphqlExtension);

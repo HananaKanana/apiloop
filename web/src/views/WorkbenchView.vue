@@ -79,11 +79,25 @@ function focusInEditor(scope) {
   return scope ? Boolean(editor.closest(scope)) : true;
 }
 
-/** 当前选中的文字（按 ⌘F 时预填进查找框）。太长的不填 —— 塞进去这个框就没法看了 */
+/**
+ * 当前选中的文字（按 ⌘F 时预填进查找框）。
+ *
+ * **只认响应区域里选中的**：在目录树、地址栏、请求 Body 里选中的字填进「响应的查找框」
+ * 很怪（用户多半是想在响应里找点别的）。太长的不填 —— 塞进去这个框就没法看了。
+ */
 function selectedText() {
   try {
     const selection = window.getSelection ? window.getSelection() : null;
-    return selection ? String(selection.toString()).trim().slice(0, 200) : '';
+    if (!selection || !selection.rangeCount) return '';
+
+    const text = String(selection.toString()).trim();
+    if (!text) return '';
+
+    const node = selection.anchorNode;
+    const el = node && node.nodeType === 1 ? node : (node ? node.parentElement : null);
+    if (!el || typeof el.closest !== 'function' || !el.closest('[data-response-pane]')) return '';
+
+    return text.slice(0, 200);
   } catch (err) {
     return '';
   }
