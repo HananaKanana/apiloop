@@ -197,7 +197,7 @@ export default {
   wbPreviewHint: '预览标签页：再单击别的会被替换，双击固定',
   wbDirtyDot: '有没保存的修改',
   wbNewRequest: '新建请求',
-  wbNewTabMore: '新建别的协议（WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP）',
+  wbNewTabMore: '新建别的协议（WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP）',
   wbNoEnvs: '还没有环境，点左边的「新建环境」',
   wbPickApi: '从左边选一个接口，或者点目录树右上角的 ＋ 新建请求'
 };

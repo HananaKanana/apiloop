@@ -30,7 +30,7 @@ import OpenapiExportDialog from '@/components/importExport/OpenapiExportDialog.v
 import ExportDocDialog from '@/components/importExport/ExportDocDialog.vue';
 import CopyNodeDialog from '@/components/tree/CopyNodeDialog.vue';
 
-const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'new-tcp', 'new-udp', 'open-folder', 'run', 'import']);
+const emit = defineEmits(['open', 'new-api', 'new-ws', 'new-sio', 'new-grpc', 'new-mqtt', 'new-amqp', 'new-tcp', 'new-udp', 'open-folder', 'run', 'import']);
 
 const projects = useProjectStore();
 const prefs = usePrefsStore();
@@ -68,6 +68,8 @@ const newOptions = computed(function () {
     // gRPC（第十一轮第 3 节）/ MQTT（第十三轮第 4 节）：同上，各自开一个临时调试标签页
     { label: 'gRPC', key: 'grpc' },
     { label: 'MQTT', key: 'mqtt' },
+    // RabbitMQ（第十六轮 T41）：同上，开一个 RabbitMQ（AMQP）调试标签页
+    { label: 'RabbitMQ', key: 'amqp' },
     // TCP / UDP（第十六轮）：同上，两种协议共用一个标签页（按方法显示不同字段）
     { label: 'TCP', key: 'tcp' },
     { label: 'UDP', key: 'udp' }
@@ -93,6 +95,10 @@ function onNewSelect(key) {
   }
   if (key === 'mqtt') {
     emit('new-mqtt');
+    return;
+  }
+  if (key === 'amqp') {
+    emit('new-amqp');
     return;
   }
   if (key === 'tcp') {
@@ -936,7 +942,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
         </n-button>
       </n-dropdown>
 
-      <!-- 新建：接口 / 目录 / WebSocket / Socket.IO / gRPC / MQTT 都收在这一个 ＋ 里 -->
+      <!-- 新建：接口 / 目录 / WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ 都收在这一个 ＋ 里 -->
       <n-dropdown v-if="projects.canEdit" trigger="click" :options="newOptions" @select="onNewSelect">
         <n-button size="small" quaternary :title="t('tree.newTitle')">
           <template #icon>

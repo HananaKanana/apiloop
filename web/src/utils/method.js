@@ -9,6 +9,9 @@
  * 四种非 HTTP 方法摆在一起也分得清）。
  * TCP / UDP（第十六轮）用**更深的蓝和更深的洋红**：色相上离 PUT 的亮蓝、Socket.IO 的亮紫红
  * 最近，但饱和度和明度差得远，10px 的小徽标摆一行也认得出是哪一种。
+ * RabbitMQ（AMQP，第十六轮 T41）用**黄绿**：上面这些色号把绿（GET）、黄（POST）、
+ * 蓝（PUT / TCP）、紫（PATCH / MQTT / SIO）、红（DELETE / UDP）、青（WS）、橙（gRPC）
+ * 都占了，色相上空得最多的一段是「黄到绿之间」，黄绿摆进去离谁都不近。
  * 都取的是中间调，亮色和暗色主题下都读得清。
  */
 const COLORS = {
@@ -23,6 +26,7 @@ const COLORS = {
   SIO: '#d946ef',
   GRPC: '#e8590c',
   MQTT: '#9333ea',
+  AMQP: '#4d7c0f',
   TCP: '#1e40af',
   UDP: '#9d174d'
 };

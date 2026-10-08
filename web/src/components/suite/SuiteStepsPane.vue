@@ -144,12 +144,12 @@ function onDrop() {
 const showAdd = ref(false);
 const checkedKeys = ref([]);
 
-/** 目录树（WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 接口不能加进测试集）：勾目录会连它下面的接口一起勾上 */
+/** 目录树（WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP 接口不能加进测试集）：勾目录会连它下面的接口一起勾上 */
 const pickerNodes = computed(function () {
   const apis = tree.apis.filter(function (api) {
     const method = String(api.method || '').toUpperCase();
     return method !== 'WS' && method !== 'SIO' && method !== 'GRPC' && method !== 'MQTT' &&
-      method !== 'TCP' && method !== 'UDP';
+      method !== 'AMQP' && method !== 'TCP' && method !== 'UDP';
   });
 
   const nodes = buildTree(tree.folders, apis);

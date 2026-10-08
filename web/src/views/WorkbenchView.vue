@@ -17,6 +17,7 @@ import WsTab from '@/components/ws/WsTab.vue';
 import SioTab from '@/components/sio/SioTab.vue';
 import GrpcTab from '@/components/grpc/GrpcTab.vue';
 import MqttTab from '@/components/mqtt/MqttTab.vue';
+import AmqpTab from '@/components/amqp/AmqpTab.vue';
 import SocketTab from '@/components/socket/SocketTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
 import RunnerTab from '@/components/runner/RunnerTab.vue';
@@ -309,6 +310,7 @@ const NEW_TAB_KINDS = [
   { key: 'sio', label: 'Socket.IO', color: 'SIO' },
   { key: 'grpc', label: 'gRPC', color: 'GRPC' },
   { key: 'mqtt', label: 'MQTT', color: 'MQTT' },
+  { key: 'amqp', label: 'RabbitMQ', color: 'AMQP' },
   { key: 'tcp', label: 'TCP', color: 'TCP' },
   { key: 'udp', label: 'UDP', color: 'UDP' }
 ];
@@ -334,6 +336,7 @@ function onNewTabSelect(key) {
   if (key === 'sio') return tabs.openSio();
   if (key === 'grpc') return tabs.openGrpc();
   if (key === 'mqtt') return tabs.openMqtt();
+  if (key === 'amqp') return tabs.openAmqp();
   if (key === 'tcp') return tabs.openSocket('TCP');
   if (key === 'udp') return tabs.openSocket('UDP');
 }
@@ -366,6 +369,11 @@ function onNewGrpc() {
 /** MQTT 调试标签页（第十三轮第 4 节）：同上，不进目录树 */
 function onNewMqtt() {
   tabs.openMqtt();
+}
+
+/** RabbitMQ 调试标签页（第十六轮 T41）：同上，不进目录树 */
+function onNewAmqp() {
+  tabs.openAmqp();
 }
 
 /** TCP / UDP 调试标签页（第十六轮）：同上，不进目录树。两种协议共用一个组件，方法决定字段 */
@@ -404,6 +412,9 @@ function tabMethod(tab) {
   if (tab.kind === 'grpc') return 'GRPC';
   // MQTT 调试标签页固定 MQTT（第十三轮第 4 节）：同上，spec 里没有 method 字段
   if (tab.kind === 'mqtt') return 'MQTT';
+  // RabbitMQ 调试标签页固定 AMQP（第十六轮 T41）：同上，spec 里没有 method 字段。
+  // 徽标写 `AMQP`（协议名），和「+」菜单里的「RabbitMQ」（产品名）区分开
+  if (tab.kind === 'amqp') return 'AMQP';
   // TCP / UDP 调试标签页（第十六轮）：两种协议共用一个 kind，方法在 spec.method 上
   if (tab.kind === 'socket') return String((tab.spec && tab.spec.method) || 'TCP').toUpperCase();
   // 目录页签、「运行」页签、「压测」页签、「环境对比」页签都没有「方法」这一说，不显示缩写
@@ -583,6 +594,7 @@ onBeforeUnmount(function () {
           @new-sio="onNewSio"
           @new-grpc="onNewGrpc"
           @new-mqtt="onNewMqtt"
+          @new-amqp="onNewAmqp"
           @new-tcp="onNewTcp"
           @new-udp="onNewUdp"
           @open-folder="onOpenFolder"
@@ -705,6 +717,11 @@ onBeforeUnmount(function () {
           />
           <mqtt-tab
             v-else-if="tabs.active && tabs.active.kind === 'mqtt'"
+            :key="tabs.activeKey"
+            :tab="tabs.active"
+          />
+          <amqp-tab
+            v-else-if="tabs.active && tabs.active.kind === 'amqp'"
             :key="tabs.activeKey"
             :tab="tabs.active"
           />

@@ -14,6 +14,7 @@ import { useWsStore } from '@/stores/ws';
 import { useSioStore } from '@/stores/sio';
 import { useGrpcStore } from '@/stores/grpc';
 import { useMqttStore } from '@/stores/mqtt';
+import { useAmqpStore } from '@/stores/amqp';
 import { useSocketStore } from '@/stores/socket';
 import * as tempTabs from '@/stores/tempTabs';
 import { useTreeStore } from '@/stores/tree';
@@ -28,6 +29,7 @@ let wsSeq = 0;
 let sioSeq = 0;
 let grpcSeq = 0;
 let mqttSeq = 0;
+let amqpSeq = 0;
 let socketSeq = 0;
 
 /**
@@ -46,6 +48,8 @@ const DEBUG_TABS = {
   GRPC: { kind: 'grpc', title: 'gRPC', spec: grpcSpecFromApi },
   // MQTT（第十三轮第 4 节）：地址是 broker，其余全在 spec.mqtt 里
   MQTT: { kind: 'mqtt', title: 'MQTT', spec: mqttSpecFromApi },
+  // RabbitMQ（第十六轮 T41）：方法名是 AMQP，地址是 broker，其余全在 spec.amqp 里
+  AMQP: { kind: 'amqp', title: 'RabbitMQ', spec: amqpSpecFromApi },
   // TCP / UDP（第十六轮）：地址是 tcp:// / tls:// / udp://，其余全在 spec.socket 里
   TCP: { kind: 'socket', title: 'TCP', spec: socketSpecFromApi },
   UDP: { kind: 'socket', title: 'UDP', spec: socketSpecFromApi }
@@ -65,6 +69,7 @@ const TEMP_SEQ = {
   sio: function () { sioSeq += 1; return sioSeq; },
   grpc: function () { grpcSeq += 1; return grpcSeq; },
   mqtt: function () { mqttSeq += 1; return mqttSeq; },
+  amqp: function () { amqpSeq += 1; return amqpSeq; },
   socket: function () { socketSeq += 1; return socketSeq; }
 };
 
@@ -75,6 +80,7 @@ const TEMP_TITLE = {
   sio: function () { return 'Socket.IO'; },
   grpc: function () { return 'gRPC'; },
   mqtt: function () { return 'MQTT'; },
+  amqp: function () { return 'RabbitMQ'; },
   socket: function (item) {
     return String((item && item.spec && item.spec.method) || 'TCP').toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
   }
@@ -90,14 +96,15 @@ const TEMP_SPEC = {
   sio: function (value) { return Object.assign(emptySioSpec(), value || {}); },
   grpc: function (value) { return Object.assign(emptyGrpcSpec(), value || {}); },
   mqtt: function (value) { return Object.assign(emptyMqttSpec(), value || {}); },
+  amqp: function (value) { return Object.assign(emptyAmqpSpec(), value || {}); },
   socket: function (value) { return Object.assign(emptySocketSpec(value && value.method), value || {}); }
 };
 
-/** 既是 WebSocket / Socket.IO / gRPC / MQTT 标签页又是 TCP / UDP 标签页（状态都按 key 存、都要单独收尾） */
+/** 既是 WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ 标签页又是 TCP / UDP 标签页（状态都按 key 存、都要单独收尾） */
 function isSocketTab(tab) {
   return Boolean(tab) &&
     (tab.kind === 'ws' || tab.kind === 'sio' || tab.kind === 'grpc' || tab.kind === 'mqtt' ||
-      tab.kind === 'socket');
+      tab.kind === 'amqp' || tab.kind === 'socket');
 }
 
 /** 调试标签页自己的运行时状态（在对应的 store 里），关标签页时要把它一起收掉 */
@@ -106,6 +113,7 @@ function dropDebugState(tab) {
   if (tab.kind === 'sio') useSioStore().closeFor(tab.key);
   else if (tab.kind === 'grpc') useGrpcStore().closeFor(tab.key);
   else if (tab.kind === 'mqtt') useMqttStore().closeFor(tab.key);
+  else if (tab.kind === 'amqp') useAmqpStore().closeFor(tab.key);
   else if (tab.kind === 'socket') useSocketStore().closeFor(tab.key);
   else if (tab.kind === 'ws') useWsStore().closeFor(tab.key);
 }
@@ -357,6 +365,44 @@ export function socketSpecFromApi(api) {
 }
 
 /**
+ * RabbitMQ 调试标签页的请求内容（第十六轮 T41）。
+ *
+ * 和 WebSocket / Socket.IO / MQTT / TCP 一样，**没有请求头 / query / 鉴权**那一套 ——
+ * 地址就是 broker（`amqp://user:pass@host:5672/vhost` / `amqps://…`），其余全在 `amqp` 里：
+ * 凭据、心跳、连接超时、忽略证书错误、消费列表、常用发布。
+ * 这份形状和 `apis.extra.amqp`（`lib/api/dto.js` 的 `toApiAmqp`）**一一对应**。
+ *
+ * 默认值跟后端对齐：心跳 60 秒（0 是合法的「不要心跳」）、连接超时 10 秒
+ * （见 `lib/api/dto.js` 的 `toApiAmqp`）。
+ *
+ * 发布那一栏（交换机、routing key、内容、属性、mandatory）和 MQTT 的发布一样是
+ * **界面上的草稿**，不落库 —— 要留下来就「存为常用」，那才进 `saved`。
+ */
+export function emptyAmqpSpec() {
+  return {
+    url: '',
+    amqp: {
+      username: '',
+      password: '',
+      heartbeat: 60,
+      connectTimeoutMs: 10000,
+      tlsInsecure: false,
+      consumers: [],
+      saved: []
+    }
+  };
+}
+
+export function amqpSpecFromApi(api) {
+  return {
+    url: api.url || '',
+    amqp: api.amqp
+      ? JSON.parse(JSON.stringify(api.amqp))
+      : emptyAmqpSpec().amqp
+  };
+}
+
+/**
  * 目录设置标签页里可编辑的那部分（契约第 3 节 `PUT /folders/:id`）。
  * 放进 `spec` 是为了直接复用标签页那套「和快照比出 dirty」的机制。
  */
@@ -581,6 +627,8 @@ export const useTabsStore = defineStore('tabs', function () {
     if (data.api.method === 'GRPC') return pushGrpcApiTab(data.api);
     // MQTT（第十三轮第 4 节）同理，走 MQTT 标签页
     if (data.api.method === 'MQTT') return pushMqttApiTab(data.api);
+    // RabbitMQ（第十六轮 T41）同理，走 RabbitMQ 标签页
+    if (data.api.method === 'AMQP') return pushAmqpApiTab(data.api);
     // TCP / UDP（第十六轮）同理，走同一个「TCP / UDP」标签页
     if (data.api.method === 'TCP' || data.api.method === 'UDP') return pushSocketApiTab(data.api);
 
@@ -859,6 +907,63 @@ export const useTabsStore = defineStore('tabs', function () {
       apiId: api.id,
       folderId: api.folderId || null,
       title: api.name || 'MQTT',
+      spec: spec,
+      savedSnapshot: snapshot(spec),
+      options: { cookies: true },
+      api: api,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /**
+   * 新建一个 RabbitMQ 调试标签页（第十六轮 T41）。和 WebSocket / Socket.IO / gRPC / MQTT 一样：
+   * **不进目录树**，想留下来就点「保存到目录」，那时会变成绑定接口的 RabbitMQ 标签页。
+   */
+  function openAmqp() {
+    amqpSeq += 1;
+    const key = 'amqp:' + amqpSeq;
+    const tab = Object.assign({
+      key: key,
+      kind: 'amqp',
+      apiId: null,
+      folderId: null,
+      title: 'RabbitMQ',
+      spec: emptyAmqpSpec(),
+      savedSnapshot: null,
+      options: { cookies: true },
+      api: null,
+      dirty: false,
+      result: null,
+      sendError: '',
+      missingVariables: [],
+      sending: false,
+      controller: null
+    }, emptyLive());
+
+    tabs.value.push(tab);
+    activeKey.value = key;
+    return tab;
+  }
+
+  /** 绑定接口的 RabbitMQ 标签页（同一接口只会有一个标签页，key 是 `api:<id>`） */
+  function pushAmqpApiTab(api) {
+    const key = 'api:' + api.id;
+    const spec = amqpSpecFromApi(api);
+    const tab = Object.assign({
+      key: key,
+      kind: 'amqp',
+      apiId: api.id,
+      folderId: api.folderId || null,
+      title: api.name || 'RabbitMQ',
       spec: spec,
       savedSnapshot: snapshot(spec),
       options: { cookies: true },
@@ -1292,9 +1397,10 @@ export const useTabsStore = defineStore('tabs', function () {
   function syncWithApis(apiIds) {
     const known = new Set(apiIds);
     const removed = tabs.value.filter(function (tab) {
-      // 绑定了接口的 WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 标签页也要一起收
+      // 绑定了接口的 WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP 标签页也要一起收
       return (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
-        tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'socket') &&
+        tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'amqp' ||
+        tab.kind === 'socket') &&
         Boolean(tab.apiId) && !known.has(tab.apiId);
     });
     removed.forEach(function (tab) { close(tab.key); });
@@ -1338,7 +1444,7 @@ export const useTabsStore = defineStore('tabs', function () {
   }
 
   function markSaved(tab, api) {
-    // WS / SIO / GRPC / MQTT 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
+    // WS / SIO / GRPC / MQTT / AMQP 接口存下来之后要换成对应的调试标签页：spec 形状和普通接口不一样
     const debug = debugTabOf(api);
     if (debug) {
       const previousKey = tab.key;
@@ -1353,11 +1459,12 @@ export const useTabsStore = defineStore('tabs', function () {
       tab.savedSnapshot = snapshot(nextSpec);
       tab.options = { cookies: true };
       tab.dirty = false;
-      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N` / `mqtt:N` / `socket:N`，绑上接口之后 key 变成 `api:<id>`：
+      // 临时标签页是 `ws:N` / `sio:N` / `grpc:N` / `mqtt:N` / `amqp:N` / `socket:N`，绑上接口之后 key 变成 `api:<id>`：
       // 运行时状态（日志、连接、在途的调用）要跟着搬，否则刚调出来的东西全丢
       if (debug.kind === 'sio') useSioStore().move(previousKey, tab.key);
       else if (debug.kind === 'grpc') useGrpcStore().move(previousKey, tab.key);
       else if (debug.kind === 'mqtt') useMqttStore().move(previousKey, tab.key);
+      else if (debug.kind === 'amqp') useAmqpStore().move(previousKey, tab.key);
       else if (debug.kind === 'socket') useSocketStore().move(previousKey, tab.key);
       else useWsStore().move(previousKey, tab.key);
       activeKey.value = tab.key;
@@ -1402,7 +1509,8 @@ export const useTabsStore = defineStore('tabs', function () {
     const list = tabs.value.filter(function (tab) {
       return Boolean(tab.apiId) && wanted.has(tab.apiId) && !tab.dirty &&
         (tab.kind === 'api' || tab.kind === 'ws' || tab.kind === 'sio' ||
-          tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'socket');
+          tab.kind === 'grpc' || tab.kind === 'mqtt' || tab.kind === 'amqp' ||
+          tab.kind === 'socket');
     });
     if (!list.length) return;
 
@@ -1697,6 +1805,7 @@ export const useTabsStore = defineStore('tabs', function () {
     openSio: openSio,
     openGrpc: openGrpc,
     openMqtt: openMqtt,
+    openAmqp: openAmqp,
     openSocket: openSocket,
     openFolder: openFolder,
     openRunner: openRunner,

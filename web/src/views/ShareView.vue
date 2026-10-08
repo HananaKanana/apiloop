@@ -64,10 +64,10 @@ const mockUrl = computed(function () {
 /* ---------------- 「试一试」（第十五轮） ---------------- */
 
 /**
- * 不是 HTTP 的接口没有「试一试」：WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 都连不上
+ * 不是 HTTP 的接口没有「试一试」：WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP 都连不上
  * Mock（Mock 只认 HTTP），给个点了必然失败的按钮不如不给。
  */
-const NON_HTTP_METHODS = ['WS', 'SIO', 'GRPC', 'MQTT', 'TCP', 'UDP'];
+const NON_HTTP_METHODS = ['WS', 'SIO', 'GRPC', 'MQTT', 'AMQP', 'TCP', 'UDP'];
 
 const canTry = computed(function () {
   if (!current.value) return false;

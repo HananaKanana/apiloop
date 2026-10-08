@@ -2,7 +2,7 @@
  * 临时标签页的本地持久化（T35「快速请求」）。
  *
  * 「临时标签页」= **还没保存进目录树**的那些：空白请求（`draft`）和没有绑定接口的
- * WebSocket / Socket.IO / gRPC / MQTT / TCP / UDP 标签页。它们的内容只活在内存里，
+ * WebSocket / Socket.IO / gRPC / MQTT / RabbitMQ / TCP / UDP 标签页。它们的内容只活在内存里，
  * 刷新一下就没了 —— 这个模块把「标题 + 请求内容」按项目存进 localStorage，重启后恢复。
  *
  * 几条刻意的取舍：
@@ -22,7 +22,7 @@ const KEY_PREFIX = 'apiloop.tempTabs.';
 const MAX_TABS = 20;
 
 /** 要保留的 kind：都是「还没进目录树」的临时标签页 */
-const TEMP_KINDS = ['draft', 'ws', 'sio', 'grpc', 'mqtt', 'socket'];
+const TEMP_KINDS = ['draft', 'ws', 'sio', 'grpc', 'mqtt', 'amqp', 'socket'];
 
 /** 这个标签页要不要保留。绑定接口的不留 —— 它的内容在库里，下次打开是它自己 */
 export function isTempTab(tab) {

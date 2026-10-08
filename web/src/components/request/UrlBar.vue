@@ -56,10 +56,17 @@ function onPaste(event) {
 // SIO（Socket.IO，第九轮第 4 节）同理，打开时是 Socket.IO 标签页；
 // GRPC（gRPC，第十一轮第 3 节）同理，打开时是 gRPC 标签页；
 // MQTT（第十三轮第 4 节）同理，打开时是 MQTT 标签页；
+// AMQP（RabbitMQ，第十六轮 T41）同理，打开时是 RabbitMQ 标签页 ——
+// 方法名是 `AMQP`，但下拉里显示「RabbitMQ」（用户认得的是产品名，不是协议缩写）；
 // TCP / UDP（第十六轮）同理，打开时是同一个「TCP / UDP」标签页（按方法显示不同字段）。
-const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'WS', 'SIO', 'GRPC', 'MQTT', 'TCP', 'UDP'].map(function (name) {
+const METHOD_OPTIONS = [
+  'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
+  'WS', 'SIO', 'GRPC', 'MQTT', 'TCP', 'UDP'
+].map(function (name) {
   return { label: name, value: name };
-});
+}).concat([
+  { label: 'RabbitMQ', value: 'AMQP' }
+]);
 
 const methodOptions = computed(function () {
   const list = METHOD_OPTIONS.slice();
@@ -79,13 +86,13 @@ function renderMethodOption(option) {
 }
 
 /**
- * 方法下拉：在去边框的基础上，把菜单的最大高度放到 14 行。
- * naive-ui 默认只给 7.6 行，方法一多（现在有 13 个：HTTP 七个 + WS / SIO / GRPC / MQTT / TCP / UDP，
- * 再加一个自定义方法就是 14 个）就会出滚动条，第一项 GET 被切掉一半。
+ * 方法下拉：在去边框的基础上，把菜单的最大高度放到 15 行。
+ * naive-ui 默认只给 7.6 行，方法一多（现在有 14 个：HTTP 七个 + WS / SIO / GRPC / MQTT / AMQP / TCP / UDP，
+ * 再加一个自定义方法就是 15 个）就会出滚动条，第一项 GET 被切掉一半。
  */
 const METHOD_SELECT_THEME = {
   peers: Object.assign({}, BARE_SELECT_THEME.peers, {
-    InternalSelectMenu: { height: 'calc(var(--n-option-height) * 14)' }
+    InternalSelectMenu: { height: 'calc(var(--n-option-height) * 15)' }
   })
 };
 </script>
