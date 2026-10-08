@@ -38,6 +38,7 @@ export default {
   myShares: '我的分享',
   userManagement: '用户管理',
   userManagementPending: '用户管理（{n} 人待审核）',
+  projectsOverview: '项目总览',
   signOut: '退出登录',
   currentPassword: '当前密码',
   newPassword: '新密码',

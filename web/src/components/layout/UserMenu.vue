@@ -152,6 +152,7 @@ const options = computed(function () {
         : t('layout.userManagement'),
       key: 'users'
     });
+    items.push({ label: t('layout.projectsOverview'), key: 'projects-overview' });
   }
   items.push(languageOption.value);
   items.push({ type: 'divider', key: 'd1' });
@@ -308,6 +309,7 @@ async function onSelect(key) {
   if (key === 'login') return router.push('/login');
   if (key === 'password') return openPassword();
   if (key === 'users') return router.push('/users');
+  if (key === 'projects-overview') return router.push('/admin/projects');
   if (key === 'about') return emit('about');
   if (key === 'shares') {
     showShares.value = true;

@@ -39,6 +39,7 @@ export default {
   myShares: 'My shares',
   userManagement: 'User management',
   userManagementPending: 'User management ({n} pending)',
+  projectsOverview: 'Projects overview',
   signOut: 'Sign out',
   currentPassword: 'Current password',
   newPassword: 'New password',

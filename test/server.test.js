@@ -36,6 +36,8 @@ test.before(async function () {
         display_name: '测试员',
         role: 'admin'
     });
+    // 和 command.js 启动时一样：没有 owner 的项目交给管理员（项目只有成员能看到）
+    require('../lib/access').fillMissingOwners(handle, usersRepo.getByUsername(handle, 'tester').id);
 
     var admin = adminModule.createAdmin({ handle: handle, store: store, version: 'test' });
     app.use(admin.apiPath, admin.api);

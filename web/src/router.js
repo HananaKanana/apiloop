@@ -5,6 +5,7 @@ import { hasChosen } from '@/utils/firstRun';
 import LoginView from '@/views/LoginView.vue';
 import WorkbenchView from '@/views/WorkbenchView.vue';
 import UsersView from '@/views/UsersView.vue';
+import ProjectsOverviewView from '@/views/ProjectsOverviewView.vue';
 import ProjectSettingsView from '@/views/ProjectSettingsView.vue';
 import SettingsView from '@/views/SettingsView.vue';
 import ChangePasswordView from '@/views/ChangePasswordView.vue';
@@ -24,6 +25,8 @@ const routes = [
   { path: '/share/:token', name: 'share', component: ShareView, meta: { public: true } },
   { path: '/workbench', name: 'workbench', component: WorkbenchView },
   { path: '/users', name: 'users', component: UsersView, meta: { admin: true } },
+  // 项目总览（管理员）：所有项目和各自的成员
+  { path: '/admin/projects', name: 'projects-overview', component: ProjectsOverviewView, meta: { admin: true } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { admin: true } },
   {
     path: '/projects/:pid/settings',
