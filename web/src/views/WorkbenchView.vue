@@ -104,8 +104,30 @@ function selectedText() {
   }
 }
 
+/** 关当前标签页（⌘W / Ctrl+W，只在桌面客户端里）；没有标签页时返回 false */
+function closeCurrentTab() {
+  const tab = tabs.active;
+  if (!tab) return false;
+  closeTab(tab);
+  return true;
+}
+
+/** 在不在桌面客户端里：两个壳子都往 User-Agent 末尾加了 `apiloop-shell/<版本>` */
+const IN_SHELL = typeof navigator !== 'undefined' && /apiloop-shell\//.test(navigator.userAgent || '');
+
 function onKeydown(event) {
   if (!(event.metaKey || event.ctrlKey)) return;
+
+  /*
+   * ⌘W / Ctrl+W：关当前标签页。**只在桌面客户端里**接 —— 浏览器里这个键是关浏览器标签页，
+   * 拦不住也不该拦。Mac 客户端的 ⌘W 被菜单先接走了，由壳子调 `apiloopShell.closeCurrentTab`；
+   * 这里接的是 Windows 客户端的 Ctrl+W。
+   */
+  if (IN_SHELL && !event.shiftKey && !event.altKey && String(event.key).toLowerCase() === 'w') {
+    event.preventDefault();
+    closeCurrentTab();
+    return;
+  }
 
   // ⌘⇧F / Ctrl+Shift+F：全局查找替换（和编辑器的「项目内查找」一个键位）。
   // 放在 ⌘\ 前面判，免得以后有人改 \\ 那段时漏掉 shift 这一路。
@@ -198,7 +220,12 @@ function onBeforeUnload(event) {
 function mountShellHook() {
   window.apiloopShell = {
     /** 壳子关窗口、退出、刷新之前问一句（Mac 原生壳） */
-    hasUnsavedChanges: function () { return Boolean(tabs.hasDirty); }
+    hasUnsavedChanges: function () { return Boolean(tabs.hasDirty); },
+    /**
+     * ⌘W：关当前标签页（用户 2026-10-08：以前 ⌘W 直接把整个程序关了）。
+     * 有没保存的修改照常先确认。返回 false 表示没有标签页可关，壳子那边什么都不做。
+     */
+    closeCurrentTab: closeCurrentTab
   };
 }
 

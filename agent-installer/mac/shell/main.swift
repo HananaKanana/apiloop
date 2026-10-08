@@ -236,12 +236,33 @@ final class Shell: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let windowMenu = NSMenu(title: "窗口")
         windowMenu.addItem(withTitle: "最小化",
                            action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "关闭窗口",
-                           action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        // ⌘W 关的是**当前标签页**（用户 2026-10-08：以前 ⌘W 关窗口，窗口一关程序就退了）；
+        // 关整个窗口改成 ⇧⌘W
+        let closeTab = windowMenu.addItem(withTitle: "关闭标签页",
+                                          action: #selector(closeCurrentTab(_:)), keyEquivalent: "w")
+        closeTab.target = self
+        let closeWindow = windowMenu.addItem(withTitle: "关闭窗口",
+                                             action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        closeWindow.keyEquivalentModifierMask = [.command, .shift]
         windowItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
 
         NSApp.mainMenu = mainMenu
+    }
+
+    /// ⌘W：让页面关当前标签页（有没保存的修改由页面自己确认）。
+    /// 页面没挂钩子（说明页、登录页）或者没有标签页可关，就什么都不做 —— 不退回去关窗口，
+    /// 否则连按几下 ⌘W 关标签页，最后一下会把程序关掉。
+    @objc private func closeCurrentTab(_ sender: Any?) {
+        if busy { return }
+        let script = "(function () {"
+            + " try {"
+            + "  var shell = window.apiloopShell;"
+            + "  if (!shell || typeof shell.closeCurrentTab !== 'function') { return false; }"
+            + "  return Boolean(shell.closeCurrentTab());"
+            + " } catch (err) { return false; }"
+            + "})()"
+        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
     @objc private func reloadPage(_ sender: Any?) {
