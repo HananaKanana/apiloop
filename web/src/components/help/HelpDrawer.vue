@@ -19,6 +19,7 @@ const { t } = useI18n();
 
 const SECTIONS = [
   { id: 'start', titleKey: 'help.secStart' },
+  { id: 'response', titleKey: 'help.secResponse' },
   { id: 'variables', titleKey: 'help.secVariables' },
   { id: 'scripts', titleKey: 'help.secScripts' },
   { id: 'examples', titleKey: 'help.secExamples' },
@@ -33,6 +34,7 @@ const SECTIONS = [
   { id: 'sio', titleKey: 'help.secSio' },
   { id: 'grpc', titleKey: 'help.secGrpc' },
   { id: 'mqtt', titleKey: 'help.secMqtt' },
+  { id: 'rabbitmq', titleKey: 'help.secRabbitmq' },
   { id: 'tcpudp', titleKey: 'help.secTcpUdp' },
   { id: 'preflight', titleKey: 'help.secPreflight' },
   { id: 'language', titleKey: 'help.secLanguage' },
@@ -203,6 +205,69 @@ const examples = computed(function () {
             <p>{{ t('help.startSync') }}</p>
             <p>{{ t('help.startQuick') }}</p>
             <p>{{ t('help.startTempTabs') }}</p>
+          </section>
+
+          <!-- ============================================================ 响应 -->
+          <section id="help-response">
+            <h2>{{ t('help.secResponse') }}</h2>
+            <p>{{ t('help.respIntro') }}</p>
+
+            <h3>{{ t('help.respFilterTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.respFilterLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.respFilterLi1B') }}</b></template>
+                <template #kbd><kbd>⌘⇧K</kbd></template>
+                <template #kbd2><kbd>Ctrl+Shift+K</kbd></template>
+              </i18n-t>
+              <i18n-t keypath="help.respFilterLi2" tag="li" scope="global">
+                <template #c1><code v-pre>$.data.list[*].id</code></template>
+                <template #c2><code v-pre>$..name</code></template>
+                <template #c3><code v-pre>$.data.list[?(@.price>100)]</code></template>
+              </i18n-t>
+              <i18n-t keypath="help.respFilterLi3" tag="li" scope="global">
+                <template #c1><code v-pre>[{ path, value }]</code></template>
+              </i18n-t>
+              <li>{{ t('help.respFilterLi4') }}</li>
+              <li>{{ t('help.respFilterLi5') }}</li>
+              <li>{{ t('help.respFilterLi6') }}</li>
+              <li>{{ t('help.respFilterLi7') }}</li>
+            </ul>
+
+            <h3>{{ t('help.respSearchTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.respSearchLi1" tag="li" scope="global">
+                <template #kbd><kbd>⌘F</kbd></template>
+                <template #kbd2><kbd>Ctrl+F</kbd></template>
+              </i18n-t>
+              <li>{{ t('help.respSearchLi2') }}</li>
+              <li>{{ t('help.respSearchLi3') }}</li>
+            </ul>
+
+            <h3>{{ t('help.respPreviewTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.respPreviewLi1') }}</li>
+              <i18n-t keypath="help.respPreviewLi2" tag="li" scope="global">
+                <template #c1><code>Content-Type</code></template>
+                <template #c2><code>application/octet-stream</code></template>
+                <template #c3><code>%PDF</code></template>
+                <template #c4><code>PK</code></template>
+              </i18n-t>
+              <i18n-t keypath="help.respPreviewLi3" tag="li" scope="global">
+                <template #c1><code>.xlsx</code></template>
+                <template #c2><code>.xls</code></template>
+              </i18n-t>
+              <li>{{ t('help.respPreviewLi4') }}</li>
+            </ul>
+
+            <h3>{{ t('help.respSaveTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.respSaveLi1') }}</li>
+              <i18n-t keypath="help.respSaveLi2" tag="li" scope="global">
+                <template #c1><code>Content-Disposition</code></template>
+                <template #c2><code>response.&lt;扩展名&gt;</code></template>
+              </i18n-t>
+              <li>{{ t('help.respSaveLi3') }}</li>
+            </ul>
           </section>
 
           <!-- ============================================================ 变量 -->
@@ -833,6 +898,63 @@ const examples = computed(function () {
             <i18n-t keypath="help.mqttLocalOnly" tag="p" scope="global">
               <template #b><b>{{ t('help.mqttLocalOnlyB') }}</b></template>
             </i18n-t>
+          </section>
+
+          <!-- ============================================================ RabbitMQ -->
+          <section id="help-rabbitmq">
+            <h2>{{ t('help.secRabbitmq') }}</h2>
+            <i18n-t keypath="help.rabbitIntro" tag="p" scope="global">
+              <template #b><b>{{ t('help.rabbitIntroB') }}</b></template>
+              <template #c1><code>amqp://</code></template>
+              <template #c2><code>amqps://</code></template>
+              <template #c3><code>amqp://guest:guest@localhost:5672/</code></template>
+              <template #c4><code>AMQP</code></template>
+            </i18n-t>
+
+            <h3>{{ t('help.rabbitConnTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.rabbitConnLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.rabbitConnLi1B') }}</b></template>
+              </i18n-t>
+              <li>{{ t('help.rabbitConnLi2') }}</li>
+              <i18n-t keypath="help.rabbitConnLi3" tag="li" scope="global">
+                <template #c><code>amqps://</code></template>
+              </i18n-t>
+            </ul>
+
+            <h3>{{ t('help.rabbitConsumeTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.rabbitConsumeLi1" tag="li" scope="global">
+                <template #b1><b>{{ t('help.rabbitConsumeLi1B1') }}</b></template>
+                <template #b2><b>{{ t('help.rabbitConsumeLi1B2') }}</b></template>
+                <template #c1><code>*</code></template>
+                <template #c2><code>#</code></template>
+              </i18n-t>
+              <i18n-t keypath="help.rabbitConsumeLi2" tag="li" scope="global">
+                <template #b1><b>{{ t('help.rabbitConsumeLi2B1') }}</b></template>
+                <template #b2><b>{{ t('help.rabbitConsumeLi2B2') }}</b></template>
+                <template #c><code>prefetch</code></template>
+              </i18n-t>
+              <li>{{ t('help.rabbitConsumeLi3') }}</li>
+            </ul>
+
+            <h3>{{ t('help.rabbitPubTitle') }}</h3>
+            <ul>
+              <i18n-t keypath="help.rabbitPubLi1" tag="li" scope="global">
+                <template #b><b>{{ t('help.rabbitPubLi1B') }}</b></template>
+              </i18n-t>
+              <li>{{ t('help.rabbitPubLi2') }}</li>
+              <li>{{ t('help.rabbitPubLi3') }}</li>
+              <i18n-t keypath="help.rabbitPubLi4" tag="li" scope="global">
+                <template #b><b>{{ t('help.rabbitPubLi4B') }}</b></template>
+              </i18n-t>
+            </ul>
+
+            <h3>{{ t('help.rabbitLogTitle') }}</h3>
+            <p>{{ t('help.rabbitLogLi1') }}</p>
+            <p>{{ t('help.rabbitLogLi2') }}</p>
+
+            <p class="note">{{ t('help.rabbitLocalOnly') }}</p>
           </section>
 
           <!-- ============================================================ TCP / UDP -->

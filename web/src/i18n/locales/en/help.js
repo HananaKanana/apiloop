@@ -15,6 +15,7 @@ export default {
   /* ---------------- Drawer / table of contents ---------------- */
   title: 'Help',
   secStart: 'Getting started',
+  secResponse: 'Response',
   secVariables: 'Variables',
   secScripts: 'Scripts',
   secExamples: 'Script examples',
@@ -29,6 +30,7 @@ export default {
   secSio: 'Socket.IO',
   secGrpc: 'gRPC',
   secMqtt: 'MQTT',
+  secRabbitmq: 'RabbitMQ debugging',
   secPreflight: 'Pre-request API',
   secLanguage: 'Interface language',
   secShortcuts: 'Shortcuts',
@@ -460,9 +462,71 @@ export default {
   tcpLocalOnly: 'Like gRPC and MQTT, TCP / UDP connections can only be opened by the desktop client; on the web version “Connect / Open” is greyed out, but you can still read, edit and save.',
 
   /* ---------------- Quick requests (round 16) ---------------- */
-  startQuick: 'The “+” on the right of the tab bar still creates an HTTP request; the little arrow next to it picks a protocol — WebSocket, Socket.IO, gRPC, MQTT, TCP or UDP — and opens the matching debugging tab. ⌘T / Ctrl+T also creates an HTTP request (⌘T is reserved by the browser, so in a browser use ⌘⌥T / Ctrl+Alt+T).',
+  startQuick: 'The “+” on the right of the tab bar still creates an HTTP request; the little arrow next to it picks a protocol — WebSocket, Socket.IO, gRPC, MQTT, RabbitMQ, TCP or UDP — and opens the matching debugging tab. ⌘T / Ctrl+T also creates an HTTP request (⌘T is reserved by the browser, so in a browser use ⌘⌥T / Ctrl+Alt+T).',
   startTempTabs: 'Temporary tabs that have not been saved into the tree are remembered per project on this machine: after a refresh or a restart they come back at the end of the tab bar, still marked unsaved. Only the title and the request are remembered — response results and connection state are not (they come back as “not connected”); at most 20 are kept, and closing one or using “Save to folder” stops remembering it.',
 
   /* ---------------- “Try it” in a shared document (round 16) ---------------- */
-  shareTry: 'In a shared document every HTTP API has a “Try it”: the reader does not have to sign in or install anything — they can send one request to the API right there. The request goes to the Mock of that project, so what comes back is sample data, not the real backend. Path parameters, query parameters, headers and the body are pre-filled from the document and can be edited; there is a “Copy as cURL” next to it. Nothing about the try-out is saved.'
+  shareTry: 'In a shared document every HTTP API has a “Try it”: the reader does not have to sign in or install anything — they can send one request to the API right there. The request goes to the Mock of that project, so what comes back is sample data, not the real backend. Path parameters, query parameters, headers and the body are pre-filled from the document and can be edited; there is a “Copy as cURL” next to it. Nothing about the try-out is saved.',
+
+  /* ---------------- Response (round 17: filter / find / preview and save) ---------------- */
+  respIntro: 'Once a request has been sent, the response panel is, from top to bottom: the status code, time and size row (a file name tag is added when the response has one), a row of tabs (Body / Headers / Test results / Console / Visualize / Timeline), and the body itself. The body can be filtered, searched, previewed by type, and the full file saved to disk.',
+
+  respFilterTitle: 'Filtering',
+  respFilterLi1: '{b}: the funnel button on the body toolbar, or {kbd} / {kbd2}. Two modes — JSONPath and keyword; JSON responses start in JSONPath, anything else starts in keyword (and JSONPath is greyed out there).',
+  respFilterLi1B: 'How to open it',
+  respFilterLi2: 'A few JSONPath examples: {c1} takes the id of every item in a list; {c2} takes name at any depth; {c3} keeps only the items whose price is above 100.',
+  respFilterLi3: 'A single result is shown as that value; several are shown as an array, formatted and highlighted, read-only. Turn on “Show paths” and each result is shown as {c1} (and copied in that shape too). A bad expression is reported in red under the input, not in a dialog.',
+  respFilterLi4: 'Keyword mode shows only the matching lines, with line numbers and the match highlighted, and a “Case sensitive” switch; a JSON response is formatted first and then filtered line by line.',
+  respFilterLi5: 'The top right shows how many results there are (“12 results” / “No matches”); “Copy result” copies what is currently shown (without line numbers in keyword mode); “×” closes the filter and brings the full response back.',
+  respFilterLi6: 'Focusing the input lists the 5 most recent JSONPath expressions for this API (kept on this machine, per API). The filter travels with the tab: after sending again the condition is still there and applies to the new response.',
+  respFilterLi7: 'Responses of a few hundred KB can still be filtered (the work is done while idle, so the UI stays responsive); when more than 5000 lines match, only the first 5000 are shown, with a note.',
+
+  respSearchTitle: 'Finding',
+  respSearchLi1: '{kbd} / {kbd2} opens the response search. When the focus is in a code box on the request side (Body, scripts, …) that box is searched instead — that is the editor’s own behaviour and has not changed; only when the focus is elsewhere (address bar, parameter tables, empty space) does the response search open. If the current tab has no response, or the response is not text (an image, binary), nothing is intercepted and the browser’s own find is left alone.',
+  respSearchLi2: 'If text is selected when it opens, it is filled into the search box; if the response is on the “Preview” or “Fields” view it switches back to the code view first; while a filter is active it searches the filtered result.',
+  respSearchLi3: 'The panel shows “N of M”; Enter jumps to the next match, ⇧Enter to the previous one, Esc closes it. The response is read-only, so there is no replace.',
+
+  respPreviewTitle: 'Preview',
+  respPreviewLi1: 'Shown by type: images, PDF, audio, video, Excel ({c1}), CSV (a “Table” view next to the text view), archives (listing the files inside, their size and compressed size); anything else gets a file card — icon, file name, type, size and a big “Save to disk” button.',
+  respPreviewLi2: 'The type is worked out by looking at {c1} first, then at the file-name extension when it is only {c2}, and finally at the file header ({c3}, {c4}, PNG / JPEG / GIF).',
+  respPreviewLi3: 'Excel gets one tab per worksheet, showing at most the first 500 rows and 50 columns (with a note when there is more); the older {c2} is not previewed — it says “only {c1} can be previewed; save it and open it in Excel”.',
+  respPreviewLi4: 'When a preview needs the full content but only the truncated part is at hand, it shows “Loading the full file…” and fetches it; files over 20 MB are not previewed automatically — you get the file card plus a “Preview anyway” button.',
+
+  respSaveTitle: 'Saving to disk',
+  respSaveLi1: '“Save to disk” on the toolbar: when the response body is over 5 MB the copy kept in memory is truncated, so this fetches the complete file from the server before saving, and the button shows a loading state.',
+  respSaveLi2: 'The file name comes from the {c1} response header (that is the tag at the top of the response panel); without one it falls back to {c2}.',
+  respSaveLi3: 'The complete file is kept on the server for 1 hour, up to 200 MB each. Saving it after that says “the file has expired, please send the request again”.',
+
+  /* ---------------- RabbitMQ debugging (round 17) ---------------- */
+  rabbitIntro: 'For debugging RabbitMQ (publishing to an exchange, consuming from a queue, watching the message flow). To create one: pick {b} as the method, or choose “+ → RabbitMQ” in the folder-tree toolbar. The address is the broker itself — {c1} is plain and {c2} is TLS; the credentials can go in the address ({c3}) or be filled in on the “Connection” tab. The method badge on the tree and on the tab reads {c4}, the protocol name — the two are the same thing.',
+  rabbitIntroB: 'RabbitMQ',
+
+  rabbitConnTitle: 'Connection',
+  rabbitConnLi1: '{b}: used when the address carries no credentials (credentials in the address take precedence).',
+  rabbitConnLi1B: 'Username and password',
+  rabbitConnLi2: 'Heartbeat (seconds; 0 means no heartbeat) and connect timeout (milliseconds).',
+  rabbitConnLi3: '“Ignore certificate errors” only appears when the address starts with {c} — turn it on for a server with a self-signed certificate, otherwise the handshake fails.',
+
+  rabbitConsumeTitle: 'Consuming',
+  rabbitConsumeLi1: 'One consumer per row, in one of two modes: {b1} consumes an existing queue directly, all you fill in is the queue name; {b2} listens in on an exchange — it creates a temporary queue (exclusive, auto-delete) and binds it to that exchange with the routing key, so messages published to the exchange show up. Routing keys support the wildcards {c1} (one word) and {c2} (zero or more words).',
+  rabbitConsumeLi1B1: 'Queue',
+  rabbitConsumeLi1B2: 'Exchange',
+  rabbitConsumeLi2: 'Acknowledgement: {b1} means the broker drops the message from the queue as soon as it has pushed it; {b2} means you acknowledge it yourself, so it stays in the queue until you do — and then you can set {c} to cap how many are pushed at once.',
+  rabbitConsumeLi2B1: 'Auto',
+  rabbitConsumeLi2B2: 'Manual',
+  rabbitConsumeLi3: 'Once connected, the rows that are enabled start consuming automatically; while connected each row can also be started or stopped on its own, with its state shown on the right (consuming / stopped / error). Queue-mode rows also have a “View” button that shows how many messages and how many consumers the queue has.',
+
+  rabbitPubTitle: 'Publishing',
+  rabbitPubLi1: 'Fill in the exchange and the routing key. {b}: that is exactly what it says next to the exchange field — leave it empty to publish to the default exchange, in which case the routing key is the queue name.',
+  rabbitPubLi1B: 'Empty = default exchange',
+  rabbitPubLi2: 'Write the payload in the editor (JSON or text, variables allowed); the “Properties” block folds away and holds content-type, persistent, headers, correlationId, replyTo, expiration, messageId and priority.',
+  rabbitPubLi3: 'Publishing uses a confirm channel: the “sent” row appears in the message list only after the broker confirms. The ones you send often can be kept with “Save as common”, and next time picking one from the “Saved publishes” dropdown fills everything in.',
+  rabbitPubLi4: '{b}: with it on, a message that cannot be routed to any queue is returned by the broker, and a returned row (with the exchange, routing key and reason) appears in the message list.',
+  rabbitPubLi4B: 'mandatory',
+
+  rabbitLogTitle: 'Message list',
+  rabbitLogLi1: 'Both incoming and outgoing messages show up below: direction, time, exchange, routing key and a redelivered marker; JSON payloads are collapsed, binary ones show as “binary N bytes” and open as base64, and truncated ones are marked. Clicking a row shows all of its properties and headers. Above it you can filter by routing key or content, clear the list and pause scrolling.',
+  rabbitLogLi2: 'Messages that need a manual acknowledgement carry ack / nack / reject buttons (nack and reject can be given requeue); once acknowledged the row says so. Connecting, disconnecting, starting and stopping consumers, returned messages and errors each take a line as well.',
+
+  rabbitLocalOnly: 'Like gRPC, MQTT and TCP / UDP, RabbitMQ connections can only be opened by the desktop client; on the web version “Connect” is greyed out, but you can still read, edit and save.'
 };

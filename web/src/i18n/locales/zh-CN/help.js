@@ -12,6 +12,7 @@ export default {
   /* ---------------- 抽屉 / 目录 ---------------- */
   title: '帮助',
   secStart: '快速上手',
+  secResponse: '响应',
   secVariables: '变量',
   secScripts: '脚本',
   secExamples: '脚本用例',
@@ -26,6 +27,7 @@ export default {
   secSio: 'Socket.IO',
   secGrpc: 'gRPC',
   secMqtt: 'MQTT',
+  secRabbitmq: 'RabbitMQ 调试',
   secPreflight: '前置接口',
   secLanguage: '界面语言',
   secShortcuts: '快捷键',
@@ -457,9 +459,71 @@ export default {
   tcpLocalOnly: '和 gRPC、MQTT 一样，TCP / UDP 的连接只在本机客户端里建得起来；网页版上「连接 / 打开」是灰的，能看、能改、能保存。',
 
   /* ---------------- 快速请求（第十六轮） ---------------- */
-  startQuick: '标签栏右边的「＋」还是新建一个 HTTP 请求；它右边的小箭头可以选协议 —— WebSocket、Socket.IO、gRPC、MQTT、TCP、UDP，各自开一个对应的调试标签页。快捷键 ⌘T / Ctrl+T 也是新建 HTTP 请求（⌘T 是浏览器保留键，浏览器里请用 ⌘⌥T / Ctrl+Alt+T）。',
+  startQuick: '标签栏右边的「＋」还是新建一个 HTTP 请求；它右边的小箭头可以选协议 —— WebSocket、Socket.IO、gRPC、MQTT、RabbitMQ、TCP、UDP，各自开一个对应的调试标签页。快捷键 ⌘T / Ctrl+T 也是新建 HTTP 请求（⌘T 是浏览器保留键，浏览器里请用 ⌘⌥T / Ctrl+Alt+T）。',
   startTempTabs: '这些还没保存进目录树的临时标签页会按项目记在本机：刷新或重启之后它们会回到标签栏末尾，还标着「未保存」。记的只有标题和请求内容，响应结果和连接状态不会恢复（回来的是「未连接」的样子）；最多留 20 个，关掉一个或者「保存到目录」之后就不再记了。',
 
   /* ---------------- 分享文档里的「试一试」（第十六轮） ---------------- */
-  shareTry: '分享出去的文档里，每个 HTTP 接口都有一个「试一试」：对方不用登录、不用装客户端，点开就能直接给这个接口发一次请求 —— 请求打到这个项目的 Mock 上，返回的是示例数据，不是真实后端。面板里的路径参数、查询参数、请求头和请求体都用文档里的值预填好了，可以改；旁边有「复制 cURL」。试调的内容不会保存。'
+  shareTry: '分享出去的文档里，每个 HTTP 接口都有一个「试一试」：对方不用登录、不用装客户端，点开就能直接给这个接口发一次请求 —— 请求打到这个项目的 Mock 上，返回的是示例数据，不是真实后端。面板里的路径参数、查询参数、请求头和请求体都用文档里的值预填好了，可以改；旁边有「复制 cURL」。试调的内容不会保存。',
+
+  /* ---------------- 响应（第十七轮：筛选 / 查找 / 预览和保存） ---------------- */
+  respIntro: '请求发出去之后，响应面板从上到下是：状态码、耗时、大小那一行（响应带文件名时会多一个文件名标签），然后是一排页签（正文 / 响应头 / 测试结果 / 控制台 / 可视化 / 时间线），最下面是正文。正文这一块能筛选、能查找、能按类型预览，也能把完整文件保存到本地。',
+
+  respFilterTitle: '筛选',
+  respFilterLi1: '{b}：正文工具栏上的漏斗按钮，或者 {kbd} / {kbd2}。两种模式 —— JSONPath 和关键字；响应是 JSON 时默认 JSONPath，不是 JSON 时默认关键字（这时候 JSONPath 是灰的）。',
+  respFilterLi1B: '怎么打开',
+  respFilterLi2: 'JSONPath 举几个例子：{c1} 取列表里每一项的 id；{c2} 取任意层级下的 name；{c3} 只留下价格大于 100 的那些项。',
+  respFilterLi3: '结果只有一个时直接显示那个值，多个时显示成数组，带格式化和高亮、只读；勾上「显示路径」会把每一条显示成 {c1}（复制时也是这个形状）。表达式写错时在输入框下面用红字说清楚哪里不对，不弹窗。',
+  respFilterLi4: '关键字模式只显示命中的行，带行号、命中的字高亮，可以勾「区分大小写」；JSON 响应会先格式化再按行筛。',
+  respFilterLi5: '右上角显示结果条数（「12 个结果」/「没有匹配」）；「复制结果」把当前结果复制走（关键字模式不带行号）；「×」关掉筛选，回到完整响应。',
+  respFilterLi6: '输入框获得焦点时会列出这个接口最近用过的 5 条 JSONPath（记在本机，按接口分开）。筛选条件跟着标签页走：重新发送之后条件还在，会自动作用到新响应上。',
+  respFilterLi7: '几百 KB 的响应照样能筛（计算放在空闲时做，不卡界面）；命中超过 5000 行时只显示前 5000 行，并给出提示。',
+
+  respSearchTitle: '查找',
+  respSearchLi1: '{kbd} / {kbd2} 打开响应的查找框。焦点在请求那一侧的代码框里（Body、脚本……）时，查的还是那个框 —— 那是代码编辑器自己的行为，没变；焦点在别处（地址栏、参数表、页面空白）才打开响应的查找。当前标签页没有响应、或者响应不是文本（图片、二进制），不拦，交给浏览器自己的查找。',
+  respSearchLi2: '打开时如果有选中的文字，会自动填进查找框；响应正停在「预览」或「字段」视图时，先切回代码视图再打开；正在筛选时，查的是筛选后的结果。',
+  respSearchLi3: '面板上显示「第 N / 共 M 个」；Enter 跳到下一个、⇧Enter 跳到上一个、Esc 关闭。响应是只读的，所以没有「替换」。',
+
+  respPreviewTitle: '预览',
+  respPreviewLi1: '按类型显示：图片、PDF、音频、视频、Excel（{c1}）、CSV（文本视图旁边多一个「表格」视图）、压缩包（列出里面的文件、大小和压缩后大小），其余类型显示一张文件卡片 —— 图标、文件名、类型、大小，加一个大按钮「保存到本地」。',
+  respPreviewLi2: '类型是这样认的：先看 {c1}，它只说 {c2} 时再看文件名的扩展名，最后看文件头（{c3}、{c4} 开头、PNG / JPEG / GIF）。',
+  respPreviewLi3: 'Excel 每个工作表一个页签，最多显示前 500 行、50 列（超出会提示）；老的 {c2} 不预览，提示「只能预览 {c1}，请保存到本地后用 Excel 打开」。',
+  respPreviewLi4: '预览需要完整内容、而手上只有被截断的那一份时，会先显示「正在加载完整文件…」再去取；文件超过 20 MB 不自动预览，显示文件卡片加一个「仍然预览」。',
+
+  respSaveTitle: '保存到本地',
+  respSaveLi1: '工具栏上的「保存到本地」：响应体超过 5 MB 时，内存里留着的那一份是被截断的，这时它会去服务端取完整文件再保存，按钮上会显示加载状态。',
+  respSaveLi2: '文件名用响应头 {c1} 里的那个（响应面板顶部那个文件名标签就是它）；没有就用 {c2}。',
+  respSaveLi3: '完整文件在服务端保留 1 小时，单个最大 200 MB。过期之后再点保存会提示「文件已过期，请重新发送」。',
+
+  /* ---------------- RabbitMQ 调试（第十七轮） ---------------- */
+  rabbitIntro: '调试 RabbitMQ 用的（往交换机发消息、从队列收消息、看消息流）。新建：方法选 {b}，或者目录树工具条的「＋ → RabbitMQ」。地址就是 broker，{c1} 是明文、{c2} 是 TLS；账号密码可以直接写在地址里（{c3}），也可以在「连接」页签里单独填。目录树和标签页上的方法徽标写的是协议名 {c4}，两者是一回事。',
+  rabbitIntroB: 'RabbitMQ',
+
+  rabbitConnTitle: '连接',
+  rabbitConnLi1: '{b}：地址里没写账号密码时用这两格（地址里写了就以地址为准）。',
+  rabbitConnLi1B: '用户名和密码',
+  rabbitConnLi2: '心跳（秒，0 表示不要心跳）、连接超时（毫秒）。',
+  rabbitConnLi3: '「忽略证书错误」只在地址以 {c} 开头时才出现 —— 服务器用自签证书时勾上，否则握手会失败。',
+
+  rabbitConsumeTitle: '消费',
+  rabbitConsumeLi1: '一行一个消费者，方式有两档：{b1} 直接消费一个已有的队列，填队列名就行；{b2} 是「旁听」一个交换机 —— 它会先建一个临时队列（exclusive、auto-delete），用 routing key 绑到那个交换机上，发到这个交换机的消息就能看到。routing key 可以用通配符 {c1}（一个词）和 {c2}（零个或多个词）。',
+  rabbitConsumeLi1B1: '队列',
+  rabbitConsumeLi1B2: '交换机',
+  rabbitConsumeLi2: '确认方式：{b1} 是 broker 把消息推过来就从队列里删掉；{b2} 要自己回确认，回之前消息留在队列里，这时可以设 {c} 限制一次最多推几条过来。',
+  rabbitConsumeLi2B1: '自动',
+  rabbitConsumeLi2B2: '手动',
+  rabbitConsumeLi3: '连上之后，勾了「启用」的行会自动开始消费；已经连上时每一行还能单独「开始 / 停止」，右边显示状态（消费中 / 已停止 / 出错）。「队列」方式的行还有一个「查看」，点开显示这个队列里还有几条消息、几个消费者。',
+
+  rabbitPubTitle: '发布',
+  rabbitPubLi1: '填交换机和 routing key。{b}：交换机的输入框旁边就写着这句 —— 留空就是发到默认交换机，这时 routing key 要填队列名。',
+  rabbitPubLi1B: '留空 = 默认交换机',
+  rabbitPubLi2: '内容用编辑器写（JSON 或文本，可以带变量）；「属性」那一块可以折叠，里面是 content-type、持久化、headers、correlationId、replyTo、expiration、messageId、priority。',
+  rabbitPubLi3: '发布走 confirm channel：broker 确认之后，消息列表里才会出现「发出」那一行。经常要发的那几条可以「存为常用」，下次从「常用发布」下拉里一选就填好。',
+  rabbitPubLi4: '{b}：勾上之后，消息路由不到任何队列时 broker 会把它退回来，消息列表里会多一行 returned（带交换机、routing key 和原因）。',
+  rabbitPubLi4B: 'mandatory',
+
+  rabbitLogTitle: '消息列表',
+  rabbitLogLi1: '收到和发出的都在下面：方向、时间、交换机、routing key、redelivered 标记；内容是 JSON 时自动折叠显示，二进制显示成「二进制 N 字节」、点开看 base64，被截断的会标出来。点开一行能看到全部的 properties 和 headers。上面可以按 routing key 或内容筛选、清空、暂停滚动。',
+  rabbitLogLi2: '手动确认的消息，行上有 ack / nack / reject 三颗按钮（nack 和 reject 可以勾 requeue）；回完之后这一行显示「已确认」。连接、断开、起停消费、returned、出错也各占一行。',
+
+  rabbitLocalOnly: '和 gRPC、MQTT、TCP / UDP 一样，RabbitMQ 的连接只在本机客户端里建得起来；网页版上「连接」是灰的，能看、能改、能保存。'
 };
