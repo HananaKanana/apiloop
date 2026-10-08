@@ -126,7 +126,7 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 
 ## 5. 现在的状态（2026-10-08）
 
-- 已发布 **2.2.0**（tag `v2.2.0`）：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
+- 已发布 **2.2.1**（tag `v2.2.1`；2.2.1 改了「管理员也要是成员才看得到项目」并加了管理员「项目总览」）。2.2.0：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
   项目备份与恢复，中英文界面（后端提示也跟着语言走），分享文档「试一试」，快速请求，响应筛选 / 查找 / 预览和保存。
   计划在 `docs/plans/2026-10-05-round11.md` … `2026-10-08-round17.md`，内容见 `CHANGELOG.md`。
 - 用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。
