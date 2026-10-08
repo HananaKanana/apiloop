@@ -33,6 +33,7 @@ const SECTIONS = [
   { id: 'sio', titleKey: 'help.secSio' },
   { id: 'grpc', titleKey: 'help.secGrpc' },
   { id: 'mqtt', titleKey: 'help.secMqtt' },
+  { id: 'tcpudp', titleKey: 'help.secTcpUdp' },
   { id: 'preflight', titleKey: 'help.secPreflight' },
   { id: 'language', titleKey: 'help.secLanguage' },
   { id: 'shortcuts', titleKey: 'help.secShortcuts' }
@@ -200,6 +201,8 @@ const examples = computed(function () {
               </i18n-t>
             </ol>
             <p>{{ t('help.startSync') }}</p>
+            <p>{{ t('help.startQuick') }}</p>
+            <p>{{ t('help.startTempTabs') }}</p>
           </section>
 
           <!-- ============================================================ 变量 -->
@@ -487,6 +490,7 @@ const examples = computed(function () {
           <section id="help-export-doc">
             <h2>{{ t('help.secExportDoc') }}</h2>
             <p>{{ t('help.exportDocIntro') }}</p>
+            <p>{{ t('help.shareTry') }}</p>
 
             <h3>{{ t('help.exportDocFormats') }}</h3>
             <table>
@@ -829,6 +833,41 @@ const examples = computed(function () {
             <i18n-t keypath="help.mqttLocalOnly" tag="p" scope="global">
               <template #b><b>{{ t('help.mqttLocalOnlyB') }}</b></template>
             </i18n-t>
+          </section>
+
+          <!-- ============================================================ TCP / UDP -->
+          <section id="help-tcpudp">
+            <h2>{{ t('help.secTcpUdp') }}</h2>
+            <p>{{ t('help.tcpIntro') }}</p>
+
+            <h3>{{ t('help.tcpConnTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.tcpConnTcp') }}</li>
+              <li>{{ t('help.tcpConnUdp') }}</li>
+              <li>{{ t('help.tcpConnBind') }}</li>
+            </ul>
+
+            <h3>{{ t('help.tcpFramingTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.tcpFramingNone') }}</li>
+              <li>{{ t('help.tcpFramingDelimiter') }}</li>
+              <li>{{ t('help.tcpFramingLength') }}</li>
+            </ul>
+
+            <h3>{{ t('help.tcpSendTitle') }}</h3>
+            <ul>
+              <li>{{ t('help.tcpSendText') }}</li>
+              <li>{{ t('help.tcpSendHex') }}</li>
+              <li>{{ t('help.tcpSendBase64') }}</li>
+            </ul>
+
+            <h3>{{ t('help.tcpLogTitle') }}</h3>
+            <p>{{ t('help.tcpLog') }}</p>
+
+            <h3>{{ t('help.tcpUdpTitle') }}</h3>
+            <p>{{ t('help.tcpUdp') }}</p>
+
+            <p class="note">{{ t('help.tcpLocalOnly') }}</p>
           </section>
 
           <!-- ============================================================ 前置接口 -->

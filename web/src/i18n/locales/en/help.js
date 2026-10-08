@@ -427,7 +427,7 @@ export default {
   langIntro: 'Under "Language" in the avatar menu you can pick {b}; it takes effect immediately with no reload, and it is remembered the next time you open the app.',
   langIntroB: 'Chinese or English',
   langDetect: 'The first time you open it (when nothing has been picked yet) it follows your browser language: anything starting with "zh" gets Chinese, everything else gets English.',
-  langBackendNote: 'Messages returned by the backend (such as not having permission, or a bad parameter) are still in Chinese for now — that part is not done yet.',
+  langBackendNote: 'Messages returned by the backend (such as not having permission, or a bad parameter) follow the interface language too: in English the interface gets English messages.',
 
   /* ---------------- Shortcuts ---------------- */
   shortcutsSave: 'Save the current API, folder or environment',
@@ -436,5 +436,33 @@ export default {
   shortcutsDblTitle: 'Double-click a title',
   shortcutsRename: 'Rename an API or folder',
   shortcutsDblEnv: 'Double-click an environment',
-  shortcutsSetEnv: 'Set as the current environment'
+  shortcutsSetEnv: 'Set as the current environment',
+
+  /* ---------------- TCP / UDP debugging (round 16) ---------------- */
+  secTcpUdp: 'TCP / UDP debugging',
+  tcpIntro: 'Hardware, IoT and game servers do not speak HTTP. Pick TCP or UDP as the method when creating an API (the “+” menu in the tree has them too) and write the address as tcp://host:port, tls://host:port or udp://host:port; it opens a debugging tab of its own.',
+  tcpConnTitle: 'Connection settings',
+  tcpConnTcp: 'TCP: connect timeout (ms), “Use TLS” (turning it on changes the scheme to tls://) and “Ignore certificate errors” (needed for servers with self-signed certificates, otherwise the handshake fails).',
+  tcpConnUdp: 'UDP: local port (empty means a random one) and “Allow broadcast” (required to send to addresses like 255.255.255.255).',
+  tcpConnBind: 'UDP binds a local port to receive data instead of connecting to a peer, so the button says “Open / Close” rather than “Connect / Disconnect”.',
+  tcpFramingTitle: 'Framing (TCP only)',
+  tcpFramingNone: 'No framing: every chunk that arrives is one message. Use it when you cannot tell when or how much the peer will send.',
+  tcpFramingDelimiter: 'Delimiter: split on a delimiter. This is the one for line-based text protocols — for one JSON object per line use \\n or \\r\\n (there are shortcut buttons).',
+  tcpFramingLength: 'Length prefix: read N bytes of length first, then that many bytes. This is the one for binary protocols. Choose 1 / 2 / 4 bytes and big / little endian; sending adds the prefix automatically.',
+  tcpSendTitle: 'Send formats',
+  tcpSendText: "Text: sent as-is, and {'{'}{'{'}variables{'}'}{'}'} are replaced with the current environment values; you can also pick a line ending (none / LF / CRLF). ⌘Enter sends too.",
+  tcpSendHex: 'Hex: write it as AA 01 00 FF — spaces, line breaks and a 0x prefix are all accepted; an odd number of digits or a bad character tells you exactly what is wrong.',
+  tcpSendBase64: 'Base64: sends the bytes a base64 string stands for.',
+  tcpLogTitle: 'Data list',
+  tcpLog: 'Every chunk sent and received is listed below with its direction (sent / received), time and size; UDP also shows the source address. The whole list switches between “Text” and “Hex”, where hex is the usual hex dump (offset + 16 bytes per line + ASCII on the right). Binary data shows as “binary N bytes” in the text view and opens as hex; anything over 64 KB per message is marked “truncated”. The list can be cleared, the scrolling paused, and filtered by content.',
+  tcpUdpTitle: 'Where UDP is sent',
+  tcpUdp: 'When sending over UDP you can fill in a temporary “Send to” address (host:port); leave it empty to use the address in the bar. A single UDP socket often receives from several peers, which is what the source address in the list is for.',
+  tcpLocalOnly: 'Like gRPC and MQTT, TCP / UDP connections can only be opened by the desktop client; on the web version “Connect / Open” is greyed out, but you can still read, edit and save.',
+
+  /* ---------------- Quick requests (round 16) ---------------- */
+  startQuick: 'The “+” on the right of the tab bar still creates an HTTP request; the little arrow next to it picks a protocol — WebSocket, Socket.IO, gRPC, MQTT, TCP or UDP — and opens the matching debugging tab. ⌘T / Ctrl+T also creates an HTTP request (⌘T is reserved by the browser, so in a browser use ⌘⌥T / Ctrl+Alt+T).',
+  startTempTabs: 'Temporary tabs that have not been saved into the tree are **remembered per project on this machine**: after a refresh or a restart they come back at the end of the tab bar, still marked unsaved. Only the title and the request are remembered — response results and connection state are not (they come back as “not connected”); at most 20 are kept, and closing one or using “Save to folder” stops remembering it.',
+
+  /* ---------------- “Try it” in a shared document (round 16) ---------------- */
+  shareTry: 'In a shared document every HTTP API has a “Try it”: the reader does not have to sign in or install anything — they can send one request to the API right there. The request goes to the **Mock of that project**, so what comes back is sample data, not the real backend. Path parameters, query parameters, headers and the body are pre-filled from the document and can be edited; there is a “Copy as cURL” next to it. Nothing about the try-out is saved.'
 };
