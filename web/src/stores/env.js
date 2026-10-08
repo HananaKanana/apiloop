@@ -74,7 +74,9 @@ export const useEnvStore = defineStore('env', function () {
    */
   const editing = computed(function () {
     // 内置 Mock 环境也能点开编辑变量（MockEnvTab）；但不当「没点过时」的退路
-    if (isMockEnvId(editingId.value)) return mockEnvironment(editingId.value);
+    // 云端关了 Mock：之前点开的「Mock（云端）」不再显示，退回到下面的默认
+    const cloudGone = editingId.value === MOCK_ENV_ID && useGatewayStore().cloudMockOff;
+    if (isMockEnvId(editingId.value) && !cloudGone) return mockEnvironment(editingId.value);
     const list = environments.value;
     const picked = list.find(function (item) { return item.id === editingId.value; });
     if (picked) return picked;

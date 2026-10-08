@@ -85,6 +85,8 @@ export async function getStatus() {
     cloudReachable: Boolean(data.cloudReachable),
     // 云端版本：网关探云端时从响应头读到的（连不上、云端太老时为空）
     cloudVersion: typeof data.cloudVersion === 'string' ? data.cloudVersion : '',
+    // 云端 Mock 开没开（2026-10-08）：只有明确是 false 才算关；老网关没有这个字段，按开着算
+    cloudMock: data.cloudMock !== false,
     // 一键更新的进度：{ supported, state: idle|downloading|installing|error, version, received, total, error }
     update: data.update || null,
     space: data.space || null,
