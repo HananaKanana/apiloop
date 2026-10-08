@@ -124,16 +124,20 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 
 测一键更新时，云端版本要比已装的高。
 
-## 5. 现在的状态（2026-10-05）
+## 5. 现在的状态（2026-10-08）
 
-- 已发布 **2.1.1**（tag `v2.1.1`）。之后做了第十一到十五轮，记在 `CHANGELOG.md` 的「2.2.0（未发布）」里，**还没打包**：
-  gRPC 调试（含反射、断言提取、客户端流 / 双向流）、MQTT 调试、Mock 录制、项目备份与恢复、英文界面。
-  计划在 `docs/plans/2026-10-05-round11.md` … `round15.md`，验收清单 `docs/plans/acceptance-2.2.0.md`。
-- 这几轮用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。
-  ateam 的 worker **不提交 `lib/web`**：主会话每通过一个前端任务，要在一份干净的 git worktree（HEAD）里
-  `npm run build:web`，把产物拷回 `lib/web` 提交 —— 直接在工作区构建会把别的 worker 没改完的代码打进去。
-- 国际化：`web/src/i18n/`（用法和术语表见里面的 README）。后端返回的提示还是中文，前端请求已经带 `Accept-Language`，下一阶段做。
-- 依赖新增：`@grpc/grpc-js`、`@grpc/proto-loader`、`protobufjs`、`mqtt`、`vue-i18n`（都是纯 JS）。
+- 已发布 **2.2.0**（tag `v2.2.0`）：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
+  项目备份与恢复，中英文界面（后端提示也跟着语言走），分享文档「试一试」，快速请求，响应筛选 / 查找 / 预览和保存。
+  计划在 `docs/plans/2026-10-05-round11.md` … `2026-10-08-round17.md`，内容见 `CHANGELOG.md`。
+- 用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。
+  - worker **不提交 `lib/web`**：主会话每通过一个前端任务，要在一份干净的 git worktree（HEAD）里
+    `npm run build:web`，把产物拷回 `lib/web` 提交 —— 直接在工作区构建会把别的 worker 没改完的代码打进去。
+  - 任务提交时服务会 `git add -A -- <任务路径>`：**同时进行的任务路径不能重叠**，任务路径是整个 `lib/` / `web/src/`
+    时别让第二个同角色任务并行（会把对方没写完的改动一起收走）。
+  - 打包也在干净的 worktree 里打（脚本按自身位置找仓库）。
+- 国际化：前端 `web/src/i18n/`（README 里有术语表）；后端 `lib/i18n/`（`i18n.m('中文原文', 参数)`，英文在
+  `lib/i18n/en/<区域>.js`，按 `Accept-Language` 选；会话类事件用建会话时记下的语言 `mIn`）。
+- 依赖新增：`@grpc/grpc-js`、`@grpc/proto-loader`、`protobufjs`、`mqtt`、`amqplib`、`vue-i18n`、`fflate`、`jsonpath-plus`（都是纯 JS）。
 
 ## 6. 改名为 apiloop 要处理的地方
 
