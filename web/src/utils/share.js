@@ -50,7 +50,7 @@ const PROTOCOL_RELATIVE_HOST = /^\/\/[^/?#]*/;
  *
  * `{{host}}/api/users/{{id}}?x=1` → `/api/users/{{id}}`
  * `https://a.com:8080/v1/x`      → `/v1/x`
- * `users/42`                     → `/users/42`（没有协议和主机时按纯路径处理）
+ * `users/42`                     → `/42`（没有协议和前导斜杠时第一段当主机名，和服务端一致）
  *
  * @param {string} url
  * @returns {string} 一定以 `/` 开头
