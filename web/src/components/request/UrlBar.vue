@@ -168,7 +168,8 @@ const METHOD_SELECT_THEME = {
 <style scoped>
 .url-bar {
   display: flex;
-  align-items: center;
+  /* 地址很长会折成几行（输入框自动换行），框跟着长高；方法、发送按钮都靠上对齐，不跟着跑到中间 */
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -176,8 +177,9 @@ const METHOD_SELECT_THEME = {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  height: 32px;
+  align-items: flex-start;
+  /* 不能写死高度：长地址折行后会溢出边框（用户 2026-10-08） */
+  min-height: 32px;
   padding-right: 8px;
   border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.4));
   border-radius: 5px;
@@ -191,12 +193,14 @@ const METHOD_SELECT_THEME = {
 .method {
   flex: none;
   width: 100px;
+  margin-top: 2px;
 }
 
 .divider {
   flex: none;
   width: 1px;
   height: 16px;
+  margin-top: 8px;
   margin-right: 8px;
   background: var(--n-border-color, rgba(128, 128, 128, 0.4));
 }
@@ -204,12 +208,14 @@ const METHOD_SELECT_THEME = {
 .url {
   flex: 1;
   min-width: 0;
+  margin: 3px 0;
 }
 
 .send {
   flex: none;
   width: 72px;
   height: 32px;
+  margin-top: 1px;
 }
 
 /* 禁用的发送按钮：外面这层只为了让悬停提示有个可挂的元素 */
