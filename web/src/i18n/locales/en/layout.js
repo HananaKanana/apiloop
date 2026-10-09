@@ -162,7 +162,7 @@ export default {
   /* ---------------- NotificationBell ---------------- */
   notifications: 'Notifications',
   markAllRead: 'Mark all as read',
-  noNotifications: 'No notifications yet. When someone @-mentions you in a comment, it shows up here.',
+  noNotifications: "No notifications yet. When someone {'@'}-mentions you in a comment, it shows up here.",
   loading: 'Loading…',
   mentionedIn: ' mentioned you in "{api}": ',
   apiFallback: 'an API',

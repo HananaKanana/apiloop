@@ -63,7 +63,7 @@ export default {
   csvPlaceholderRow1: 'account,password',
   csvPlaceholderRow2: 'user1,pass1',
   csvPlaceholderRow3: 'user2,pass2',
-  jsonPlaceholder: '[{"account":"user1","password":"pass1"}]',
+  jsonPlaceholder: '[{\'{\'}"account":"user1","password":"pass1"{\'}\'}]',
   fileTooLarge: 'The file is over 2 MB; split it up',
   readFileFailed: 'Failed to read the file',
   dataHintLead: 'Each row runs one iteration. Column names are variable names; in an API, write',

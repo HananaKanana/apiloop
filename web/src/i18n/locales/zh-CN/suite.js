@@ -63,7 +63,7 @@ export default {
   csvPlaceholderRow1: '账号,密码',
   csvPlaceholderRow2: 'user1,pass1',
   csvPlaceholderRow3: 'user2,pass2',
-  jsonPlaceholder: '[{"账号":"user1","密码":"pass1"}]',
+  jsonPlaceholder: '[{\'{\'}"账号":"user1","密码":"pass1"{\'}\'}]',
   fileTooLarge: '文件超过 2 MB 了，拆小一点',
   readFileFailed: '读文件失败',
   dataHintLead: '每一行跑一轮。列名就是变量名，接口里写',

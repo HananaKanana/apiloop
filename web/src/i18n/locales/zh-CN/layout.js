@@ -153,7 +153,7 @@ export default {
   /* ---------------- 通知 NotificationBell ---------------- */
   notifications: '提醒',
   markAllRead: '全部标为已读',
-  noNotifications: '还没有提醒。别人在评论里 @ 你时会出现在这里。',
+  noNotifications: "还没有提醒。别人在评论里 {'@'} 你时会出现在这里。",
   loading: '加载中…',
   mentionedIn: ' 在「{api}」里提到了你： ',
   apiFallback: '接口',
