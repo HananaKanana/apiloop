@@ -697,7 +697,7 @@ onBeforeUnmount(function () {
         <div v-if="ui.sidebarTab === 'env'" class="tab-body">
           <mock-env-tab v-if="envs.editing && envs.editing.builtin" />
           <env-tab v-else-if="envs.editing" :key="envs.editing.id" :env-id="envs.editing.id" />
-          <div v-else class="placeholder">
+          <div v-else class="placeholder skin-dots">
             <n-empty :description="t('views.wbNoEnvs')" />
           </div>
         </div>
@@ -764,7 +764,7 @@ onBeforeUnmount(function () {
             :key="tabs.activeKey"
             :tab="tabs.active"
           />
-          <div v-else class="placeholder">
+          <div v-else class="placeholder skin-dots">
             <n-empty :description="t('views.wbPickApi')" />
           </div>
         </div>

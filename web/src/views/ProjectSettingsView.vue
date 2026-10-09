@@ -199,7 +199,8 @@ watch(function () { return route.params.pid; }, load);
 </script>
 
 <template>
-  <div class="page">
+  <!-- skin-ribbons：小岛皮肤下分区标题画成飘带（styles/island.css） -->
+  <div class="page skin-ribbons">
     <div class="header">
       <n-space align="center">
         <n-button quaternary size="small" @click="router.push('/workbench')">{{ t('views.psBack') }}</n-button>

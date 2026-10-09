@@ -1,0 +1,122 @@
+/*
+ * 「小岛」皮肤的装饰（用户 2026-10-09：照 animal-island-ui 的样子，挑几样试效果）。
+ *
+ * animal-island-ui 是 React 组件，这里是 Vue + naive-ui，用不上它的组件，
+ * 所以把几样最有辨识度的效果用 CSS 画出来：
+ *   1. 设置页的分区标题 → 燕尾飘带（几种颜色轮换）
+ *   2. 登录页、分享页、设置页、工作台空白处 → 点点底纹
+ *   3. 目录树的选中行 → 淡蓝色药丸
+ *   4. 开关 → 草绿色、底下一道深色的立体边
+ *
+ * 全部挂在 `:root[data-skin='island']` 下面，「经典」皮肤一点不受影响。
+ * 写成 `:root[...] .类名`，优先级比组件里 scoped 的 `.类名[data-v-xxx]` 高，不用 !important；
+ * 只有 naive-ui 写在行内 style 上的变量（目录树、开关）才必须 !important。
+ */
+
+/* ------------------------------------------------------------------ 1. 飘带标题 */
+
+/* 只在设置页（项目设置、系统设置）里：页面根上带 .skin-ribbons */
+:root[data-skin='island'] .skin-ribbons .n-card {
+  --ribbon: #19c8b9;
+  --ribbon-dark: #11a89b;
+  border: 1px solid rgba(196, 184, 158, 0.55);
+  background: #fffdf5;
+}
+
+:root[data-skin='island'] .skin-ribbons .n-card + .n-card,
+:root[data-skin='island'] .skin-ribbons .n-card.card {
+  margin-top: 18px;
+}
+
+/* 几种颜色轮着来（库里 Title 的配色：薄荷、暖桃、蓝、黄、粉） */
+:root[data-skin='island'] .skin-ribbons .n-card:nth-of-type(5n + 2) { --ribbon: #e2876a; --ribbon-dark: #c0613f; }
+:root[data-skin='island'] .skin-ribbons .n-card:nth-of-type(5n + 3) { --ribbon: #8b9ef0; --ribbon-dark: #5b6fd8; }
+:root[data-skin='island'] .skin-ribbons .n-card:nth-of-type(5n + 4) { --ribbon: #eab93c; --ribbon-dark: #c99a1f; }
+:root[data-skin='island'] .skin-ribbons .n-card:nth-of-type(5n + 5) { --ribbon: #f09ab0; --ribbon-dark: #d6708a; }
+
+:root[data-skin='island'] .skin-ribbons .n-card-header {
+  position: relative;
+  z-index: 0;
+  padding-left: 28px;
+}
+
+:root[data-skin='island'] .skin-ribbons .n-card-header__main {
+  flex: none;
+  position: relative;
+  padding: 3px 18px 4px;
+  border-radius: 4px;
+  background: var(--ribbon);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* 两头的燕尾：比正身低一点、颜色深一档，压在正身后面 */
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::before,
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  width: 16px;
+  height: 100%;
+  background: var(--ribbon-dark);
+  z-index: -1;
+}
+
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::before {
+  left: -11px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 38% 50%);
+}
+
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::after {
+  right: -11px;
+  clip-path: polygon(0 0, 100% 0, 62% 50%, 100% 100%, 0 100%);
+}
+
+/* ------------------------------------------------------------------ 2. 点点底纹 */
+
+/* 登录页：绿底白点（库文档站的那种背景） */
+:root[data-skin='island'] .login-page {
+  background-color: #86c9a0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.28) 1.6px, transparent 1.8px);
+  background-size: 22px 22px;
+}
+
+/* 分享页、设置页、工作台空白处（没打开标签页时）：羊皮纸底、浅棕点，不抢内容 */
+:root[data-skin='island'] .share-page,
+:root[data-skin='island'] .skin-ribbons,
+:root[data-skin='island'] .skin-dots {
+  background-color: #f8f8f0;
+  background-image: radial-gradient(rgba(159, 146, 125, 0.22) 1.3px, transparent 1.5px);
+  background-size: 20px 20px;
+}
+
+/* ------------------------------------------------------------------ 3. 目录树选中行 */
+
+/* naive-ui 把这几个变量写在 .n-tree 的行内 style 上，只能 !important 盖 */
+:root[data-skin='island'] .n-tree {
+  --n-node-color-active: #b7c6e5 !important;
+  --n-node-color-hover: #d6dff0 !important;
+  --n-node-color-pressed: #c6d2ea !important;
+  --n-node-border-radius: 12px !important;
+}
+
+:root[data-skin='island'] .n-tree .n-tree-node--selected {
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ 4. 开关 */
+
+:root[data-skin='island'] .n-switch {
+  --n-rail-color-active: #6fba2c !important;
+}
+
+/* 打开时底下一道深绿的边，像个能按下去的拨片 */
+:root[data-skin='island'] .n-switch.n-switch--active .n-switch__rail {
+  box-shadow: inset 0 -3px 0 #5a9e1e;
+}
+
+:root[data-skin='island'] .n-switch:not(.n-switch--active) .n-switch__rail {
+  box-shadow: inset 0 -3px 0 rgba(121, 79, 39, 0.14);
+}

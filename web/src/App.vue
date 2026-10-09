@@ -16,6 +16,7 @@ import {
 } from 'naive-ui';
 import '@fontsource-variable/nunito';
 import { skin } from '@/utils/skin';
+import '@/styles/island.css';
 
 // 跟随系统的亮色 / 暗色。「小岛」皮肤只有亮色一套，选了它就不跟随系统（见 utils/skin.js）
 const osTheme = useOsTheme();
