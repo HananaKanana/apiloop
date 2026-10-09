@@ -605,6 +605,41 @@ export const useTabsStore = defineStore('tabs', function () {
     return pending;
   }
 
+  /**
+   * 同步拉下来新数据后，刷新已经打开的 HTTP 接口标签页（用户 2026-10-08：云端加了示例，
+   * 本机同步过来了，可是开着的标签页里还是旧的 —— 标签页的 `api` 只在打开时读一次）。
+   *
+   * - `api`（示例、期望、Mock 设置这些「点了就存」的东西）整个换成新的；
+   * - 请求本身（地址、参数、Body……）**只在没有未保存修改时**换，改了一半的不动；
+   * - 接口在别处被删了（拉不到）就保持原样，不关标签页。
+   * 内容没变就不碰，免得界面无谓地重画。
+   */
+  async function refreshOpenApis() {
+    const list = tabs.value.filter(function (tab) { return tab.kind === 'api' && tab.apiId; });
+    await Promise.all(list.map(async function (tab) {
+      let data;
+      try {
+        data = await apisApi.getApi(tab.apiId);
+      } catch (err) {
+        return;
+      }
+      const live = tabs.value.find(function (item) { return item.key === tab.key; });
+      if (!live || !data || !data.api) return;
+
+      if (JSON.stringify(live.api) !== JSON.stringify(data.api)) live.api = data.api;
+      if (!live.dirty) {
+        const spec = specFromApi(data.api);
+        const next = snapshot(spec);
+        if (next !== live.savedSnapshot) {
+          live.spec = spec;
+          live.savedSnapshot = next;
+          live.title = data.api.name || t('stores.untitledApi');
+          live.folderId = data.api.folderId || null;
+        }
+      }
+    }));
+  }
+
   async function loadApiTab(apiId, preview) {
     const key = 'api:' + apiId;
     const data = await apisApi.getApi(apiId);
@@ -1800,6 +1835,7 @@ export const useTabsStore = defineStore('tabs', function () {
     active: active,
     hasDirty: hasDirty,
     openApi: openApi,
+    refreshOpenApis: refreshOpenApis,
     openDraft: openDraft,
     openWs: openWs,
     openSio: openSio,
