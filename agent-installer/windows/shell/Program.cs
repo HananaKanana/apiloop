@@ -262,8 +262,12 @@ namespace Apiloop
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
 
-            web.ZoomFactor = ReadZoom();
-            web.ZoomFactorChanged += (s, e) => SaveZoom(web.ZoomFactor);
+            // 禁用缩放（用户 2026-10-08：滚轮翻页时页面忽大忽小 —— Ctrl+滚轮、触控板双指捏合、
+            // Ctrl +/- 都会缩放，Ctrl 键状态偶尔还会卡住，于是普通滚轮也在缩放）。
+            // 以前存过的缩放比例不再读，一律 100%
+            core.Settings.IsZoomControlEnabled = false;
+            core.Settings.IsPinchZoomEnabled = false;
+            web.ZoomFactor = 1.0;
 
             core.NavigationStarting += OnNavigationStarting;
             core.NewWindowRequested += OnNewWindowRequested;
@@ -571,36 +575,6 @@ namespace Apiloop
             }
         }
 
-        private double ReadZoom()
-        {
-            try
-            {
-                using (var key = Registry.CurrentUser.OpenSubKey(@"Software\apiloop"))
-                {
-                    if (key?.GetValue("PageZoom") is string text && double.TryParse(text,
-                            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var zoom)
-                        && zoom >= 0.25 && zoom <= 5) return zoom;
-                }
-            }
-            catch
-            {
-            }
-            return 1.0;
-        }
-
-        private static void SaveZoom(double zoom)
-        {
-            try
-            {
-                using (var key = Registry.CurrentUser.CreateSubKey(@"Software\apiloop"))
-                {
-                    key.SetValue("PageZoom", zoom.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
-            }
-            catch
-            {
-            }
-        }
     }
 
     /* ------------------------------------------------------------------ 卸载 */
