@@ -17,4 +17,12 @@ document.addEventListener('contextmenu', function (event) {
   event.preventDefault();
 });
 
+/**
+ * 标出是不是 Mac（`<html data-os="mac">`），给全局样式用：
+ * Windows 上原生滚动条又宽又带上下箭头（用户 2026-10-09 嫌丑），App.vue 里换成细的圆角滚动条；
+ * Mac 自己的是悬浮隐藏式的，不动它。
+ */
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+document.documentElement.setAttribute('data-os', isMac ? 'mac' : 'other');
+
 createApp(App).use(createPinia()).use(i18n).use(router).mount('#app');

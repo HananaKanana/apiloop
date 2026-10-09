@@ -280,6 +280,47 @@ const themeOverrides = computed(() => {
   box-shadow: 0 2px 0 #c94646;
 }
 
+/*
+ * 原生滚动条（目录树、请求区这些用 overflow: auto 的地方）：Windows 上默认的又宽又带上下箭头，
+ * 换成细的圆角滑块、没有箭头、轨道透明。Mac 的是系统悬浮式的，不改（见 main.js 的 data-os）。
+ */
+:root {
+  --apiloop-scrollbar: rgba(128, 128, 128, 0.32);
+  --apiloop-scrollbar-hover: rgba(128, 128, 128, 0.55);
+}
+
+:root[data-skin='island'] {
+  --apiloop-scrollbar: rgba(159, 146, 125, 0.4);
+  --apiloop-scrollbar-hover: rgba(121, 79, 39, 0.45);
+}
+
+:root:not([data-os='mac']) ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root:not([data-os='mac']) ::-webkit-scrollbar-track,
+:root:not([data-os='mac']) ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:root:not([data-os='mac']) ::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+:root:not([data-os='mac']) ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-color: var(--apiloop-scrollbar);
+  background-clip: padding-box;
+}
+
+:root:not([data-os='mac']) ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--apiloop-scrollbar-hover);
+}
+
 html,
 body,
 #app {
