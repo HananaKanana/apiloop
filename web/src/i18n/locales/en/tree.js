@@ -101,9 +101,6 @@ export default {
   copyAction: 'Copy',
 
   /* ---------------- Multi-select (2026-10-08) ---------------- */
-  multiSelected: '{n} selected',
-  multiHint: 'Drag to move them together, right-click for more',
-  multiClear: 'Clear',
   multiMoveTo: 'Move to folder…',
   multiMoveTitle: 'Move {n} items to',
   multiMoveAction: 'Move',

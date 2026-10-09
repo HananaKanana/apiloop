@@ -1267,12 +1267,6 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           @dragend="onDragEnd"
           @drop="onDrop"
         />
-        <!-- 多选时底下一条提示：选了几个、怎么操作、怎么取消 -->
-        <div v-if="isMulti" class="multi-bar">
-          <span>{{ t('tree.multiSelected', { n: selectedKeys.length }) }}</span>
-          <span class="multi-hint">{{ t('tree.multiHint') }}</span>
-          <button class="multi-clear" @click="clearMulti">{{ t('tree.multiClear') }}</button>
-        </div>
         <n-empty
           v-else
           size="small"
@@ -1520,39 +1514,6 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   /* 拖动、⇧ 点击时别把行里的文字选成一片蓝（用户 2026-10-08 截图） */
   user-select: none;
   -webkit-user-select: none;
-}
-
-/* 多选提示条：贴在树的底部，滚动时跟着停在下面 */
-.multi-bar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  background: var(--apiloop-surface, #fff);
-  box-shadow: 0 -1px 0 rgba(128, 128, 128, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.multi-hint {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.55;
-}
-
-.multi-clear {
-  flex: none;
-  border: none;
-  background: transparent;
-  color: var(--apiloop-primary);
-  font-size: 12px;
-  cursor: pointer;
 }
 
 .delete-desc {

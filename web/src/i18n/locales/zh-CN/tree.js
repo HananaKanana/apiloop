@@ -98,9 +98,6 @@ export default {
   copyAction: '复制',
 
   /* ---------------- 多选（2026-10-08） ---------------- */
-  multiSelected: '已选 {n} 项',
-  multiHint: '拖动一起移动，右键批量操作',
-  multiClear: '取消选择',
   multiMoveTo: '移动到目录…',
   multiMoveTitle: '把 {n} 项移动到',
   multiMoveAction: '移动',
