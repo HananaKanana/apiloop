@@ -124,9 +124,9 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 
 测一键更新时，云端版本要比已装的高。
 
-## 5. 现在的状态（2026-10-08）
+## 5. 现在的状态（2026-10-09）
 
-- 已发布 **2.2.2**（tag `v2.2.2`；2.2.2：本机 Mock（网关同一个端口上响应 `/mock-<项目ID>`），云端 Mock 加开关默认关（`APILOOP_CLOUD_MOCK=1` 才开），分享文档「试一试」换成「导入到客户端」（下载 OpenAPI）。2.2.1 改了「管理员也要是成员才看得到项目」并加了管理员「项目总览」）。2.2.0：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
+- 已发布 **2.3.0**（tag `v2.3.0`；2.3.0：目录树多选（`POST /projects/:pid/move-many`、`remove-many`），皮肤切换「经典 / 小岛」（`web/src/utils/skin.js`、`web/src/styles/island.css`，`<html data-skin>`），OpenAPI 导入 JSON 请求体，⌘W 关标签页。2.2.2：本机 Mock（网关同一个端口上响应 `/mock-<项目ID>`），云端 Mock 加开关默认关（`APILOOP_CLOUD_MOCK=1` 才开），分享文档「试一试」换成「导入到客户端」（下载 OpenAPI）。2.2.1 改了「管理员也要是成员才看得到项目」并加了管理员「项目总览」）。2.2.0：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
   项目备份与恢复，中英文界面（后端提示也跟着语言走），分享文档「试一试」（2.2.2 已去掉），快速请求，响应筛选 / 查找 / 预览和保存。
   计划在 `docs/plans/2026-10-05-round11.md` … `2026-10-08-round17.md`，内容见 `CHANGELOG.md`。
 - 用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。
