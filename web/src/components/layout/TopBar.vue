@@ -416,6 +416,6 @@ onBeforeUnmount(function () {
 }
 
 .download-button:hover {
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
 }
 </style>

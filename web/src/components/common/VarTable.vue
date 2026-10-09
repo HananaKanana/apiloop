@@ -341,7 +341,7 @@ function toggleSecret(item) {
 }
 
 .cell:focus-within {
-  background: rgba(255, 108, 55, 0.08);
+  background: rgba(var(--apiloop-primary-rgb), 0.08);
 }
 
 .row.head .cell:focus-within {

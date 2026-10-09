@@ -460,7 +460,7 @@ function isEdited(item) {
 
 /* 从提醒点进来时闪一下，让人知道是哪一条 */
 .comment.highlight {
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
 }
 
 .comment.deleted {

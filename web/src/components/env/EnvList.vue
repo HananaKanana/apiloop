@@ -257,7 +257,7 @@ async function onMenuSelect(env, key) {
   padding: 0 5px;
   border-radius: 3px;
   color: var(--apiloop-primary);
-  background: rgba(255, 108, 55, 0.12);
+  background: rgba(var(--apiloop-primary-rgb), 0.12);
 }
 
 .dirty-dot {

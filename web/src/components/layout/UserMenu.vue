@@ -15,7 +15,7 @@ import {
   NSpace,
   useMessage
 } from 'naive-ui';
-import { User } from '@vicons/tabler';
+import { Check, User } from '@vicons/tabler';
 import { useDialog } from '@/utils/dialog';
 import { changePassword, logout as logoutApi } from '@/api/auth';
 import { isLoginRequired } from '@/api/client';
@@ -25,6 +25,7 @@ import { useSessionStore } from '@/stores/session';
 import { useTabsStore } from '@/stores/tabs';
 import { useGatewayStore } from '@/stores/gateway';
 import { LOCALES, LOCALE_LABELS, setLocale } from '@/i18n';
+import { SKINS, setSkin, skin } from '@/utils/skin';
 import MySharesDialog from '@/components/share/MySharesDialog.vue';
 
 const emit = defineEmits(['about']);
@@ -111,6 +112,24 @@ const languageOption = computed(function () {
 });
 
 /**
+ * 「皮肤」子菜单（用户 2026-10-09）：经典 / 小岛，选中后立刻生效，当前的那个打勾。
+ * 和语言一样三种账号状态下都挂，记在这台电脑上（见 utils/skin.js）。
+ */
+const skinOption = computed(function () {
+  return {
+    label: t('layout.skin'),
+    key: 'skin',
+    children: SKINS.map(function (value) {
+      return {
+        label: t('layout.skin_' + value),
+        key: 'skin:' + value,
+        icon: skin.value === value ? function () { return h(NIcon, { component: Check }); } : undefined
+      };
+    })
+  };
+});
+
+/**
  * 账号菜单（设计稿第 7 节）。网关上按空间状态分三种，直接打开云端时和以前一样。
  *
  * 未绑定：还没登录过，只能去登录；
@@ -124,6 +143,7 @@ const options = computed(function () {
         { label: t('layout.signIn'), key: 'login' },
         { label: t('layout.about'), key: 'about' },
         languageOption.value,
+        skinOption.value,
         { type: 'divider', key: 'd1' },
         { label: t('layout.deleteLocalData'), key: 'delete' }
       ];
@@ -131,7 +151,8 @@ const options = computed(function () {
     return [
       { label: t('layout.signInToSync'), key: 'login' },
       { label: t('layout.about'), key: 'about' },
-      languageOption.value
+      languageOption.value,
+      skinOption.value
     ];
   }
 
@@ -155,6 +176,7 @@ const options = computed(function () {
     items.push({ label: t('layout.projectsOverview'), key: 'projects-overview' });
   }
   items.push(languageOption.value);
+  items.push(skinOption.value);
   items.push({ type: 'divider', key: 'd1' });
   // 只有一个「退出登录」：要不要顺带删本机数据，在确认框里勾（用户 2026-10-02）
   items.push({ label: t('layout.signOut'), key: 'logout' });
@@ -303,6 +325,10 @@ async function onSelect(key) {
   const value = String(key);
   if (value.indexOf('locale:') === 0) {
     setLocale(value.slice('locale:'.length));
+    return;
+  }
+  if (value.indexOf('skin:') === 0) {
+    setSkin(value.slice('skin:'.length));
     return;
   }
 

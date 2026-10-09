@@ -376,7 +376,7 @@ watch(function () { return props.highlightId; }, function (id) {
 }
 
 @keyframes apiloop-row-flash {
-  from { background: rgba(255, 108, 55, 0.28); }
+  from { background: rgba(var(--apiloop-primary-rgb), 0.28); }
   to { background: transparent; }
 }
 

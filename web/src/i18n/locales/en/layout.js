@@ -31,6 +31,9 @@ export default {
   /* ---------------- UserMenu ---------------- */
   notSignedIn: 'Not signed in',
   language: 'Language',
+  skin: 'Skin',
+  skin_classic: 'Classic',
+  skin_island: 'Island',
   signIn: 'Sign in',
   about: 'About',
   deleteLocalData: 'Delete local data',

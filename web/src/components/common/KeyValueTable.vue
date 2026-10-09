@@ -351,7 +351,7 @@ function valueSuggestions(row) {
 
 /* 格子里的输入框没有边框和底色；聚焦时只给这一个格子一层很浅的主色底 */
 .cell:focus-within {
-  background: rgba(255, 108, 55, 0.08);
+  background: rgba(var(--apiloop-primary-rgb), 0.08);
 }
 
 .row.head .cell:focus-within {

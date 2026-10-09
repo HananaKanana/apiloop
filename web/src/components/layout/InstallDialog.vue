@@ -204,7 +204,7 @@ function archLabel(arch) {
   gap: 8px;
   padding: 12px;
   border-radius: 6px;
-  background: rgba(255, 108, 55, 0.08);
+  background: rgba(var(--apiloop-primary-rgb), 0.08);
 }
 
 .update-title {

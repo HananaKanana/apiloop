@@ -569,7 +569,7 @@ async function doReplace(skipApiIds, skipped) {
 .line .hit {
   color: var(--apiloop-primary);
   font-weight: 600;
-  background: rgba(255, 108, 55, 0.14);
+  background: rgba(var(--apiloop-primary-rgb), 0.14);
   border-radius: 2px;
 }
 

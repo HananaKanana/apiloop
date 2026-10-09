@@ -1169,7 +1169,7 @@ async function assign(projectId, groupId) {
 
 /* 当前项目：浅橙底 + 橙字，一眼能看出来 */
 .row.active {
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
   color: var(--apiloop-primary);
   font-weight: 500;
 }
@@ -1312,7 +1312,7 @@ async function assign(projectId, groupId) {
 }
 
 .gm-item.active {
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
   color: var(--apiloop-primary);
   font-weight: 500;
 }

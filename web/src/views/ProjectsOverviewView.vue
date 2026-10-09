@@ -425,7 +425,7 @@ function formatDate(value) {
 }
 
 .item.active {
-  background: rgba(255, 108, 55, 0.12);
+  background: rgba(var(--apiloop-primary-rgb), 0.12);
 }
 
 .item-icon {

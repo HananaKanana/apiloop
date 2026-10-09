@@ -265,7 +265,7 @@ function compareAll() {
 
 /* 选中：浅橙底 + 橙字，右边一个勾，一眼能看出来 */
 .item.active {
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
   color: var(--apiloop-primary);
   font-weight: 500;
 }
@@ -355,7 +355,7 @@ function compareAll() {
 .text-button:hover {
   opacity: 1;
   color: var(--apiloop-primary);
-  background: rgba(255, 108, 55, 0.08);
+  background: rgba(var(--apiloop-primary-rgb), 0.08);
 }
 
 .rows {

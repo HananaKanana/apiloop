@@ -1093,7 +1093,7 @@ const examples = computed(function () {
 
 .toc a.active {
   color: var(--apiloop-primary);
-  background: rgba(255, 108, 55, 0.1);
+  background: rgba(var(--apiloop-primary-rgb), 0.1);
   opacity: 1;
 }
 
@@ -1197,7 +1197,7 @@ table.api td:first-child {
 .flow {
   padding: 6px 10px;
   border-radius: 4px;
-  background: rgba(255, 108, 55, 0.08);
+  background: rgba(var(--apiloop-primary-rgb), 0.08);
 }
 
 .flow-inline {

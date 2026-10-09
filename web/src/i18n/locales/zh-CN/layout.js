@@ -30,6 +30,9 @@ export default {
   /* ---------------- 头像菜单 UserMenu ---------------- */
   notSignedIn: '未登录',
   language: '语言',
+  skin: '皮肤',
+  skin_classic: '经典',
+  skin_island: '小岛',
   signIn: '登录',
   about: '关于',
   deleteLocalData: '删除本机数据',
