@@ -106,6 +106,17 @@ export const useTreeStore = defineStore('tree', function () {
     apply(data);
   }
 
+  async function moveMany(payload) {
+    const data = await treeApi.moveMany(projectId.value, payload);
+    apply(data);
+  }
+
+  async function removeMany(items) {
+    const data = await treeApi.removeMany(projectId.value, items);
+    apply(data);
+    return data.removed || 0;
+  }
+
   async function duplicateApi(id) {
     const data = await apisApi.duplicateApi(id);
     await refresh();
@@ -149,6 +160,8 @@ export const useTreeStore = defineStore('tree', function () {
     duplicateApi: duplicateApi,
     renameApi: renameApi,
     removeApi: removeApi,
+    moveMany: moveMany,
+    removeMany: removeMany,
     createApi: createApi
   };
 });

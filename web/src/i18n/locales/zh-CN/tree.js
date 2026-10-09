@@ -95,5 +95,20 @@ export default {
   copyTip: '复制出来的是新的一份（新 id），原项目里的东西不动。',
   noTargetProject: '没有别的项目可以放（只列你在里面是 editor 及以上的项目）',
   moveAction: '移动',
-  copyAction: '复制'
+  copyAction: '复制',
+
+  /* ---------------- 多选（2026-10-08） ---------------- */
+  multiSelected: '已选 {n} 项',
+  multiHint: '拖动一起移动，右键批量操作',
+  multiClear: '取消选择',
+  multiMoveTo: '移动到目录…',
+  multiMoveTitle: '把 {n} 项移动到',
+  multiMoveAction: '移动',
+  moveToRoot: '项目根目录',
+  multiMoved: '已移动 {n} 项',
+  multiDelete: '删除 {n} 项',
+  multiDeleteTitle: '删除 {n} 项？',
+  multiDeleteBody: '选中的 {n} 项会被删除，可以在回收站里恢复。',
+  multiDeleteBodyFolders: '选中的 {n} 项会被删除，其中 {folders} 个目录连同里面的接口一起删除。可以在回收站里恢复。',
+  multiDeleted: '已删除 {n} 项'
 };

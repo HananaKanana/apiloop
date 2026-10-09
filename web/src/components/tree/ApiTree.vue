@@ -1,7 +1,7 @@
 <script setup>
-import { computed, h, ref, watch } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, useMessage } from 'naive-ui';
+import { NButton, NDropdown, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTree, NTreeSelect, useMessage } from 'naive-ui';
 import { ChevronDown, ChevronRight, FileImport, Filter, Fold, FoldDown, Plus, Star } from '@vicons/tabler';
 import { useProjectStore } from '@/stores/project';
 import { usePrefsStore } from '@/stores/prefs';
@@ -452,7 +452,19 @@ function nodeProps(info) {
      * （cancelable 是 false），可那个标签页可能已经被关掉了 —— 之前就是这样，
      * 打开一个接口、关掉标签页，再点它就打不开了（用户 2026-09-30 报的 bug）。
      */
+    // 记下这次点击按没按 ⌘ / ⇧：overrideClick 只拿得到节点、拿不到事件，mousedown 比 click 先到
+    onMousedown: function (event) {
+      clickMods = { toggle: event.metaKey || event.ctrlKey, range: event.shiftKey };
+    },
     onClick: function (event) {
+      if (event.metaKey || event.ctrlKey) {
+        toggleSelect(info.option.key);
+        return;
+      }
+      if (event.shiftKey) {
+        selectRange(info.option.key);
+        return;
+      }
       openNode(event, info.option, true);
     },
     /** 双击：把预览标签页固定下来（和 Postman 一样） */
@@ -520,11 +532,170 @@ function openStarredMenu(event, api) {
   };
 }
 
+/* ---------------- 多选（用户 2026-10-08） ---------------- */
+
+/**
+ * ⌘ / Ctrl 点击：选上或去掉一个；⇧ 点击：从上次点的那个连着选到这个（按树上看得见的顺序）。
+ * 普通点击照旧只选一个、打开它。多选后可以一起拖动，右键「移动到…」「删除 N 项」。
+ * 目录和它里面的东西一起选了，只动那个目录（服务端也会再去一遍）。
+ */
+let clickMods = { toggle: false, range: false };
+/** ⇧ 点击的起点：上一次普通点击或 ⌘ 点击的那个 */
+const anchorKey = ref('');
+
+/** 按了 ⌘ / ⇧：不要树自带的「选中 + 展开」，选择由下面两个函数算 */
+function overrideClick() {
+  return clickMods.toggle || clickMods.range ? 'none' : 'default';
+}
+
+function toggleSelect(key) {
+  const list = selectedKeys.value.slice();
+  const at = list.indexOf(key);
+  if (at === -1) list.push(key);
+  else list.splice(at, 1);
+  selectedKeys.value = list;
+  anchorKey.value = key;
+}
+
+/** 树上看得见的节点，从上到下（收起的目录里面的不算） */
+function visibleKeys() {
+  const out = [];
+  const open = new Set(expandedKeys.value);
+  (function walk(list) {
+    list.forEach(function (node) {
+      out.push(node.key);
+      if (node.children && open.has(node.key)) walk(node.children);
+    });
+  })(displayTree.value);
+  return out;
+}
+
+function selectRange(key) {
+  const keys = visibleKeys();
+  const from = keys.indexOf(anchorKey.value);
+  const to = keys.indexOf(key);
+  if (from === -1 || to === -1) {
+    toggleSelect(key);
+    return;
+  }
+  selectedKeys.value = keys.slice(Math.min(from, to), Math.max(from, to) + 1);
+}
+
+const isMulti = computed(function () { return selectedKeys.value.length > 1; });
+
+/** 选中的节点，按树上的顺序（拖过去、移过去之后也保持这个先后） */
+function selectedNodesInOrder(keys) {
+  const wanted = new Set(keys || selectedKeys.value);
+  const out = [];
+  walkTree(tree.nodes, function (node) {
+    if (wanted.has(node.key) && (node.kind === 'folder' || node.kind === 'api')) out.push(node);
+  });
+  return out;
+}
+
+function clearMulti() {
+  if (!isMulti.value) return;
+  const last = selectedKeys.value[selectedKeys.value.length - 1];
+  selectedKeys.value = last ? [last] : [];
+}
+
+function onWindowKeydown(event) {
+  if (event.key !== 'Escape' || !isMulti.value) return;
+  const target = event.target;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+  clearMulti();
+}
+
+onMounted(function () { window.addEventListener('keydown', onWindowKeydown); });
+onBeforeUnmount(function () { window.removeEventListener('keydown', onWindowKeydown); });
+
+/** 多选时的右键菜单 */
+function multiMenuOptions() {
+  const n = selectedKeys.value.length;
+  return [
+    { label: t('tree.multiMoveTo'), key: 'multi-move' },
+    { type: 'divider', key: 'multi-d' },
+    { label: t('tree.multiDelete', { n: n }), key: 'multi-delete', props: { style: 'color: #d03050' } }
+  ];
+}
+
+/* ---------- 「移动到…」 ---------- */
+
+const ROOT_TARGET = '__root__';
+const showMoveTo = ref(false);
+const moveToTarget = ref(ROOT_TARGET);
+
+/** 目录选择框的数据：项目根 + 所有目录（选中的目录和它的子孙不能选，挪不进自己） */
+const moveToOptions = computed(function () {
+  const blocked = new Set();
+  selectedNodesInOrder().forEach(function (node) {
+    if (node.kind !== 'folder') return;
+    blocked.add(node.key);
+    walkTree(node.children || [], function (child) { blocked.add(child.key); });
+  });
+  function convert(list) {
+    return list.filter(function (node) { return node.kind === 'folder'; }).map(function (node) {
+      const children = convert(node.children || []);
+      return {
+        key: node.id,
+        label: node.name,
+        disabled: blocked.has(node.key),
+        children: children.length ? children : undefined
+      };
+    });
+  }
+  return [{ key: ROOT_TARGET, label: t('tree.moveToRoot') }].concat(convert(tree.nodes));
+});
+
+function openMoveTo() {
+  moveToTarget.value = ROOT_TARGET;
+  showMoveTo.value = true;
+}
+
+async function confirmMoveTo() {
+  const items = selectedNodesInOrder().map(function (node) { return { kind: node.kind, id: node.id }; });
+  if (!items.length) return;
+  const parentId = moveToTarget.value === ROOT_TARGET ? null : moveToTarget.value;
+  try {
+    await tree.moveMany({ items: items, parentId: parentId });
+    showMoveTo.value = false;
+    if (parentId) expandedKeys.value = Array.from(new Set(expandedKeys.value.concat(['f:' + parentId])));
+    message.success(t('tree.multiMoved', { n: items.length }));
+  } catch (err) {
+    message.error(err.message);
+  }
+}
+
+function confirmDeleteMany() {
+  const nodes = selectedNodesInOrder();
+  if (!nodes.length) return;
+  const folders = nodes.filter(function (node) { return node.kind === 'folder'; }).length;
+  dialog.error({
+    title: t('tree.multiDeleteTitle', { n: nodes.length }),
+    content: folders ? t('tree.multiDeleteBodyFolders', { n: nodes.length, folders: folders }) : t('tree.multiDeleteBody', { n: nodes.length }),
+    positiveText: t('app.delete'),
+    negativeText: t('app.cancel'),
+    onPositiveClick: async function () {
+      try {
+        const removed = await tree.removeMany(nodes.map(function (node) { return { kind: node.kind, id: node.id }; }));
+        selectedKeys.value = [];
+        message.success(t('tree.multiDeleted', { n: removed }));
+      } catch (err) {
+        message.error(err.message);
+      }
+    }
+  });
+}
+
 /* ---------------- 选中与右键 ---------------- */
 
-function onSelectedChange(keys) {
-  selectedKeys.value = keys;
-  const key = keys[keys.length - 1];
+function onSelectedChange(keys, options, meta) {
+  // 树开着 multiple（多选要画出好几行高亮），它自己点一下是「追加」—— 普通点击要的是「只选这一个」，
+  // 所以只认**这次点的那个**（meta.node）。不能取 keys 的最后一个：点一个已经选中的，keys 原样不变，
+  // 最后一个是别的。⌘ / ⇧ 点击不走这里（见 overrideClick），由 toggleSelect / selectRange 算
+  const key = (meta && meta.node && meta.node.key) || keys[keys.length - 1];
+  selectedKeys.value = key ? [key] : [];
+  anchorKey.value = key || '';
   if (!key) return;
 
   const node = findNode(tree.nodes, key);
@@ -544,6 +715,14 @@ function openMenu(event, node) {
    * 别的节点类型上仍然没有 viewer 能用的项，那就不弹：弹一个全是灰项的菜单比不弹更让人困惑。
    */
   if (!projects.canEdit && node.kind !== 'folder' && node.kind !== 'api') return;
+
+  // 在多选里的某一项上右键：批量菜单（只读角色没有批量操作，退回单个的菜单）
+  if (isMulti.value && selectedKeys.value.indexOf(node.key) > -1 && projects.canEdit) {
+    menu.value = { show: true, x: event.clientX, y: event.clientY, node: null, options: multiMenuOptions() };
+    return;
+  }
+  // 在多选之外的节点上右键：多选作废，只选它
+  if (isMulti.value) selectedKeys.value = [node.key];
 
   menu.value = {
     show: true,
@@ -667,6 +846,8 @@ async function onMenuSelect(key) {
   if (key === 'blank-sync-openapi') return openSync(null);
   if (key === 'blank-share') return openShare(null);
   if (key === 'blank-toggle') return toggleExpandAll();
+  if (key === 'multi-move') return openMoveTo();
+  if (key === 'multi-delete') return confirmDeleteMany();
   if (!node) return;
 
   // 收藏只在当前项目里记（偏好里存的就是「项目 + 接口」这一对）
@@ -814,16 +995,27 @@ function isDescendant(ancestor, key) {
  * 所以在 dragstart 时自己记下来，dragend 清掉。
  */
 const draggingKey = ref('');
+/** 这次一起拖的（多选时是全部选中的；从没选中的那一行拖就只有它自己） */
+const draggingKeys = ref([]);
 
 function onDragStart(info) {
-  draggingKey.value = info && info.node ? info.node.key : '';
+  const key = info && info.node ? info.node.key : '';
+  draggingKey.value = key;
+  if (isMulti.value && selectedKeys.value.indexOf(key) > -1) {
+    draggingKeys.value = selectedKeys.value.slice();
+  } else {
+    draggingKeys.value = key ? [key] : [];
+  }
 }
 
 function onDragEnd() {
   draggingKey.value = '';
+  draggingKeys.value = [];
 }
 
 function allowDrop(info) {
+  if (draggingKeys.value.length > 1) return allowDropMany(info);
+
   const drag = findNode(tree.nodes, draggingKey.value);
   const drop = findNode(tree.nodes, info.node.key);
   if (!drag || !drop) return false;
@@ -840,7 +1032,55 @@ function allowDrop(info) {
   return true;
 }
 
+/** 一起拖的那批：不能落在它们自己身上，目录不能落进自己的子孙里 */
+function allowDropMany(info) {
+  const drop = findNode(tree.nodes, info.node.key);
+  if (!drop) return false;
+  if (draggingKeys.value.indexOf(drop.key) > -1) return false;
+  if (info.dropPosition === 'inside' && drop.kind !== 'folder') return false;
+  return !selectedNodesInOrder(draggingKeys.value).some(function (node) {
+    return node.kind === 'folder' && isDescendant(node, drop.key);
+  });
+}
+
+async function onDropMany(info) {
+  const drop = findNode(tree.nodes, info.node.key);
+  const nodes = selectedNodesInOrder(draggingKeys.value);
+  draggingKey.value = '';
+  draggingKeys.value = [];
+  if (!drop || !nodes.length) return;
+
+  const moving = new Set(nodes.map(function (node) { return node.key; }));
+  const payload = { items: nodes.map(function (node) { return { kind: node.kind, id: node.id }; }) };
+
+  if (info.dropPosition === 'inside') {
+    payload.parentId = drop.id;
+  } else {
+    payload.parentId = drop.parentId || null;
+    // 落点那一类按 drop 的位置算（去掉这批之后），另一类：目录放到这一层最后、接口放到这一层最前
+    const same = siblingsUnder(payload.parentId, drop.kind).filter(function (item) { return !moving.has(item.key); });
+    let at = same.findIndex(function (item) { return item.key === drop.key; });
+    if (at === -1) at = same.length;
+    if (info.dropPosition === 'after') at += 1;
+    if (drop.kind === 'folder') {
+      payload.folderIndex = at;
+      payload.apiIndex = 0;
+    } else {
+      payload.apiIndex = at;
+    }
+  }
+
+  try {
+    await tree.moveMany(payload);
+    if (payload.parentId) expandedKeys.value = Array.from(new Set(expandedKeys.value.concat(['f:' + payload.parentId])));
+  } catch (err) {
+    message.error(err.message);
+    await tree.refresh();
+  }
+}
+
 async function onDrop(info) {
+  if (draggingKeys.value.length > 1) return onDropMany(info);
   const drag = findNode(tree.nodes, info.dragNode.key);
   const drop = findNode(tree.nodes, info.node.key);
   draggingKey.value = '';
@@ -1012,6 +1252,8 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           :data="displayTree"
           :expanded-keys="expandedKeys"
           :selected-keys="selectedKeys"
+          multiple
+          :override-default-node-click-behavior="overrideClick"
           :render-label="renderLabel"
           :render-switcher-icon="renderSwitcherIcon"
           :render-suffix="renderSuffix"
@@ -1025,6 +1267,12 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           @dragend="onDragEnd"
           @drop="onDrop"
         />
+        <!-- 多选时底下一条提示：选了几个、怎么操作、怎么取消 -->
+        <div v-if="isMulti" class="multi-bar">
+          <span>{{ t('tree.multiSelected', { n: selectedKeys.length }) }}</span>
+          <span class="multi-hint">{{ t('tree.multiHint') }}</span>
+          <button class="multi-clear" @click="clearMulti">{{ t('tree.multiClear') }}</button>
+        </div>
         <n-empty
           v-else
           size="small"
@@ -1068,6 +1316,27 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
       <template #footer>
         <n-space justify="end">
           <n-button @click="showDelete = false">{{ t('app.cancel') }}</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 多选后「移动到…」：选一个目录（或项目根）一起挪过去 -->
+    <n-modal
+      v-model:show="showMoveTo"
+      preset="card"
+      :title="t('tree.multiMoveTitle', { n: selectedKeys.length })"
+      style="width: 420px; max-width: 92vw"
+    >
+      <n-tree-select
+        v-model:value="moveToTarget"
+        :options="moveToOptions"
+        default-expand-all
+        filterable
+      />
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showMoveTo = false">{{ t('app.cancel') }}</n-button>
+          <n-button type="primary" @click="confirmMoveTo">{{ t('tree.multiMoveAction') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -1248,6 +1517,42 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
   min-height: 0;
   overflow: auto;
   padding: 0 4px 4px;
+  /* 拖动、⇧ 点击时别把行里的文字选成一片蓝（用户 2026-10-08 截图） */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 多选提示条：贴在树的底部，滚动时跟着停在下面 */
+.multi-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--apiloop-surface, #fff);
+  box-shadow: 0 -1px 0 rgba(128, 128, 128, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.multi-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.55;
+}
+
+.multi-clear {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--apiloop-primary);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .delete-desc {

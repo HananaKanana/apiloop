@@ -98,5 +98,20 @@ export default {
   copyTip: 'The copies are new rows with new ids; the originals stay where they are.',
   noTargetProject: 'No other project can take them (only projects where you are editor or above are listed)',
   moveAction: 'Move',
-  copyAction: 'Copy'
+  copyAction: 'Copy',
+
+  /* ---------------- Multi-select (2026-10-08) ---------------- */
+  multiSelected: '{n} selected',
+  multiHint: 'Drag to move them together, right-click for more',
+  multiClear: 'Clear',
+  multiMoveTo: 'Move to folder…',
+  multiMoveTitle: 'Move {n} items to',
+  multiMoveAction: 'Move',
+  moveToRoot: 'Project root',
+  multiMoved: 'Moved {n} items',
+  multiDelete: 'Delete {n} items',
+  multiDeleteTitle: 'Delete {n} items?',
+  multiDeleteBody: 'The {n} selected items will be deleted. You can restore them from the trash.',
+  multiDeleteBodyFolders: 'The {n} selected items will be deleted, including {folders} folders with everything inside them. You can restore them from the trash.',
+  multiDeleted: 'Deleted {n} items'
 };

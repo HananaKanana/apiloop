@@ -22,6 +22,16 @@ export function moveNode(pid, payload) {
   return post('/projects/' + encodeURIComponent(pid) + '/move', payload);
 }
 
+/** 多选后一起移动：`{ items: [{kind, id}], parentId, folderIndex, apiIndex }` */
+export function moveMany(pid, payload) {
+  return post('/projects/' + encodeURIComponent(pid) + '/move-many', payload);
+}
+
+/** 多选后一起删除（进回收站）：`{ items: [{kind, id}] }` */
+export function removeMany(pid, items) {
+  return post('/projects/' + encodeURIComponent(pid) + '/remove-many', { items: items });
+}
+
 export function importRoutes(pid, payload) {
   return post('/projects/' + encodeURIComponent(pid) + '/import/routes', payload);
 }
