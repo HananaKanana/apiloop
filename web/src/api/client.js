@@ -7,7 +7,7 @@
  * - 失败时抛出的 Error.message 一定是可以直接给用户看的中文。
  */
 
-import { currentLocale } from '@/i18n';
+import { currentLocale, t } from '@/i18n';
 
 export const API_PREFIX = '/__admin/api';
 
