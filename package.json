@@ -20,7 +20,7 @@
   "scripts": {
     "test": "node --test --test-timeout=30000 test/*.test.js",
     "dev:web": "vite --config web/vite.config.js",
-    "build:web": "vite build --config web/vite.config.js"
+    "build:web": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/check-i18n.mjs && vite build --config web/vite.config.js"
   },
   "repository": {
     "type": "git",
