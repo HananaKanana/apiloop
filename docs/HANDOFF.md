@@ -37,7 +37,7 @@
 
 团队用的接口调试工具（定位类似 Postman，**但界面和文档里不许出现「Postman」字样**，用户明确要求）：
 
-- **云端**（Docker 部署在 `http://leonaz.top:8765`，端口映射 8765:8080）：管理台网页、Mock 服务、
+- **云端**（Docker 部署，对外 `https://leonaz.top:8765`：nginx 在 8765 上接 https，转给 docker 的 127.0.0.1:18765 → 容器 8080，见 `apiloop.conf`）：管理台网页、Mock 服务、
   账号与用户管理、多端同步的中心、客户端安装包下载。
 - **本机网关**（`node bin/server gateway`，监听 `127.0.0.1:47321`）：客户端里跑的就是它。
   请求从用户自己的电脑发出（内网、本机地址都能调）；数据存在本机 SQLite，登录后和云端双向同步。
@@ -105,8 +105,8 @@
 **打安装包**（在用户这台 Mac 上，产物在 `agent-installer/dist/`，不入库）：
 
 ```bash
-APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/mac/build-all.sh      # arm64 + x64 两个 .pkg
-APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh      # win-x64 .exe（要 dotnet SDK）
+APILOOP_CLOUD_URL=https://leonaz.top:8765 bash agent-installer/mac/build-all.sh      # arm64 + x64 两个 .pkg
+APILOOP_CLOUD_URL=https://leonaz.top:8765 bash agent-installer/windows/build.sh      # win-x64 .exe（要 dotnet SDK）
 ```
 
 - 云端地址打包时写死进安装包，必须给。打完习惯上挪到 `agent-installer/dist/leonaz.top/` 交给用户。
@@ -124,9 +124,9 @@ APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh  
 
 测一键更新时，云端版本要比已装的高。
 
-## 5. 现在的状态（2026-10-09）
+## 5. 现在的状态（2026-10-14）
 
-- 已发布 **2.3.0**（tag `v2.3.0`；2.3.0：目录树多选（`POST /projects/:pid/move-many`、`remove-many`），皮肤切换「经典 / 小岛」（`web/src/utils/skin.js`、`web/src/styles/island.css`，`<html data-skin>`），OpenAPI 导入 JSON 请求体，⌘W 关标签页。2.2.2：本机 Mock（网关同一个端口上响应 `/mock-<项目ID>`），云端 Mock 加开关默认关（`APILOOP_CLOUD_MOCK=1` 才开），分享文档「试一试」换成「导入到客户端」（下载 OpenAPI）。2.2.1 改了「管理员也要是成员才看得到项目」并加了管理员「项目总览」）。2.2.0：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
+- 已发布 **2.4.0**（tag `v2.4.0`；2.4.0：云端改成 https（`https://leonaz.top:8765`，nginx 配置见仓库根的 `apiloop.conf`，docker 退到 127.0.0.1:18765），页面按需加载 + gzip（`lib/static-gzip.js`），构建前检查文案（`web/scripts/check-i18n.mjs`），全局界面报错提示。2.3.0：目录树多选（`POST /projects/:pid/move-many`、`remove-many`），皮肤切换「经典 / 小岛」（`web/src/utils/skin.js`、`web/src/styles/island.css`，`<html data-skin>`），OpenAPI 导入 JSON 请求体，⌘W 关标签页。2.2.2：本机 Mock（网关同一个端口上响应 `/mock-<项目ID>`），云端 Mock 加开关默认关（`APILOOP_CLOUD_MOCK=1` 才开），分享文档「试一试」换成「导入到客户端」（下载 OpenAPI）。2.2.1 改了「管理员也要是成员才看得到项目」并加了管理员「项目总览」）。2.2.0：第十一到十七轮 —— gRPC、MQTT、RabbitMQ、TCP / UDP 调试，Mock 录制，
   项目备份与恢复，中英文界面（后端提示也跟着语言走），分享文档「试一试」（2.2.2 已去掉），快速请求，响应筛选 / 查找 / 预览和保存。
   计划在 `docs/plans/2026-10-05-round11.md` … `2026-10-08-round17.md`，内容见 `CHANGELOG.md`。
 - 用 **ateam** 派活（`ateam serve` 要在仓库根目录启动；worker 按 `backend` / `frontend` 角色加入）。

@@ -21,7 +21,7 @@ services:
     # user: "1000:1000"
     restart: unless-stopped
     ports:
-      # 对外端口 8765 → 容器里的 8080（线上 http://leonaz.top:8765）。改端口在 .env 里设 PORT
+      # 对外端口 8765 → 容器里的 8080（线上由 nginx 接 https，.env 里 PORT=127.0.0.1:18765，见 apiloop.conf）。改端口在 .env 里设 PORT
       - "${PORT:-8765}:8080"
     environment:
       TZ: Asia/Shanghai

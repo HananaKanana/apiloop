@@ -132,10 +132,10 @@ cp .env.example .env        # 改对外端口、指定 admin 初始密码（可�
 
 ```bash
 # Mac：Apple 芯片 + Intel 两个 .pkg
-APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/mac/build-all.sh
+APILOOP_CLOUD_URL=https://leonaz.top:8765 bash agent-installer/mac/build-all.sh
 
 # Windows：.exe（需要本机装好 dotnet SDK）
-APILOOP_CLOUD_URL=http://leonaz.top:8765 bash agent-installer/windows/build.sh
+APILOOP_CLOUD_URL=https://leonaz.top:8765 bash agent-installer/windows/build.sh
 ```
 
 产物在 `agent-installer/dist/`：
