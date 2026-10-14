@@ -171,14 +171,12 @@ const columns = computed(function () {
       :loading="loading"
       :bordered="false"
       :row-key="(row) => row.id"
-    />
-
-    <n-empty
-      v-if="!loading && !errorText && !shares.length"
-      class="empty"
-      size="small"
-      :description="t('share.mySharesEmpty')"
-    />
+    >
+      <!-- 用表格自己的空状态，换上我们的说明（原来和表格的「无数据」叠着显示了两个） -->
+      <template #empty>
+        <n-empty size="small" :description="t('share.mySharesEmpty')" />
+      </template>
+    </n-data-table>
   </n-modal>
 </template>
 
@@ -193,10 +191,6 @@ const columns = computed(function () {
 .error {
   font-size: 12px;
   color: #d03050;
-}
-
-.empty {
-  padding: 20px 0;
 }
 
 /* 已过期的链接调灰：和项目设置里那张表同一套写法 */

@@ -152,14 +152,12 @@ watch(function () { return props.pid; }, load);
       :loading="loading"
       :bordered="false"
       :row-key="(row) => row.id"
-    />
-
-    <n-empty
-      v-if="!loading && !errorText && !shares.length"
-      class="empty"
-      size="small"
-      :description="t('share.noShares')"
-    />
+    >
+      <!-- 用表格自己的空状态，换上我们的说明（原来表格的「无数据」和下面另一个空状态叠着显示了两个） -->
+      <template #empty>
+        <n-empty size="small" :description="t('share.noShares')" />
+      </template>
+    </n-data-table>
   </div>
 </template>
 
@@ -180,10 +178,6 @@ watch(function () { return props.pid; }, load);
 .error {
   font-size: 12px;
   color: #d03050;
-}
-
-.empty {
-  padding: 20px 0;
 }
 
 :deep(.expired) {
