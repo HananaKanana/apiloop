@@ -184,8 +184,9 @@ onMounted(load);
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
-  max-width: 760px;
+  /* 内容居中、限宽 760（用户 2026-10-13：只占左半边不好看，和项目设置一样居中）。
+     用左右留白来居中，而不是给自己限宽 —— 这样滚动条还在窗口最右边 */
+  padding: 12px max(12px, calc((100% - 760px) / 2));
   width: 100%;
   box-sizing: border-box;
 }
