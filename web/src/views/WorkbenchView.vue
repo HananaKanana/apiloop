@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { NAlert, NDropdown, NEmpty, NIcon, useMessage } from 'naive-ui';
@@ -13,24 +13,29 @@ import QuickOpen from '@/components/layout/QuickOpen.vue';
 import FindReplaceDialog from '@/components/search/FindReplaceDialog.vue';
 import SideBar from '@/components/layout/SideBar.vue';
 import RequestTab from '@/components/request/RequestTab.vue';
-import WsTab from '@/components/ws/WsTab.vue';
-import SioTab from '@/components/sio/SioTab.vue';
-import GrpcTab from '@/components/grpc/GrpcTab.vue';
-import MqttTab from '@/components/mqtt/MqttTab.vue';
-import AmqpTab from '@/components/amqp/AmqpTab.vue';
-import SocketTab from '@/components/socket/SocketTab.vue';
 import FolderTab from '@/components/folder/FolderTab.vue';
-import RunnerTab from '@/components/runner/RunnerTab.vue';
-import LoadTab from '@/components/load/LoadTab.vue';
-import EnvDiffTab from '@/components/env/EnvDiffTab.vue';
-import SuiteTab from '@/components/suite/SuiteTab.vue';
 import EnvTab from '@/components/env/EnvTab.vue';
 import MockEnvTab from '@/components/env/MockEnvTab.vue';
-import ImportDialog from '@/components/importExport/ImportDialog.vue';
 import AboutDialog from '@/components/layout/AboutDialog.vue';
 import MockLogDrawer from '@/components/mock/MockLogDrawer.vue';
-import HelpDrawer from '@/components/help/HelpDrawer.vue';
 import ContextMenu from '@/components/common/ContextMenu.vue';
+
+/*
+ * 不常用的标签页、导入弹框、帮助抽屉按需加载（用户 2026-10-13：网页版首次打开更快）。
+ * 普通 HTTP 请求、目录、环境这些一打开就要用的照旧直接打进来。
+ */
+const WsTab = defineAsyncComponent(function () { return import('@/components/ws/WsTab.vue'); });
+const SioTab = defineAsyncComponent(function () { return import('@/components/sio/SioTab.vue'); });
+const GrpcTab = defineAsyncComponent(function () { return import('@/components/grpc/GrpcTab.vue'); });
+const MqttTab = defineAsyncComponent(function () { return import('@/components/mqtt/MqttTab.vue'); });
+const AmqpTab = defineAsyncComponent(function () { return import('@/components/amqp/AmqpTab.vue'); });
+const SocketTab = defineAsyncComponent(function () { return import('@/components/socket/SocketTab.vue'); });
+const RunnerTab = defineAsyncComponent(function () { return import('@/components/runner/RunnerTab.vue'); });
+const LoadTab = defineAsyncComponent(function () { return import('@/components/load/LoadTab.vue'); });
+const EnvDiffTab = defineAsyncComponent(function () { return import('@/components/env/EnvDiffTab.vue'); });
+const SuiteTab = defineAsyncComponent(function () { return import('@/components/suite/SuiteTab.vue'); });
+const ImportDialog = defineAsyncComponent(function () { return import('@/components/importExport/ImportDialog.vue'); });
+const HelpDrawer = defineAsyncComponent(function () { return import('@/components/help/HelpDrawer.vue'); });
 import { useProjectStore } from '@/stores/project';
 import { usePrefsStore } from '@/stores/prefs';
 import { useTreeStore } from '@/stores/tree';

@@ -3,13 +3,18 @@ import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
 import { hasChosen } from '@/utils/firstRun';
 import LoginView from '@/views/LoginView.vue';
-import WorkbenchView from '@/views/WorkbenchView.vue';
-import UsersView from '@/views/UsersView.vue';
-import ProjectsOverviewView from '@/views/ProjectsOverviewView.vue';
-import ProjectSettingsView from '@/views/ProjectSettingsView.vue';
-import SettingsView from '@/views/SettingsView.vue';
-import ChangePasswordView from '@/views/ChangePasswordView.vue';
-import ShareView from '@/views/ShareView.vue';
+
+/*
+ * 页面按需加载（用户 2026-10-13：网页版首次打开更快）。登录页还是直接打进主包 ——
+ * 没登录时它是第一个页面，要马上出来；其余页面进去的时候才下载各自那一块。
+ */
+const WorkbenchView = function () { return import('@/views/WorkbenchView.vue'); };
+const UsersView = function () { return import('@/views/UsersView.vue'); };
+const ProjectsOverviewView = function () { return import('@/views/ProjectsOverviewView.vue'); };
+const ProjectSettingsView = function () { return import('@/views/ProjectSettingsView.vue'); };
+const SettingsView = function () { return import('@/views/SettingsView.vue'); };
+const ChangePasswordView = function () { return import('@/views/ChangePasswordView.vue'); };
+const ShareView = function () { return import('@/views/ShareView.vue'); };
 
 /**
  * 用 hash 路由，后端的静态文件服务就不用为前端路由做任何特殊处理。
