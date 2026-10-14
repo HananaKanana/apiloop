@@ -245,7 +245,7 @@ async function submit() {
       </p>
     </n-card>
 
-    <!-- 卡片下面一颗小按钮，不抢登录表单的注意力；网页版才有 -->
+    <!-- 页面右上角一颗小按钮（用户 2026-10-13），不抢登录表单的注意力；网页版才有 -->
     <button
       v-if="gateway.loaded && !gateway.isGateway"
       class="download-button"
@@ -267,9 +267,9 @@ async function submit() {
 
 <style scoped>
 .login-page {
+  position: relative;
   height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
@@ -328,10 +328,12 @@ async function submit() {
 }
 
 .download-button {
+  position: absolute;
+  top: 16px;
+  right: 20px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 16px;
   padding: 6px 16px;
   border: 1px solid rgba(128, 128, 128, 0.25);
   border-radius: 999px;
