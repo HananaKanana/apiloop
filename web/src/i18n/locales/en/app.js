@@ -9,5 +9,6 @@ export default {
   delete: 'Delete',
   retry: 'Retry',
   copied: 'Copied',
-  copyFailed: 'Copy failed, please select and copy manually'
+  copyFailed: 'Copy failed, please select and copy manually',
+  uiError: 'Something went wrong in the page; this part may not have rendered or finished: {message}'
 };

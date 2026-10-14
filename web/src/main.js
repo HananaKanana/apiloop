@@ -2,7 +2,8 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
-import { i18n } from './i18n';
+import { createDiscreteApi } from 'naive-ui';
+import { i18n, t } from './i18n';
 
 /**
  * 整个页面不弹浏览器自带的右键菜单（返回 / 重新加载 / 检查元素那一套），用户 2026-09-30 要求。
@@ -25,4 +26,31 @@ document.addEventListener('contextmenu', function (event) {
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 document.documentElement.setAttribute('data-os', isMac ? 'mac' : 'other');
 
-createApp(App).use(createPinia()).use(i18n).use(router).mount('#app');
+const app = createApp(App);
+
+/**
+ * 全局兜底（用户 2026-10-13）：组件渲染、生命周期、事件处理里抛出的错误，Vue 默认只打到控制台，
+ * 界面上那一块就安安静静地坏掉了（2026-10-09 铃铛：文案编译报错，弹框闪一下就没了、再也点不开，
+ * 用户看不出发生了什么）。这里弹一条提示，错误照样打到控制台方便排查。
+ *
+ * 同一条错误 5 秒内只提示一次 —— 渲染报错常常一口气连着抛好几遍。
+ * 提示用 createDiscreteApi：这里在 App 外面，拿不到 App 里的 NMessageProvider。
+ */
+let discrete = null;
+let lastError = { text: '', at: 0 };
+
+app.config.errorHandler = function (err, instance, info) {
+  console.error('[apiloop] ' + info, err);
+  const text = String((err && err.message) || err || '').split('\n')[0].slice(0, 200);
+  const now = Date.now();
+  if (text === lastError.text && now - lastError.at < 5000) return;
+  lastError = { text: text, at: now };
+  try {
+    if (!discrete) discrete = createDiscreteApi(['message']);
+    discrete.message.error(t('app.uiError', { message: text }), { duration: 8000, closable: true });
+  } catch (e) {
+    // 提示本身都弹不出来就算了，控制台里已经有了
+  }
+};
+
+app.use(createPinia()).use(i18n).use(router).mount('#app');

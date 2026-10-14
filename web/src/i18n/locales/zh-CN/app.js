@@ -9,5 +9,7 @@ export default {
   delete: '删除',
   retry: '重试',
   copied: '已复制',
-  copyFailed: '复制失败，请手动选中复制'
+  copyFailed: '复制失败，请手动选中复制',
+  // 全局兜底（main.js）：某个组件渲染 / 事件处理里报了错
+  uiError: '界面出错了，刚才这块可能没显示全或操作没完成：{message}'
 };
