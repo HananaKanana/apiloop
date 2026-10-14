@@ -15,7 +15,9 @@ async function requestGateway(method, path, body) {
   const init = {
     method: method,
     headers: Object.assign({}, baseHeaders()),
-    credentials: 'same-origin'
+    credentials: 'same-origin',
+    // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+    cache: 'no-store'
   };
 
   if (body !== undefined) {
@@ -57,7 +59,9 @@ export async function getStatus() {
     res = await fetch(GATEWAY_PREFIX + '/status', {
       method: 'GET',
       headers: Object.assign({}, baseHeaders()),
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+      cache: 'no-store'
     });
   } catch (err) {
     // 网络层面就失败了（比如页面是从 file:// 打开的），当不是网关

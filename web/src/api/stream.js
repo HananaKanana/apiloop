@@ -100,7 +100,9 @@ export function postNdjson(path, body, options) {
     method: 'POST',
     headers: Object.assign({ 'Content-Type': 'application/json' }, baseHeaders()),
     body: JSON.stringify(body),
-    credentials: 'same-origin'
+    credentials: 'same-origin',
+    // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+    cache: 'no-store'
   };
   if (opts.signal) init.signal = opts.signal;
 
@@ -112,7 +114,9 @@ export function getNdjson(path, options) {
   const init = {
     method: 'GET',
     headers: Object.assign({}, baseHeaders()),
-    credentials: 'same-origin'
+    credentials: 'same-origin',
+    // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+    cache: 'no-store'
   };
   if (opts.signal) init.signal = opts.signal;
 

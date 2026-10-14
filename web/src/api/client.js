@@ -111,7 +111,9 @@ export function request(method, path, body, options) {
   const init = {
     method: method,
     headers: Object.assign(baseHeaders(), opts.headers),
-    credentials: 'same-origin'
+    credentials: 'same-origin',
+    // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+    cache: 'no-store'
   };
 
   if (opts.raw !== undefined && opts.raw !== null) {
@@ -189,7 +191,9 @@ export async function requestBlob(method, path) {
   const res = await fetch(API_PREFIX + path, {
     method: method,
     headers: baseHeaders(),
-    credentials: 'same-origin'
+    credentials: 'same-origin',
+    // 接口一律不走缓存（2026-10-14：客户端窗口把一次 301 永久缓存了，之后一直不发请求）
+    cache: 'no-store'
   });
   if (res.status === 401) {
     redirectToLogin();
