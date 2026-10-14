@@ -26,6 +26,23 @@ document.addEventListener('contextmenu', function (event) {
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 document.documentElement.setAttribute('data-os', isMac ? 'mac' : 'other');
 
+/**
+ * 按需加载的那几块（router.js、WorkbenchView.vue）文件名带哈希。云端升级以后，
+ * 一直开着的旧页面再去要旧文件就 404 了 —— Vite 这时会发 `vite:preloadError`。
+ * 刷新一次拿新页面；1 分钟内刷过就不再刷，免得真断网时来回刷个不停。
+ */
+window.addEventListener('vite:preloadError', function (event) {
+  try {
+    const last = Number(sessionStorage.getItem('apiloop.chunkReload')) || 0;
+    if (Date.now() - last < 60 * 1000) return;
+    sessionStorage.setItem('apiloop.chunkReload', String(Date.now()));
+  } catch (err) {
+    // 存不了就直接刷
+  }
+  event.preventDefault();
+  window.location.reload();
+});
+
 const app = createApp(App);
 
 /**
