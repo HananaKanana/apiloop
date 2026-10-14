@@ -164,6 +164,13 @@ const ISLAND_OVERRIDES = {
   },
   Tag: { borderRadius: '12px' },
   Card: { borderRadius: '18px' },
+  // 2026-10-13 铺开小岛皮肤：提示、气泡、勾选框、表格、消息条的圆角和颜色
+  Tooltip: { color: '#794f27', textColor: '#fffdf5', borderRadius: '10px' },
+  Popover: { borderRadius: '16px' },
+  Checkbox: { borderRadius: '6px' },
+  DataTable: { borderRadius: '14px' },
+  Message: { borderRadius: '16px' },
+  Notification: { borderRadius: '18px' },
   Drawer: { color: '#fffdf5' },
   Dialog: { ...DIALOG_OVERRIDES, borderRadius: '24px' }
 };

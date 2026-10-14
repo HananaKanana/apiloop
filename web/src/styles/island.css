@@ -7,6 +7,12 @@
  *   2. 登录页、分享页、设置页、工作台空白处 → 点点底纹
  *   3. 目录树的选中行 → 淡蓝色药丸
  *   4. 开关 → 草绿色、底下一道深色的立体边
+ *   （2026-10-13 铺开：）
+ *   5. 弹窗、抽屉的标题 → 同样的飘带
+ *   6. 工作台顶部的标签页 → 药丸形，选中的是米白卡片 + 薄荷绿描边
+ *   7. 页签（Params / Headers / Body…）→ 下划线加粗成圆头短条，选中的字加粗
+ *   8. 下拉菜单 → 大圆角，每一项是圆角高亮
+ *   9. 空状态 → 图标用浅棕，说明文字加粗一点
  *
  * 全部挂在 `:root[data-skin='island']` 下面，「经典」皮肤一点不受影响。
  * 写成 `:root[...] .类名`，优先级比组件里 scoped 的 `.类名[data-v-xxx]` 高，不用 !important；
@@ -54,7 +60,11 @@
 
 /* 两头的燕尾：比正身低一点、颜色深一档，压在正身后面 */
 :root[data-skin='island'] .skin-ribbons .n-card-header__main::before,
-:root[data-skin='island'] .skin-ribbons .n-card-header__main::after {
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::after,
+:root[data-skin='island'] .n-modal .n-card-header__main::before,
+:root[data-skin='island'] .n-modal .n-card-header__main::after,
+:root[data-skin='island'] .n-drawer-header__main::before,
+:root[data-skin='island'] .n-drawer-header__main::after {
   content: '';
   position: absolute;
   top: 6px;
@@ -64,12 +74,16 @@
   z-index: -1;
 }
 
-:root[data-skin='island'] .skin-ribbons .n-card-header__main::before {
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::before,
+:root[data-skin='island'] .n-modal .n-card-header__main::before,
+:root[data-skin='island'] .n-drawer-header__main::before {
   left: -11px;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 38% 50%);
 }
 
-:root[data-skin='island'] .skin-ribbons .n-card-header__main::after {
+:root[data-skin='island'] .skin-ribbons .n-card-header__main::after,
+:root[data-skin='island'] .n-modal .n-card-header__main::after,
+:root[data-skin='island'] .n-drawer-header__main::after {
   right: -11px;
   clip-path: polygon(0 0, 100% 0, 62% 50%, 100% 100%, 0 100%);
 }
@@ -119,4 +133,105 @@
 
 :root[data-skin='island'] .n-switch:not(.n-switch--active) .n-switch__rail {
   box-shadow: inset 0 -3px 0 rgba(121, 79, 39, 0.14);
+}
+
+/* ------------------------------------------------------------------ 5. 弹窗、抽屉的标题 */
+
+/* 弹窗（n-modal 的卡片）和右侧抽屉：标题也画成飘带，统一薄荷绿。燕尾的样子和上面共用 */
+:root[data-skin='island'] .n-modal .n-card-header,
+:root[data-skin='island'] .n-drawer-header {
+  position: relative;
+  z-index: 0;
+  padding-left: 30px !important;
+}
+
+:root[data-skin='island'] .n-modal .n-card-header__main,
+:root[data-skin='island'] .n-drawer-header__main {
+  --ribbon: #19c8b9;
+  --ribbon-dark: #11a89b;
+  flex: 0 1 auto;
+  position: relative;
+  margin-right: 16px;
+  padding: 3px 18px 4px;
+  border-radius: 4px;
+  background: var(--ribbon);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+:root[data-skin='island'] .n-drawer-header {
+  border-bottom-color: rgba(196, 184, 158, 0.45) !important;
+}
+
+/* ------------------------------------------------------------------ 6. 工作台顶部的标签页 */
+
+:root[data-skin='island'] .tab-bar {
+  background: #f3efdf;
+  border-bottom-color: rgba(196, 184, 158, 0.55);
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+:root[data-skin='island'] .tab-item {
+  height: 28px;
+  border: 1.5px solid transparent;
+  border-radius: 50px;
+  color: #725d42;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root[data-skin='island'] .tab-item:hover {
+  background: rgba(196, 184, 158, 0.28);
+}
+
+:root[data-skin='island'] .tab-item.active {
+  background: #fffdf5;
+  border-color: #19c8b9;
+  color: #794f27;
+  font-weight: 700;
+  box-shadow: 0 2px 0 rgba(17, 168, 155, 0.25);
+}
+
+:root[data-skin='island'] .tab-add,
+:root[data-skin='island'] .tab-add-more {
+  border-radius: 50px;
+}
+
+/* ------------------------------------------------------------------ 7. 页签 */
+
+/* 下划线粗一点、两头圆，像一小段彩带；选中的字加粗 */
+:root[data-skin='island'] .n-tabs .n-tabs-bar {
+  height: 3px !important;
+  border-radius: 3px;
+}
+
+:root[data-skin='island'] .n-tabs .n-tabs-tab--active {
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ 8. 下拉菜单 */
+
+:root[data-skin='island'] .n-dropdown-menu {
+  border-radius: 16px !important;
+  padding: 6px !important;
+  border: 1px solid rgba(196, 184, 158, 0.45);
+}
+
+:root[data-skin='island'] .n-dropdown-option-body::before {
+  left: 0 !important;
+  right: 0 !important;
+  border-radius: 10px !important;
+}
+
+/* ------------------------------------------------------------------ 9. 空状态 */
+
+:root[data-skin='island'] .n-empty .n-empty__icon {
+  color: #c4b89e !important;
+}
+
+:root[data-skin='island'] .n-empty .n-empty__description {
+  color: #9f927d !important;
+  font-weight: 600;
 }
