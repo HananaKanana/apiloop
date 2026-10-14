@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui';
+import { NAlert, NButton, NCard, NForm, NFormItem, NIcon, NInput } from 'naive-ui';
+import { Download } from '@vicons/tabler';
+import InstallDialog from '@/components/layout/InstallDialog.vue';
 import { useDialog } from '@/utils/dialog';
 import { useSessionStore } from '@/stores/session';
 import { useGatewayStore } from '@/stores/gateway';
@@ -22,6 +24,8 @@ const username = ref('');
 const password = ref('');
 const loading = ref(false);
 const errorText = ref('');
+/** 「下载客户端」弹框（用户 2026-10-13：登录页上直接能下载）。只在网页版有 —— 客户端里已经装好了 */
+const showInstall = ref(false);
 
 /**
  * 同一张卡片上切「登录 / 注册」（用户 2026-10-02：加注册，管理员审核通过才能登录）。
@@ -240,6 +244,24 @@ async function submit() {
         {{ t('views.hasAccountLead') }}<a class="link" @click="switchMode('login')">{{ t('views.hasAccountLink') }}</a>
       </p>
     </n-card>
+
+    <!-- 卡片下面一颗小按钮，不抢登录表单的注意力；网页版才有 -->
+    <button
+      v-if="gateway.loaded && !gateway.isGateway"
+      class="download-button"
+      :title="t('layout.downloadClientHint')"
+      @click="showInstall = true"
+    >
+      <n-icon size="15" :component="Download" />
+      <span>{{ t('layout.downloadClient') }}</span>
+    </button>
+
+    <install-dialog
+      v-if="!gateway.isGateway"
+      v-model:show="showInstall"
+      :is-gateway="false"
+      :cloud-url="gateway.cloudUrl"
+    />
   </div>
 </template>
 
@@ -247,6 +269,7 @@ async function submit() {
 .login-page {
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
@@ -302,6 +325,29 @@ async function submit() {
 .link {
   color: var(--apiloop-primary);
   cursor: pointer;
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 6px 16px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 999px;
+  background: var(--apiloop-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.download-button:hover {
+  opacity: 1;
+  color: var(--apiloop-primary);
+  border-color: var(--apiloop-primary);
 }
 
 .hint code {
