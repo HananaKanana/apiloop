@@ -45,9 +45,11 @@ export function importHar(text, options) {
 
 /* ---------------- 落库 ---------------- */
 
-export function importRoutes(pid, routes, folderId) {
+export function importRoutes(pid, routes, folderId, urlPrefix) {
   const payload = { routes: routes };
   if (folderId) payload.folderId = folderId;
+  // 地址前缀，比如 `{{host}}`：新接口加上，已有的接口地址还是 `/xxx` 开头的也补上
+  if (urlPrefix) payload.urlPrefix = urlPrefix;
   return post('/projects/' + encodeURIComponent(pid) + '/import/routes', payload);
 }
 

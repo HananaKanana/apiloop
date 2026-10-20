@@ -23,6 +23,8 @@ import { useGatewayStore } from '@/stores/gateway';
 import { parseCurl } from '@/utils/curl';
 import { methodColor } from '@/utils/method';
 import { readFileAsText } from '@/utils/download';
+import { readUrlPrefix, saveUrlPrefix, prefixVariable } from '@/utils/urlPrefix';
+import { useEnvStore, isMockEnvId } from '@/stores/env';
 import ExternalImportPanel from '@/components/importExport/ExternalImportPanel.vue';
 
 /**
@@ -295,6 +297,48 @@ const selectedFolderName = computed(function () {
 });
 /** 解析出来的文档分组（Swagger UI 里列了好几个分组时才有意义） */
 const openapiDocuments = ref([]);
+
+/** 地址前缀（用户 2026-10-20）：默认 `{{host}}`，改了就记住，见 utils/urlPrefix.js */
+const openapiPrefix = ref(readUrlPrefix());
+/** 文档里写的服务地址（`servers[0].url`），导入后拿它建前缀里那个变量 */
+const openapiServerUrl = ref('');
+
+const envs = useEnvStore();
+
+/** 前缀里的变量在项目变量或当前环境里已经有了吗 */
+function variableDefined(name) {
+  const project = projects.current;
+  if (project && (project.variables || []).some(function (row) { return row.key === name; })) return true;
+  const env = envs.selected;
+  return Boolean(env && (env.variables || []).some(function (row) { return row.key === name; }));
+}
+
+/**
+ * 导入后顺手把前缀里的变量建好（用户 2026-10-20，照 Postman 的做法）：
+ * 项目变量或当前环境里已经有了就不动；选着一个环境就加进去；项目里一个环境都没有就新建一个。
+ * 有环境、但一个都没选：不替用户挑，提示一句。返回给提示用的说明，没做事返回空串。
+ */
+async function ensurePrefixVariable(prefix) {
+  const name = prefixVariable(prefix);
+  const value = openapiServerUrl.value;
+  if (!name || !value || variableDefined(name)) return '';
+  const row = { key: name, value: value, type: 'string', enabled: true };
+  try {
+    const env = envs.selected;
+    if (env && !isMockEnvId(env.id)) {
+      await envs.update(env.id, { variables: (env.variables || []).concat([row]) });
+      return t('importExport.prefixVarAdded', { name: name, value: value, env: env.name });
+    }
+    if (!envs.environments.length) {
+      const created = await envs.create({ name: t('importExport.prefixEnvName'), variables: [row] });
+      if (created && created.id) envs.select(created.id);
+      return t('importExport.prefixEnvCreated', { name: name, value: value, env: t('importExport.prefixEnvName') });
+    }
+    return t('importExport.prefixVarMissing', { name: name, value: value });
+  } catch (err) {
+    return t('importExport.prefixVarFailed', { name: name, message: err.message });
+  }
+}
 /** 网页版而且云端不发请求（SERVER_SEND=0）：云端也不替人拉地址，只能选文件或粘贴 */
 const urlFetchBlocked = computed(function () { return useGatewayStore().cloudSendBlocked; });
 const openapiFileInput = ref(null);
@@ -337,6 +381,7 @@ async function parseOpenapi() {
     const data = await importExportApi.parseOpenapi(url ? { url: url } : { text: openapiText.value });
     openapiRoutes.value = data.routes || [];
     openapiDocuments.value = data.documents || [];
+    openapiServerUrl.value = data.serverUrl || '';
   } catch (err) {
     openapiRoutes.value = null;
     openapiDocuments.value = [];
@@ -356,17 +401,20 @@ async function importParsed(routes) {
     const data = await importExportApi.importRoutes(
       projects.currentId,
       routes,
-      openapiIntoSelected.value && selectedFolderName.value ? tree.selectedFolderId : null
+      openapiIntoSelected.value && selectedFolderName.value ? tree.selectedFolderId : null,
+      openapiPrefix.value.trim()
     );
+    saveUrlPrefix(openapiPrefix.value);
     await tree.refresh();
+    const varNote = await ensurePrefixVariable(openapiPrefix.value.trim());
     // 这段提示只服务 OpenAPI 页签（importParsed 只有它在调）：导入之后最常问的就是
     // 「后端改了接口怎么办」，顺手把「从 OpenAPI 同步更新」这条路指出来
     const added = (data.apis && data.apis.length) || 0;
     const same = (data.updated || 0) + (data.unchanged || 0);
     // 重复导入时认出了已有的接口：告诉用户是「更新」，不是又多出一份
-    message.success(same
+    message.success((same
       ? t('importExport.importedMerged', { added: added, updated: data.updated || 0, unchanged: data.unchanged || 0 })
-      : t('importExport.importedApis', { n: added }), { duration: 8000 });
+      : t('importExport.importedApis', { n: added })) + (varNote ? ' ' + varNote : ''), { duration: 10000 });
     visible.value = false;
     openapiRoutes.value = null;
     openapiText.value = '';
@@ -709,6 +757,18 @@ function routeLabel(route) {
                 {{ routeLabel(route) }}
               </div>
             </div>
+            <div class="prefix-row">
+              <span class="hint">{{ t('importExport.urlPrefixLabel') }}</span>
+              <n-input
+                v-model:value="openapiPrefix"
+                size="small"
+                class="prefix-input"
+                :placeholder="t('importExport.urlPrefixPlaceholder')"
+              />
+              <span class="hint">{{ openapiPrefix.trim()
+                ? t('importExport.urlPrefixExample', { url: openapiPrefix.trim().replace(/\/+$/, '') + (openapiRoutes[0] ? openapiRoutes[0].path : '/login') })
+                : t('importExport.urlPrefixNone') }}</span>
+            </div>
             <n-space justify="space-between" align="center">
               <span v-if="selectedFolderName">
                 <n-checkbox v-model:checked="openapiIntoSelected" size="small">
@@ -903,4 +963,16 @@ function routeLabel(route) {
   font-size: 12px;
   opacity: 0.65;
 }
+.prefix-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.prefix-input {
+  width: 180px;
+  flex: none;
+}
+
 </style>

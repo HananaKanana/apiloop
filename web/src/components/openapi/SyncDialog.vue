@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { readUrlPrefix } from '@/utils/urlPrefix';
 import { useI18n } from 'vue-i18n';
 import {
   NAlert,
@@ -187,6 +188,8 @@ async function apply() {
   errorText.value = '';
   try {
     const data = await openapiApi.applyOpenapi(props.pid, Object.assign(payload(), {
+      // 新增的接口带上导入页记住的地址前缀（utils/urlPrefix.js）
+      urlPrefix: readUrlPrefix().trim(),
       add: selected.value.added,
       update: selected.value.changed,
       remove: selected.value.removed

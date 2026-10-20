@@ -68,6 +68,15 @@ export default {
   parsedCount: 'Parsed {n} API(s)',
   importedApis: 'Imported {n} API(s). Later, when the backend changes an API, you can right-click it in the tree and choose “Sync from OpenAPI”.',
   importedMerged: 'Added {added} API(s), updated {updated}, {unchanged} already matched the document. Existing APIs only get the document parts updated (name, URL, params, body); scripts, examples and Mock are kept.',
+  urlPrefixLabel: 'URL prefix',
+  urlPrefixPlaceholder: "e.g. {'{{'}host{'}}'}; leave empty for none",
+  urlPrefixExample: 'Imported URLs look like {url}',
+  urlPrefixNone: 'No prefix: URLs are the paths from the document',
+  prefixEnvName: 'Default',
+  prefixVarAdded: 'Added variable {name} = {value} to environment "{env}".',
+  prefixEnvCreated: 'The project had no environment, so "{env}" was created with {name} = {value}.',
+  prefixVarMissing: 'Variable {name} does not exist yet: add {name} = {value} to the environment you use.',
+  prefixVarFailed: 'Could not create variable {name}: {message}',
 
   /* ---------------- HAR ---------------- */
   pasteOrPickHar: 'Paste the HAR content or choose a file',
