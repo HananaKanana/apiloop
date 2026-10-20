@@ -361,7 +361,12 @@ async function importParsed(routes) {
     await tree.refresh();
     // 这段提示只服务 OpenAPI 页签（importParsed 只有它在调）：导入之后最常问的就是
     // 「后端改了接口怎么办」，顺手把「从 OpenAPI 同步更新」这条路指出来
-    message.success(t('importExport.importedApis', { n: (data.apis && data.apis.length) || 0 }), { duration: 8000 });
+    const added = (data.apis && data.apis.length) || 0;
+    const same = (data.updated || 0) + (data.unchanged || 0);
+    // 重复导入时认出了已有的接口：告诉用户是「更新」，不是又多出一份
+    message.success(same
+      ? t('importExport.importedMerged', { added: added, updated: data.updated || 0, unchanged: data.unchanged || 0 })
+      : t('importExport.importedApis', { n: added }), { duration: 8000 });
     visible.value = false;
     openapiRoutes.value = null;
     openapiText.value = '';

@@ -67,6 +67,7 @@ export default {
   parse: 'Parse',
   parsedCount: 'Parsed {n} API(s)',
   importedApis: 'Imported {n} API(s). Later, when the backend changes an API, you can right-click it in the tree and choose “Sync from OpenAPI”.',
+  importedMerged: 'Added {added} API(s), updated {updated}, {unchanged} already matched the document. Existing APIs only get the document parts updated (name, URL, params, body); scripts, examples and Mock are kept.',
 
   /* ---------------- HAR ---------------- */
   pasteOrPickHar: 'Paste the HAR content or choose a file',

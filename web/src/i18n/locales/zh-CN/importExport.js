@@ -67,6 +67,7 @@ export default {
   parse: '解析',
   parsedCount: '解析出 {n} 个接口',
   importedApis: '已导入 {n} 个接口。以后后端改了接口，可以在目录树右键「从 OpenAPI 同步更新」',
+  importedMerged: '新增 {added} 个接口，更新 {updated} 个，{unchanged} 个和文档一样没动。已有的接口只更新文档里的内容（名称、地址、参数、请求体），脚本、示例、Mock 都保留',
 
   /* ---------------- HAR ---------------- */
   pasteOrPickHar: '请粘贴 HAR 内容，或者选择一个文件',
