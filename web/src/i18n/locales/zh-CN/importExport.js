@@ -45,9 +45,10 @@ export default {
   curlPlaceholder: '把浏览器的 Copy as cURL 粘到这里，粘完自动解析',
   curlStats: '请求头 {headers} 个 · 查询参数 {query} 个 · 请求体：{body} · 鉴权：{auth}',
   intoSelected: '会落到目录树里选中的目录',
-  intoSelectedImport: '会导入到目录树里选中的目录',
   intoRoot: '没有选中目录，会落到根目录',
-  intoByGroup: '没有选中目录，会按分组建顶层目录',
+  // OpenAPI 导入（2026-10-20）：默认按文档分组建目录，勾上才放进选中的目录
+  parsedGroups: '（来自 {names} 几个分组，会按「分组 / 控制器」建两层目录）',
+  openapiIntoSelected: '放进选中的目录「{name}」里（分组目录建在它下面）',
   openInNewTab: '在新标签页打开',
   intoCurrentFolder: '导入到当前目录',
   importedInto: '已导入到{where}',

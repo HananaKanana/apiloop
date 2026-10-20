@@ -281,6 +281,20 @@ const openapiBusy = ref(false);
  * OpenAPI / Swagger 只有 JSON 和 YAML 两种写法，没有 XML 版。
  */
 const openapiUrl = ref('');
+
+/**
+ * 导到哪（用户 2026-10-20：目录树里正好选着一个目录，整份文档就全平铺进去了）。
+ * 默认按文档的分组（tag）在项目根上建目录、同名的并进去；勾上才放进选中的目录，
+ * 而且分组目录照样建在它下面，不再平铺。每次打开都回到默认，不记。
+ */
+const openapiIntoSelected = ref(false);
+const selectedFolderName = computed(function () {
+  const id = tree.selectedFolderId;
+  const folder = id && tree.folders.find(function (item) { return item.id === id; });
+  return folder ? folder.name : '';
+});
+/** 解析出来的文档分组（Swagger UI 里列了好几个分组时才有意义） */
+const openapiDocuments = ref([]);
 /** 网页版而且云端不发请求（SERVER_SEND=0）：云端也不替人拉地址，只能选文件或粘贴 */
 const urlFetchBlocked = computed(function () { return useGatewayStore().cloudSendBlocked; });
 const openapiFileInput = ref(null);
@@ -322,8 +336,10 @@ async function parseOpenapi() {
   try {
     const data = await importExportApi.parseOpenapi(url ? { url: url } : { text: openapiText.value });
     openapiRoutes.value = data.routes || [];
+    openapiDocuments.value = data.documents || [];
   } catch (err) {
     openapiRoutes.value = null;
+    openapiDocuments.value = [];
     message.error(err.message);
   } finally {
     openapiBusy.value = false;
@@ -340,7 +356,7 @@ async function importParsed(routes) {
     const data = await importExportApi.importRoutes(
       projects.currentId,
       routes,
-      tree.selectedFolderId
+      openapiIntoSelected.value && selectedFolderName.value ? tree.selectedFolderId : null
     );
     await tree.refresh();
     // 这段提示只服务 OpenAPI 页签（importParsed 只有它在调）：导入之后最常问的就是
@@ -351,6 +367,8 @@ async function importParsed(routes) {
     openapiText.value = '';
     openapiUrl.value = '';
     openapiFileName.value = '';
+    openapiDocuments.value = [];
+    openapiIntoSelected.value = false;
   } catch (err) {
     message.error(err.message);
   }
@@ -482,7 +500,8 @@ watch(harKeepCredentials, function () {
 });
 
 function routeLabel(route) {
-  return (route.method || 'GET') + ' ' + (route.path || route.url || route.name || '');
+  const folder = route.folderPath && route.folderPath.length ? route.folderPath.join(' / ') : route.group;
+  return (route.method || 'GET') + ' ' + (route.path || route.url || route.name || '') + (folder ? '  ·  ' + folder : '');
 }
 </script>
 
@@ -671,20 +690,27 @@ function routeLabel(route) {
             <n-button size="small" secondary :loading="openapiBusy" @click="parseOpenapi">
               {{ openapiUrl.trim() ? t('importExport.fetchAndParse') : t('importExport.parse') }}
             </n-button>
-            <span v-if="tree.selectedFolderId" class="hint">{{ t('importExport.intoSelectedImport') }}</span>
-            <span v-else class="hint">{{ t('importExport.intoByGroup') }}</span>
           </n-space>
 
           <template v-if="openapiRoutes">
             <n-alert type="info" :show-icon="false" class="notice">
               {{ t('importExport.parsedCount', { n: openapiRoutes.length }) }}
+              <template v-if="openapiDocuments.length > 1">
+                {{ t('importExport.parsedGroups', { names: openapiDocuments.map((doc) => doc.name).join('、') }) }}
+              </template>
             </n-alert>
             <div class="routes">
               <div v-for="(route, index) in openapiRoutes" :key="index" class="route">
                 {{ routeLabel(route) }}
               </div>
             </div>
-            <n-space justify="end" align="center">
+            <n-space justify="space-between" align="center">
+              <span v-if="selectedFolderName">
+                <n-checkbox v-model:checked="openapiIntoSelected" size="small">
+                  {{ t('importExport.openapiIntoSelected', { name: selectedFolderName }) }}
+                </n-checkbox>
+              </span>
+              <span v-else />
               <n-button
                 v-if="canEdit"
                 size="small"
