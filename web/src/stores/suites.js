@@ -13,17 +13,22 @@ export const useSuitesStore = defineStore('suites', function () {
   const loading = ref(false);
   /** 当前这份列表属于哪个项目（切项目时用来判断要不要重新拉） */
   const projectId = ref('');
+  let wantedId = '';
 
   async function load(pid) {
     if (!pid) {
+      wantedId = '';
       suites.value = [];
       projectId.value = '';
       return [];
     }
 
     loading.value = true;
+    // 记下「最后要的是哪个项目」：先发的请求晚回来时不能盖掉后发的（和 stores/tree.js 同一个坑）
+    wantedId = pid;
     try {
       const data = await suitesApi.listSuites(pid);
+      if (pid !== wantedId) return suites.value;
       suites.value = data.suites || [];
       projectId.value = pid;
       return suites.value;

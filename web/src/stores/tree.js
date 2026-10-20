@@ -38,7 +38,13 @@ export const useTreeStore = defineStore('tree', function () {
     return map;
   });
 
-  function apply(data) {
+  /**
+   * 把服务端给的树装进来。`pid` 是**发请求时**的项目：请求回来之前项目已经切走了，就扔掉
+   * （用户 2026-10-20：切项目之后目录点不开 —— 同步触发的 refresh 还在路上，
+   * 比新项目的 load 晚回来，把上一个项目的目录盖了回来；标题是新项目，树是旧的，点了没反应）。
+   */
+  function apply(data, pid) {
+    if (pid !== undefined && pid !== projectId.value) return;
     folders.value = data.folders || [];
     apis.value = data.apis || [];
 
@@ -63,15 +69,16 @@ export const useTreeStore = defineStore('tree', function () {
 
     loading.value = true;
     try {
-      apply(await treeApi.getTree(pid));
+      apply(await treeApi.getTree(pid), pid);
     } finally {
       loading.value = false;
     }
   }
 
   async function refresh() {
-    if (!projectId.value) return;
-    apply(await treeApi.getTree(projectId.value));
+    const pid = projectId.value;
+    if (!pid) return;
+    apply(await treeApi.getTree(pid), pid);
   }
 
   async function createFolder(name, parentId) {
@@ -102,18 +109,21 @@ export const useTreeStore = defineStore('tree', function () {
   }
 
   async function move(payload) {
-    const data = await treeApi.moveNode(projectId.value, payload);
-    apply(data);
+    const pid = projectId.value;
+    const data = await treeApi.moveNode(pid, payload);
+    apply(data, pid);
   }
 
   async function moveMany(payload) {
-    const data = await treeApi.moveMany(projectId.value, payload);
-    apply(data);
+    const pid = projectId.value;
+    const data = await treeApi.moveMany(pid, payload);
+    apply(data, pid);
   }
 
   async function removeMany(items) {
-    const data = await treeApi.removeMany(projectId.value, items);
-    apply(data);
+    const pid = projectId.value;
+    const data = await treeApi.removeMany(pid, items);
+    apply(data, pid);
     return data.removed || 0;
   }
 

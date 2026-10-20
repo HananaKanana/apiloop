@@ -124,6 +124,8 @@ export const useEnvStore = defineStore('env', function () {
     }
 
     const data = await envsApi.listEnvironments(pid);
+    // 请求回来之前已经切到别的项目了：这份是旧项目的，扔掉（和 stores/tree.js 同一个坑）
+    if (pid !== projectId.value) return environments.value;
     environments.value = data.environments || [];
 
     // 存的环境可能已经被删了，那就退回「无环境」。
