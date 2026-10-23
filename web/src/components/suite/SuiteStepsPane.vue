@@ -206,7 +206,7 @@ function checkedApisInOrder() {
 function openAdd() {
   checkedKeys.value = [];
   showAdd.value = true;
-  if (!tree.folders.length) tree.load().catch(function () {});
+  if (!tree.folders.length) tree.load(projects.currentId).catch(function () {});
 }
 
 function confirmAdd() {
@@ -236,7 +236,7 @@ function confirmAdd() {
 // 步骤里引用的接口不在当前项目的目录树里（被删了）：拉一次树，好判断哪些标红
 watch(
   function () { return steps.value.length; },
-  function (value) { if (value && !tree.apis.length) tree.load().catch(function () {}); },
+  function (value) { if (value && !tree.apis.length) tree.load(projects.currentId).catch(function () {}); },
   { immediate: true }
 );
 </script>

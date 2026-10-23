@@ -48,6 +48,15 @@ const { t } = useI18n();
  * 行高 28px（计划里的全局约束）。naive-ui 的树高走 `nodeHeight` 主题变量，
  * 悬停 / 选中的底色也从主题里给 —— 默认那层太淡，看不出来。
  */
+/*
+ * 目录树**不开展开 / 收起动画**（`:animated="false"`，用户 2026-10-22：切项目后目录经常点不开）。
+ *
+ * naive-ui 的 n-tree 在展开列表少了一个 key 时，先把「动画进行中」置上，再去树里找那个节点做收起动画；
+ * 节点已经不在树里（切了项目、展开着的目录被删掉、同步后没了）就找不到，动画不播，标记永远不清，
+ * 之后点任何目录都被当成「动画还没完」直接忽略（Tree.mjs：`if (props.disabled || aipRef.value) return`），
+ * 只能刷新页面。它自己有个 isDataReset 保护，但 props 更新时展开列表的 watcher 比 data 的先跑，保护落空。
+ * 那个标记只有动画用，关掉动画就整个绕开了；代价只是展开时没有滑动效果。
+ */
 const TREE_THEME = {
   nodeHeight: '28px',
   nodeColorHover: 'rgba(128, 128, 128, 0.14)',
@@ -1247,6 +1256,7 @@ defineExpose({ expandAll: expandAll, refresh: tree.refresh, selectApi: selectApi
           v-if="displayTree.length"
           block-line
           expand-on-click
+          :animated="false"
           :indent="16"
           :theme-overrides="TREE_THEME"
           :data="displayTree"

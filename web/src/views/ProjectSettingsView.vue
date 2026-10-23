@@ -120,7 +120,8 @@ async function load() {
     if (!projects.projects.length) await projects.load();
     projectId.value = String(route.params.pid || '');
     // 前置接口要选一个接口，所以这一个页签也要一份接口清单（目录树的数据）
-    if (!tree.apis.length) await tree.load();
+    // 一定要带项目 ID：不带的话 tree.load 会把目录树清空、记成「没有项目」，之后刷新都不管用
+    if (!tree.apis.length) await tree.load(projectId.value);
     const project = projects.projects.find(function (item) { return item.id === projectId.value; });
     if (!project) {
       errorText.value = t('views.psProjectMissing');
