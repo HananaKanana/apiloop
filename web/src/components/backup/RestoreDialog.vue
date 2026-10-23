@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { NAlert, NButton, NForm, NFormItem, NInput, NModal, NSpace, NSpin, useMessage } from 'naive-ui';
+import { NAlert, NButton, NCheckbox, NForm, NFormItem, NInput, NModal, NSpace, NSpin, useMessage } from 'naive-ui';
 import * as backupApi from '@/api/backup';
 import { formatBytes } from '@/utils/bytes';
 import { formatFullTime } from '@/utils/comment';
@@ -15,13 +15,18 @@ import { downloadText, readFileAsText } from '@/utils/download';
  * - `overwrite`：覆盖 `pid` 这个项目，**必须手动输入当前项目名确认**，
  *   而且在真正覆盖之前**先自动下载一份当前项目的备份** —— 测试集覆盖时是直接删掉的，
  *   这份备份是找回它们的唯一途径。
+ * - `merge`：合并更新进 `pid` 这个项目（用户 2026-10-22：内网导出、外网反复导入，见 lib/backup-merge.js）。
+ *   选了文件先让服务端算一遍预览（新增 / 更新 / 没变、内网已删除的列表），确认后再写。
+ *
+ * 从文件恢复成**新**项目也走合并（不带 pid）：这样建出来的项目和以后的合并更新用同一套 id，
+ * 再从同一个来源导入才认得出来（老的 `new` 每次都换随机 id，之后合并会全部重复）。
  *
  * 备份文件是整份项目数据（可能几 MB），**解析完的结果放在普通变量里、不进 ref**：
  * 让 Vue 把整棵对象做成响应式既慢又占内存，预览只需要几个数字（同 ImportDialog 的做法）。
  */
 const props = defineProps({
   show: { type: Boolean, default: false },
-  /** 'new' | 'overwrite' */
+  /** 'new' | 'overwrite' | 'merge' */
   mode: { type: String, default: 'new' },
   /** 覆盖哪个项目（`overwrite` 时必须给；`new` 时只用来定位云端自动备份） */
   pid: { type: String, default: '' },
@@ -51,6 +56,9 @@ const newName = ref('');
 const confirmName = ref('');
 const restoring = ref(false);
 const result = ref(null);
+/** 合并更新的预览（服务端算的）：`{ counts, removable }`；要删的那几条 id */
+const mergePreview = ref(null);
+const mergeRemove = ref([]);
 
 const visible = computed({
   get: function () { return props.show; },
@@ -58,8 +66,41 @@ const visible = computed({
 });
 
 const title = computed(function () {
+  if (props.mode === 'merge') return t('backup.restoreMergeTitle');
   return props.mode === 'overwrite' ? t('backup.restoreOverwriteTitle') : t('backup.restoreNewTitle');
 });
+
+/** 真正发给服务端的模式：从文件恢复成新项目也走 merge（见文件头）；云端自动备份照旧 */
+function serverMode() {
+  if (props.mode === 'merge') return 'merge';
+  if (props.mode === 'new' && !props.autoId) return 'merge';
+  return props.mode;
+}
+
+async function loadMergePreview() {
+  if (props.mode !== 'merge' || !payload) return;
+  busy.value = true;
+  try {
+    const data = await backupApi.restoreBackup({ backup: payload, mode: 'merge', projectId: props.pid, preview: true });
+    mergePreview.value = { counts: data.counts || {}, removable: data.removable || [] };
+    mergeRemove.value = [];
+  } catch (err) {
+    mergePreview.value = null;
+    errorText.value = err.message;
+  } finally {
+    busy.value = false;
+  }
+}
+
+function toggleRemove(id, checked) {
+  const list = mergeRemove.value.filter(function (item) { return item !== id; });
+  if (checked) list.push(id);
+  mergeRemove.value = list;
+}
+
+function kindLabel(kind) {
+  return t('backup.mergeKind_' + kind);
+}
 
 /** 覆盖时必须一字不差地输入当前项目名（项目名没拿到就一律不放行） */
 const confirmed = computed(function () {
@@ -69,6 +110,7 @@ const confirmed = computed(function () {
 });
 
 const canSubmit = computed(function () {
+  if (props.mode === 'merge' && !mergePreview.value) return false;
   return Boolean(payload) && confirmed.value && !busy.value;
 });
 
@@ -111,6 +153,8 @@ function reset() {
   confirmName.value = '';
   restoring.value = false;
   result.value = null;
+  mergePreview.value = null;
+  mergeRemove.value = [];
 }
 
 /** 恢复成新项目时默认叫「<备份里的名字>（恢复）」；用户已经改过就不动 */
@@ -175,6 +219,7 @@ async function onFile(event) {
   } finally {
     busy.value = false;
   }
+  await loadMergePreview();
 }
 
 /**
@@ -208,9 +253,10 @@ async function submit() {
       ? await backupApi.restoreAutoBackup(props.pid, props.autoId, { mode: props.mode, name: name })
       : await backupApi.restoreBackup({
         backup: payload,
-        mode: props.mode,
+        mode: serverMode(),
         name: name,
-        projectId: props.mode === 'overwrite' ? props.pid : ''
+        projectId: props.mode === 'overwrite' || props.mode === 'merge' ? props.pid : '',
+        remove: props.mode === 'merge' ? mergeRemove.value : []
       });
 
     result.value = data || {};
@@ -225,6 +271,18 @@ async function submit() {
 function close() {
   visible.value = false;
 }
+
+/** 合并计数 → 文案参数（缺的当 0） */
+function mergeCounts(counts) {
+  const c = counts || {};
+  return {
+    added: Number(c.added) || 0,
+    updated: Number(c.updated) || 0,
+    unchanged: Number(c.unchanged) || 0,
+    vars: Number(c.varsAdded) || 0,
+    removed: Number(c.removed) || 0
+  };
+}
 </script>
 
 <template>
@@ -238,7 +296,10 @@ function close() {
       <!-- 恢复完的收尾：说清楚哪些东西进回收站 / 被删了，再把 warnings 列出来 -->
       <template v-if="result">
         <n-alert type="success" :show-icon="false" :title="t('backup.doneTitle')">
-          <template v-if="mode === 'overwrite'">
+          <template v-if="mode === 'merge'">
+            {{ t('backup.doneMerge', mergeCounts(result.counts)) }}
+          </template>
+          <template v-else-if="mode === 'overwrite'">
             {{ t('backup.doneOverwrite', { n: Number(result.deletedSuites) || 0 }) }}
           </template>
           <template v-else>
@@ -299,6 +360,31 @@ function close() {
           </div>
         </div>
 
+        <template v-if="mode === 'merge'">
+          <n-alert v-if="!preview" type="info" :show-icon="false" class="block">
+            {{ t('backup.mergeHint') }}
+          </n-alert>
+          <div v-if="mergePreview" class="preview">
+            <p class="preview-title">{{ t('backup.mergePreviewTitle') }}</p>
+            <p class="merge-counts">{{ t('backup.mergeCounts', mergeCounts(mergePreview.counts)) }}</p>
+            <template v-if="mergePreview.removable.length">
+              <p class="preview-title">{{ t('backup.mergeRemovedTitle', { n: mergePreview.removable.length }) }}</p>
+              <p class="tip">{{ t('backup.mergeRemovedHint') }}</p>
+              <div class="removable">
+                <n-checkbox
+                  v-for="item in mergePreview.removable"
+                  :key="item.id"
+                  size="small"
+                  :checked="mergeRemove.indexOf(item.id) > -1"
+                  @update:checked="(value) => toggleRemove(item.id, value)"
+                >
+                  {{ kindLabel(item.kind) }} · {{ item.name || '—' }}
+                </n-checkbox>
+              </div>
+            </template>
+          </div>
+        </template>
+
         <n-form v-if="mode === 'new'" label-placement="top" class="block">
           <n-form-item :label="t('backup.newNameLabel')">
             <n-input v-model:value="newName" :placeholder="t('backup.newNamePlaceholder')" />
@@ -324,7 +410,7 @@ function close() {
         <template v-else>
           <n-button @click="close">{{ t('app.cancel') }}</n-button>
           <n-button type="primary" :loading="restoring" :disabled="!canSubmit" @click="submit">
-            {{ t('backup.restoreAction') }}
+            {{ mode === 'merge' ? t('backup.mergeAction') : t('backup.restoreAction') }}
           </n-button>
         </template>
       </n-space>
@@ -430,4 +516,17 @@ function close() {
   line-height: 1.8;
   opacity: 0.8;
 }
+.merge-counts {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.removable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+
 </style>

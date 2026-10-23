@@ -153,7 +153,7 @@ async function onRestored() {
     // 列表没刷新不影响恢复本身的结果
   }
 
-  if (mode === 'overwrite') {
+  if (mode === 'overwrite' || mode === 'merge') {
     try {
       await tree.load(props.pid);
       tabs.syncWithApis(tree.apis.map(function (api) { return api.id; }));
@@ -178,6 +178,17 @@ watch(isOwner, loadAuto);</script>
       <n-space>
         <n-button size="small" :loading="downloading" :disabled="!canEdit" @click="download">
           {{ t('backup.downloadAction') }}
+        </n-button>
+      </n-space>
+    </n-card>
+
+    <!-- 合并更新（用户 2026-10-22）：内网导出的备份反复导进来，已有的更新、没有的新增，外网自己的不动 -->
+    <n-card :bordered="false" size="small" :title="t('backup.mergeTitle')" class="card">
+      <p class="tip">{{ t('backup.mergeCardHint') }}</p>
+      <p v-if="!canEdit" class="tip">{{ t('backup.editorOnly') }}</p>
+      <n-space v-else>
+        <n-button size="small" type="primary" @click="openRestore({ mode: 'merge', autoId: '', autoAt: 0, autoSize: 0 })">
+          {{ t('backup.mergeOpenAction') }}
         </n-button>
       </n-space>
     </n-card>

@@ -23,6 +23,7 @@ export default {
     '选一个之前下载的备份文件，用它替换当前项目的内容。现在的目录、接口、环境会移进回收站（还能找回来），测试集会直接删除。',
   restoreFileAction: '从备份文件恢复…',
   ownerOnly: '只有项目的 owner（或系统管理员）能覆盖恢复。',
+  editorOnly: '要这个项目的编辑权限（editor 及以上）才能合并。',
 
   /* ---------------- 云端自动备份列表 ---------------- */
   autoTitle: '云端自动备份',
@@ -51,6 +52,23 @@ export default {
   previewLoading: '正在读取备份…',
 
   restoreNewTitle: '从备份恢复成新项目',
+  // 合并更新（2026-10-22）：内网导出、外网反复导入
+  restoreMergeTitle: '合并更新',
+  mergeTitle: '合并更新（内网 → 外网）',
+  mergeCardHint: '把另一边（比如内网）导出的备份合并进这个项目：已有的接口、示例、Mock 期望按文件更新，没有的新增，这边自己加的不动。同一个文件导几次都不会重复。环境和变量只补缺的，不改这边的值（内网地址不会盖掉外网地址）。',
+  mergeOpenAction: '选择备份文件合并',
+  mergeHint: '选一个从另一边导出的备份文件，先预览要改什么，确认后再合并。',
+  mergePreviewTitle: '合并预览',
+  mergeCounts: '新增 {added}，更新 {updated}，没变 {unchanged}，补变量 {vars} 个',
+  mergeRemovedTitle: '那边已经删掉的（{n} 项）',
+  mergeRemovedHint: '上次从这个来源导进来、这次文件里没有了。默认保留，勾上的会删掉（接口进回收站）。',
+  mergeKind_api: '接口',
+  mergeKind_folder: '目录',
+  mergeKind_example: '示例',
+  mergeKind_expectation: 'Mock 期望',
+  mergeKind_suite: '测试集',
+  mergeAction: '合并',
+  doneMerge: '合并完成：新增 {added}，更新 {updated}，没变 {unchanged}，补变量 {vars} 个，删除 {removed}。',
   restoreOverwriteTitle: '恢复备份（覆盖当前项目）',
   newNameLabel: '新项目名称',
   newNamePlaceholder: '留空则用备份里的项目名加「（恢复）」',

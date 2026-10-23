@@ -72,13 +72,17 @@ export function exportBackup(pid) {
 /**
  * 恢复。
  *
- * @param {{backup: object, mode: 'new'|'overwrite', name?: string, projectId?: string}} payload
+ * @param {{backup: object, mode: 'new'|'overwrite'|'merge', name?: string, projectId?: string,
+ *          preview?: boolean, remove?: string[]}} payload
  * @returns {Promise<{project: object, warnings: string[], trashed?: object, deletedSuites?: number}>}
  */
 export function restoreBackup(payload) {
   const body = { backup: payload.backup, mode: payload.mode };
   if (payload.name) body.name = payload.name;
   if (payload.projectId) body.projectId = payload.projectId;
+  // 合并更新（mode: merge）：preview 只算不写；remove 是要删掉的「内网已删除」那几条的 id
+  if (payload.preview) body.preview = true;
+  if (payload.remove && payload.remove.length) body.remove = payload.remove;
   return post('/backup/restore', body);
 }
 

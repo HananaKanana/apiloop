@@ -9,7 +9,7 @@
  * 这里把 locales 下每一条都真的编译一遍，另外核对各语言的键是不是一一对应。
  * 有问题就列出来、退出码 1，`npm run build:web` 跟着失败，坏文案进不了安装包。
  */
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -63,6 +63,36 @@ for (const a of langs) {
       if (!keysByLang[b].has(key)) problems.push(b + ' 缺少 ' + key + '（' + a + ' 里有）');
     }
   }
+}
+
+/*
+ * 代码里写死的 `t('区域.键')` 必须在文案里有（2026-10-22：`backup.editorOnly` 写进了页面却没加文案，
+ * 构建照过、界面上直接显示成 backup.editorOnly）。拼出来的键（`t('x.' + kind)`）认不出来，不管。
+ */
+const srcDir = path.join(here, '..', 'src');
+const used = new Map();
+(function walk(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (full === path.join(srcDir, 'i18n')) continue;
+      walk(full);
+    } else if (/\.(vue|js)$/.test(entry.name)) {
+      const text = readFileSync(full, 'utf8');
+      const pattern = /\bt\(\s*'([A-Za-z][\w-]*\.[A-Za-z][\w.-]*)'/g;
+      let match;
+      while ((match = pattern.exec(text))) {
+        // `t('layout.skin_' + name)` 这种拼出来的：截到 `_` 为止的半截，不是真键
+        if (/[_.-]$/.test(match[1]) || text.charAt(match.index + match[0].length) === '+') continue;
+        if (text.slice(match.index + match[0].length).match(/^\s*\+/)) continue;
+        if (!used.has(match[1])) used.set(match[1], path.relative(srcDir, full));
+      }
+    }
+  }
+})(srcDir);
+const baseLang = langs.indexOf('zh-CN') !== -1 ? 'zh-CN' : langs[0];
+for (const [key, file] of used) {
+  if (!keysByLang[baseLang].has(key)) problems.push(file + ' 用了不存在的文案 ' + key);
 }
 
 if (problems.length) {
